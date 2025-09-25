@@ -2,12 +2,312 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>筋トレメモ</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>筋トレメモ | BUILD_TAG=STARTER-20250925</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="color-scheme" content="light dark">
+  <style>
+    /* iOSのズーム誤爆抑止 */
+    input, select, textarea, button { font-size: 16px; }
+    /* 下タブのための余白 */
+    main { padding-bottom: 84px; }
+  </style>
 </head>
-<body>
-  <h1>筋トレメモアプリ</h1>
-  <p>ここにアプリの内容が入ります。</p>
-  <script src="app.js"></script>
+<body class="bg-slate-50 text-slate-900">
+  <!-- エラー帯 -->
+  <div id="errbar" class="hidden fixed top-0 left-0 right-0 z-50 bg-red-600 text-white text-sm px-4 py-2"></div>
+
+  <!-- ヘッダー -->
+  <header class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      <h1 class="text-lg font-semibold">筋トレメモ</h1>
+      <span id="build" class="text-xs text-slate-500">STARTER</span>
+    </div>
+  </header>
+
+  <!-- ページ本体 -->
+  <main class="max-w-2xl mx-auto px-4 py-4" id="view">
+    <!-- ここにJSで画面を描画 -->
+  </main>
+
+  <!-- 下タブ -->
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur border-t border-slate-200">
+    <div class="max-w-2xl mx-auto grid grid-cols-3">
+      <button data-tab="home" class="tab px-4 py-3 text-sm font-medium">ホーム</button>
+      <button data-tab="history" class="tab px-4 py-3 text-sm font-medium">履歴</button>
+      <button data-tab="settings" class="tab px-4 py-3 text-sm font-medium">設定</button>
+    </div>
+  </nav>
+
+  <script>
+  // ====== 安全ユーティリティ ======
+  const NS = "muscle-app";
+  const KEYS = {
+    LOGS: `${NS}:workout-logs`,
+    SETTINGS: `${NS}:settings`,
+    SCHEMA: `${NS}:schema-version`
+  };
+  const SCHEMA_VERSION = 1;
+
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+  function showError(msg) {
+    const bar = $("#errbar");
+    bar.textContent = msg;
+    bar.classList.remove("hidden");
+  }
+  function hideError() {
+    $("#errbar").classList.add("hidden");
+  }
+
+  window.onerror = (message, src, line, col, err) => {
+    showError(String(message || err || "不明なエラー"));
+    return false;
+  };
+  window.onunhandledrejection = (e) => {
+    showError(String(e.reason || e));
+  };
+
+  function safeParse(json, fallback) {
+    try { return JSON.parse(json); } catch { return fallback; }
+  }
+
+  function load(key, fallback) {
+    const raw = localStorage.getItem(key);
+    return raw == null ? fallback : safeParse(raw, fallback);
+  }
+  function save(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  // 初期化（スキーマ差異なら全体初期化）
+  (function bootstrap() {
+    const v = load(KEYS.SCHEMA, null);
+    if (v !== SCHEMA_VERSION) {
+      if (v !== null) {
+        // 既存データの破損を避けるため、LOGSだけは生かす…が、今回はシンプルに初期化
+        // 必要ならここでマイグレーションを書く
+      }
+      save(KEYS.LOGS, []);
+      save(KEYS.SETTINGS, { unit: "kg", theme: "light" });
+      save(KEYS.SCHEMA, SCHEMA_VERSION);
+    }
+  })();
+
+  // ====== ルーター ======
+  const routes = ["home","history","settings"];
+  function currentRoute() {
+    const h = location.hash.replace(/^#\/?/, "");
+    return routes.includes(h) ? h : "home";
+  }
+  function navigate(to) {
+    if (!routes.includes(to)) to = "home";
+    if (currentRoute() !== to) location.hash = `#/${to}`;
+    render();
+  }
+  window.addEventListener("hashchange", () => {
+    render();
+    highlightTab();
+  });
+
+  // ====== データアクセス ======
+  function getLogs() { return load(KEYS.LOGS, []); }
+  function setLogs(arr) { save(KEYS.LOGS, arr); }
+  function addLog(entry) {
+    const arr = getLogs();
+    arr.unshift({ id: crypto.randomUUID(), ...entry });
+    setLogs(arr);
+  }
+  function removeLog(id) {
+    setLogs(getLogs().filter(x => x.id !== id));
+  }
+
+  // ====== 画面 ======
+  function viewHome() {
+    const today = new Date().toISOString().slice(0,10);
+    return `
+      <section class="space-y-4">
+        <h2 class="text-base font-semibold">記録を追加</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="col-span-2 text-sm">
+            <span class="block mb-1 text-slate-600">日付</span>
+            <input id="f-date" type="date" value="${today}" class="w-full border rounded-lg px-3 py-2">
+          </label>
+          <label class="col-span-2 text-sm">
+            <span class="block mb-1 text-slate-600">種目</span>
+            <input id="f-ex" type="text" placeholder="例：ベンチプレス" class="w-full border rounded-lg px-3 py-2">
+          </label>
+          <label class="text-sm">
+            <span class="block mb-1 text-slate-600">重量</span>
+            <input id="f-weight" type="number" inputmode="decimal" placeholder="kg" class="w-full border rounded-lg px-3 py-2">
+          </label>
+          <label class="text-sm">
+            <span class="block mb-1 text-slate-600">回数</span>
+            <input id="f-reps" type="number" inputmode="numeric" placeholder="10" class="w-full border rounded-lg px-3 py-2">
+          </label>
+          <label class="col-span-2 text-sm">
+            <span class="block mb-1 text-slate-600">メモ（任意）</span>
+            <input id="f-note" type="text" placeholder="フォーム/感覚など" class="w-full border rounded-lg px-3 py-2">
+          </label>
+        </div>
+        <div class="flex gap-3">
+          <button id="btn-add" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium">追加</button>
+          <button id="btn-clear" class="px-3 py-2 rounded-lg border">入力クリア</button>
+        </div>
+        <hr class="my-4">
+        <h3 class="text-sm font-semibold text-slate-600">直近の記録</h3>
+        <div id="recent" class="divide-y"></div>
+      </section>
+    `;
+  }
+
+  function renderRecent() {
+    const wrap = $("#recent");
+    if (!wrap) return;
+    const rows = getLogs().slice(0,5).map(rowToItem).join("") || `<p class="text-sm text-slate-500 py-3">まだ記録がありません。</p>`;
+    wrap.innerHTML = rows;
+    bindItemButtons(wrap);
+  }
+
+  function rowToItem(x) {
+    return `
+      <div class="py-3 flex items-start justify-between gap-3">
+        <div>
+          <div class="font-medium">${escapeHtml(x.exercise)} <span class="text-slate-500 text-sm">(${x.weight}${getSettings().unit} × ${x.reps}回)</span></div>
+          <div class="text-xs text-slate-500">${x.date}</div>
+          ${x.note ? `<div class="text-sm">${escapeHtml(x.note)}</div>` : ""}
+        </div>
+        <button data-del="${x.id}" class="text-xs text-red-600 hover:underline">削除</button>
+      </div>
+    `;
+  }
+
+  function viewHistory() {
+    const logs = getLogs();
+    if (logs.length === 0) {
+      return `<p class="text-sm text-slate-500">まだ記録がありません。ホームから追加してください。</p>`;
+    }
+    return `
+      <section>
+        <h2 class="text-base font-semibold mb-2">全履歴</h2>
+        <div class="divide-y">
+          ${logs.map(rowToItem).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function getSettings() { return load(KEYS.SETTINGS, { unit: "kg", theme: "light" }); }
+  function setSettings(s) { save(KEYS.SETTINGS, s); }
+
+  function viewSettings() {
+    const s = getSettings();
+    return `
+      <section class="space-y-4">
+        <h2 class="text-base font-semibold">設定</h2>
+        <label class="block text-sm">
+          <span class="block mb-1 text-slate-600">重量の単位</span>
+          <select id="set-unit" class="border rounded-lg px-3 py-2">
+            <option value="kg" ${s.unit==="kg"?"selected":""}>kg</option>
+            <option value="lb" ${s.unit==="lb"?"selected":""}>lb</option>
+          </select>
+        </label>
+        <div class="flex gap-3">
+          <button id="btn-save-settings" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium">保存</button>
+          <button id="btn-clear-all" class="px-4 py-2 rounded-lg border border-red-300 text-red-700">全データ削除</button>
+        </div>
+        <p class="text-xs text-slate-500">※ ブラウザのlocalStorageに保存します。端末をまたぐ共有はしません。</p>
+      </section>
+    `;
+  }
+
+  // ====== 描画とイベント ======
+  function render() {
+    hideError();
+    const route = currentRoute();
+    const root = $("#view");
+    root.innerHTML =
+      route === "home" ? viewHome() :
+      route === "history" ? viewHistory() :
+      viewSettings();
+
+    if (route === "home") {
+      $("#btn-add").addEventListener("click", onAdd);
+      $("#btn-clear").addEventListener("click", onClearInputs);
+      renderRecent();
+    } else if (route === "history") {
+      bindItemButtons(root);
+    } else if (route === "settings") {
+      $("#btn-save-settings").addEventListener("click", onSaveSettings);
+      $("#btn-clear-all").addEventListener("click", onClearAll);
+    }
+    highlightTab();
+  }
+
+  function bindItemButtons(scope=document) {
+    $$('button[data-del]', scope).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-del");
+        removeLog(id);
+        render(); // 画面更新
+      });
+    });
+  }
+
+  function onAdd() {
+    const date = $("#f-date").value || new Date().toISOString().slice(0,10);
+    const exercise = ($("#f-ex").value || "").trim();
+    const weight = Number($("#f-weight").value || 0);
+    const reps = Number($("#f-reps").value || 0);
+    const note = ($("#f-note").value || "").trim();
+
+    if (!exercise) { showError("種目を入力してください。"); return; }
+    if (!(weight >= 0)) { showError("重量を数値で入力してください。"); return; }
+    if (!(reps > 0)) { showError("回数を1以上で入力してください。"); return; }
+
+    // lb表示対応（保存はkg基準でも可。今回は単純に表示単位で保存）
+    const s = getSettings();
+    addLog({ date, exercise, weight, reps, note, unit: s.unit });
+    onClearInputs();
+    renderRecent();
+  }
+
+  function onClearInputs() {
+    ["#f-ex","#f-weight","#f-reps","#f-note"].forEach(id => { const el = $(id); if (el) el.value = ""; });
+  }
+
+  function onSaveSettings() {
+    const unit = $("#set-unit").value;
+    setSettings({ ...getSettings(), unit });
+    hideError();
+    alert("保存しました。");
+  }
+
+  function onClearAll() {
+    if (!confirm("本当に全ての記録を削除しますか？この操作は元に戻せません。")) return;
+    setLogs([]);
+    render();
+  }
+
+  function highlightTab() {
+    const route = currentRoute();
+    $$(".tab").forEach(b => {
+      const active = b.getAttribute("data-tab") === route;
+      b.classList.toggle("text-blue-600", active);
+      b.classList.toggle("border-t-2", active);
+      b.classList.toggle("border-blue-600", active);
+      b.classList.toggle("bg-blue-50/50", active);
+      b.onclick = () => navigate(b.getAttribute("data-tab"));
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // 初回起動
+  render();
+  </script>
 </body>
 </html>
