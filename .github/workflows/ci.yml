@@ -26,4 +26,4 @@ jobs:
         run: |
           npm run serve &                        # http-server で配信
           npx wait-on http://127.0.0.1:4173/index.html
-          curl -sSf http://127.0.0.1:4173/index.html | head -n 3
+          curl -sSf http://127.0.0.1:4173/index.html | grep "筋トレメモアプリ"
