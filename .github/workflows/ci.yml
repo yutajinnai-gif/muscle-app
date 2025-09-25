@@ -27,3 +27,15 @@ jobs:
           npm run serve &                        # http-server で配信
           npx wait-on http://127.0.0.1:4173/index.html
           curl -sSf http://127.0.0.1:4173/index.html | grep "筋トレメモアプリ"
+      - name: Upload Playwright artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report
+            test-results
+            **/*.png
+            **/*.webm
+            **/*.zip
+          if-no-files-found: ignore
