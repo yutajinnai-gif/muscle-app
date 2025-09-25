@@ -1,4 +1,3 @@
-# .github/workflows/ci.yml
 name: ci
 on:
   push:
@@ -6,12 +5,25 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  static-check:
+  serve-smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Check index.html exists
         run: |
           test -f index.html || (echo "index.html not found"; exit 1)
-      - name: Print first line
-        run: head -n 1 index.html || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install minimal deps
+        run: npm ci || npm i --no-audit --no-fund
+
+      - name: Serve & ping
+        run: |
+          npm run serve &                        # http-server で配信
+          npx wait-on http://127.0.0.1:4173/index.html
+          curl -sSf http://127.0.0.1:4173/index.html | head -n 3

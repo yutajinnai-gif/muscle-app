@@ -1,0 +1,12 @@
+{
+  "name": "muscle-app",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "serve": "http-server -p 4173 -c-1 ."
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "wait-on": "^7.2.0"
+  }
+}
