@@ -45,9 +45,14 @@
   const KEYS = {
     LOGS: `${NS}:workout-logs`,
     SETTINGS: `${NS}:settings`,
-    SCHEMA: `${NS}:schema-version`
+    SCHEMA: `${NS}:schema-version`,
+    RECENTS: `${NS}:recent-exercises`,        // 追加
+    LAST_BY_EX: `${NS}:last-by-exercise`      // 追加
   };
   const SCHEMA_VERSION = 1;
+
+    // ＋/−ボタンの増分値をまとめた定数（ここに追記）
+  const INCREMENTS = { kg: 2.5, lb: 5, reps: 1 };
 
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
@@ -111,6 +116,33 @@
     highlightTab();
   });
 
+  // 簡易マスタ（必要に応じて追加/編集OK）
+  const EXERCISE_MASTER = [
+    "ベンチプレス","インクラインベンチプレス","ダンベルプレス","スクワット","フロントスクワット",
+    "デッドリフト","ルーマニアンデッドリフト","ラットプルダウン","シーテッドロウ",
+    "ショルダープレス","サイドレイズ","アームカール","プレスダウン","レッグプレス",
+  ];
+
+  // 最近使った種目（最大10件を新しい順で保持）
+  function getRecents() { return load(KEYS.RECENTS, []); }
+  function pushRecent(ex) {
+    const name = ex.trim();
+    if (!name) return;
+    let r = getRecents().filter(x => x !== name);
+    r.unshift(name);
+    if (r.length > 10) r = r.slice(0,10);
+    save(KEYS.RECENTS, r);
+  }
+
+  // 種目ごとの直近値（重量/回数/単位）を保存・取得
+  function getLastByEx() { return load(KEYS.LAST_BY_EX, {}); }
+  function setLastByEx(map) { save(KEYS.LAST_BY_EX, map); }
+  function rememberLast(exercise, payload) {
+    const m = getLastByEx();
+    m[exercise] = { ...m[exercise], ...payload };
+    setLastByEx(m);
+  }
+
   // ====== データアクセス ======
   function getLogs() { return load(KEYS.LOGS, []); }
   function setLogs(arr) { save(KEYS.LOGS, arr); }
@@ -124,43 +156,74 @@
   }
 
   // ====== 画面 ======
-  function viewHome() {
-    const today = new Date().toISOString().slice(0,10);
-    return `
-      <section class="space-y-4">
-        <h2 class="text-base font-semibold">記録を追加</h2>
-        <div class="grid grid-cols-2 gap-3">
-          <label class="col-span-2 text-sm">
-            <span class="block mb-1 text-slate-600">日付</span>
-            <input id="f-date" type="date" value="${today}" class="w-full border rounded-lg px-3 py-2">
-          </label>
-          <label class="col-span-2 text-sm">
-            <span class="block mb-1 text-slate-600">種目</span>
-            <input id="f-ex" type="text" placeholder="例：ベンチプレス" class="w-full border rounded-lg px-3 py-2">
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">重量</span>
-            <input id="f-weight" type="number" inputmode="decimal" placeholder="kg" class="w-full border rounded-lg px-3 py-2">
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">回数</span>
+ function viewHome() {
+  const today = new Date().toISOString().slice(0,10);
+  const s = getSettings();
+  const unit = s.unit;
+  const recents = getRecents();
+
+  // datalist用オプションを生成（マスタ + 最近）
+  const options = [...new Set([...recents, ...EXERCISE_MASTER])].map(
+    name => `<option value="${name}"></option>`
+  ).join("");
+
+  const chips = recents.map(n =>
+    `<button type="button" class="px-2 py-1 text-xs rounded-full border hover:bg-slate-100 mr-2 mb-2" data-chip="${n}">${n}</button>`
+  ).join("");
+
+  return `
+    <section class="space-y-4">
+      <h2 class="text-base font-semibold">記録を追加</h2>
+
+      <div class="grid grid-cols-2 gap-3">
+        <label class="col-span-2 text-sm">
+          <span class="block mb-1 text-slate-600">日付</span>
+          <input id="f-date" type="date" value="${today}" class="w-full border rounded-lg px-3 py-2">
+        </label>
+
+        <label class="col-span-2 text-sm">
+          <span class="block mb-1 text-slate-600">種目 <span class="text-xs text-slate-500">(入力か選択)</span></span>
+          <input id="f-ex" list="ex-list" type="text" placeholder="例：ベンチプレス" class="w-full border rounded-lg px-3 py-2">
+          <datalist id="ex-list">${options}</datalist>
+        </label>
+
+        <div class="col-span-2 -mt-2">${chips ? `<div class="flex flex-wrap mt-1">${chips}</div>` : ""}</div>
+
+        <label class="text-sm">
+          <span class="block mb-1 text-slate-600">重量 (${unit})</span>
+          <div class="flex items-center gap-2">
+            <button type="button" class="px-2 py-1 border rounded" data-dec="weight">−</button>
+            <input id="f-weight" type="number" inputmode="decimal" placeholder="${unit}" class="w-full border rounded-lg px-3 py-2">
+            <button type="button" class="px-2 py-1 border rounded" data-inc="weight">＋</button>
+          </div>
+        </label>
+
+        <label class="text-sm">
+          <span class="block mb-1 text-slate-600">回数</span>
+          <div class="flex items-center gap-2">
+            <button type="button" class="px-2 py-1 border rounded" data-dec="reps">−</button>
             <input id="f-reps" type="number" inputmode="numeric" placeholder="10" class="w-full border rounded-lg px-3 py-2">
-          </label>
-          <label class="col-span-2 text-sm">
-            <span class="block mb-1 text-slate-600">メモ（任意）</span>
-            <input id="f-note" type="text" placeholder="フォーム/感覚など" class="w-full border rounded-lg px-3 py-2">
-          </label>
-        </div>
-        <div class="flex gap-3">
-          <button id="btn-add" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium">追加</button>
-          <button id="btn-clear" class="px-3 py-2 rounded-lg border">入力クリア</button>
-        </div>
-        <hr class="my-4">
-        <h3 class="text-sm font-semibold text-slate-600">直近の記録</h3>
-        <div id="recent" class="divide-y"></div>
-      </section>
-    `;
-  }
+            <button type="button" class="px-2 py-1 border rounded" data-inc="reps">＋</button>
+          </div>
+        </label>
+
+        <label class="col-span-2 text-sm">
+          <span class="block mb-1 text-slate-600">メモ（任意）</span>
+          <input id="f-note" type="text" placeholder="フォーム/感覚など" class="w-full border rounded-lg px-3 py-2">
+        </label>
+      </div>
+
+      <div class="flex gap-3">
+        <button id="btn-add" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium">追加</button>
+        <button id="btn-clear" class="px-3 py-2 rounded-lg border">入力クリア</button>
+      </div>
+
+      <hr class="my-4">
+      <h3 class="text-sm font-semibold text-slate-600">直近の記録</h3>
+      <div id="recent" class="divide-y"></div>
+    </section>
+  `;
+}
 
   function renderRecent() {
     const wrap = $("#recent");
@@ -226,6 +289,34 @@
   }
 
   // ====== 描画とイベント ======
+  function autofillFromLast() {
+    const name = ($("#f-ex").value || "").trim();
+    if (!name) return;
+    const m = getLastByEx();
+    const last = m[name];
+    if (!last) return;
+    if ($("#f-weight") && ( $("#f-weight").value === "" || Number($("#f-weight").value) === 0 )) {
+      $("#f-weight").value = last.weight ?? "";
+    }
+    if ($("#f-reps") && ( $("#f-reps").value === "" || Number($("#f-reps").value) === 0 )) {
+      $("#f-reps").value = last.reps ?? "";
+    }
+  }
+
+  function adjustField(kind, dir) {
+    if (kind === "weight") {
+      const unit = getSettings().unit;
+      const step = INCREMENTS[unit] ?? 1;
+      const cur = Number($("#f-weight").value || 0);
+      const next = Math.max(0, (cur + dir * step));
+      $("#f-weight").value = (unit === "kg") ? Number(next.toFixed(1)) : Math.round(next);
+    } else if (kind === "reps") {
+      const cur = Number($("#f-reps").value || 0);
+      const next = Math.max(0, (cur + dir * INCREMENTS.reps));
+      $("#f-reps").value = Math.round(next);
+    }
+  }
+
   function render() {
     hideError();
     const route = currentRoute();
@@ -239,14 +330,27 @@
       $("#btn-add").addEventListener("click", onAdd);
       $("#btn-clear").addEventListener("click", onClearInputs);
       renderRecent();
-    } else if (route === "history") {
-      bindItemButtons(root);
-    } else if (route === "settings") {
-      $("#btn-save-settings").addEventListener("click", onSaveSettings);
-      $("#btn-clear-all").addEventListener("click", onClearAll);
+
+      // 種目チップ → クリックで反映
+      $$(".flex.flex-wrap [data-chip]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          $("#f-ex").value = btn.getAttribute("data-chip");
+          autofillFromLast();
+        });
+      });
+
+      // 種目が変わったら直近値を自動入力
+      $("#f-ex").addEventListener("change", autofillFromLast);
+      $("#f-ex").addEventListener("blur", autofillFromLast);
+
+      // ±ボタン
+      $$("button[data-inc]").forEach(b => {
+        b.addEventListener("click", () => adjustField(b.getAttribute("data-inc"), +1));
+      });
+      $$("button[data-dec]").forEach(b => {
+        b.addEventListener("click", () => adjustField(b.getAttribute("data-dec"), -1));
+      });
     }
-    highlightTab();
-  }
 
   function bindItemButtons(scope=document) {
   $$('button[data-del]', scope).forEach(btn => {
@@ -278,6 +382,10 @@
     // lb表示対応（保存はkg基準でも可。今回は単純に表示単位で保存）
     const s = getSettings();
     addLog({ date, exercise, weight, reps, note, unit: s.unit });
+    
+    pushRecent(exercise);
+    rememberLast(exercise, { weight, reps, unit: s.unit });
+    
     onClearInputs();
     renderRecent();
   }
