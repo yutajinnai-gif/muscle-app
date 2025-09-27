@@ -215,6 +215,7 @@
 
       <div class="flex gap-3">
         <button id="btn-add" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium">追加</button>
+        <button id="btn-add-dup" class="px-4 py-2 rounded-lg bg-indigo-600 text-white font-medium">もう1セット</button>
         <button id="btn-clear" class="px-3 py-2 rounded-lg border">入力クリア</button>
       </div>
 
@@ -328,6 +329,7 @@
 
     if (route === "home") {
       $("#btn-add").addEventListener("click", onAdd);
+      $("#btn-add-dup").addEventListener("click", onAddDuplicate);
       $("#btn-clear").addEventListener("click", onClearInputs);
       renderRecent();
 
@@ -390,6 +392,43 @@
     renderRecent();
   }
 
+  function onAddDuplicate() {
+    const dateEl = $("#f-date");
+    const exEl   = $("#f-ex");
+    const wEl    = $("#f-weight");
+    const rEl    = $("#f-reps");
+    const noteEl = $("#f-note");
+
+    const date = (dateEl?.value || new Date().toISOString().slice(0,10));
+    const exercise = (exEl?.value || "").trim();
+
+    if (!exercise) { showError("種目が未入力です。先に種目を選ぶか入力してください。"); return; }
+
+    // 1) まず現在の入力値を使う
+    let weight = Number(wEl?.value || NaN);
+    let reps   = Number(rEl?.value || NaN);
+    let note   = (noteEl?.value || "").trim();
+
+    // 2) 空/0/NaNなら、その種目の直近値で補完
+    const last = getLastByEx()[exercise];
+    if (!(weight >= 0)) weight = last?.weight ?? 0;
+    if (!(reps > 0))    reps   = last?.reps   ?? 0;
+
+    // 3) バリデーション
+    if (!(weight >= 0)) { showError("重量が未入力です。現在の入力か直近値を用意してください。"); return; }
+    if (!(reps > 0))    { showError("回数が未入力です。現在の入力か直近値を用意してください。"); return; }
+
+    const s = getSettings();
+    addLog({ date, exercise, weight, reps, note, unit: s.unit });
+
+    // 最近一覧・直近値を更新
+    pushRecent(exercise);
+    rememberLast(exercise, { weight, reps, unit: s.unit });
+
+    // 入力はそのままにしておく（連打で同じ内容を量産できる）
+    renderRecent();
+  }
+  
   function onClearInputs() {
     ["#f-ex","#f-weight","#f-reps","#f-note"].forEach(id => { const el = $(id); if (el) el.value = ""; });
   }
