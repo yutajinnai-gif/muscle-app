@@ -351,7 +351,7 @@
         b.addEventListener("click", () => adjustField(b.getAttribute("data-dec"), -1));
       });
     }
-
+  }
   function bindItemButtons(scope=document) {
   $$('button[data-del]', scope).forEach(btn => {
     btn.addEventListener("click", () => {
