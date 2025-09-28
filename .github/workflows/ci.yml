@@ -2,26 +2,76 @@ name: ci
 on: push
 
 jobs:
-  smoke:
+  browser-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 10
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Start static server
+      # ① 静的サーバを起動
+      - name: Start static server (http-server)
         run: |
-          npx --yes http-server -p 4173 -c-1 . &>/dev/null &
-          echo "SERVER_PID=$!" >> $GITHUB_ENV
-          sleep 2
+          npx --yes http-server -p 4173 -c-1 . > server.log 2>&1 &
+          echo $! > server.pid
 
-      - name: Smoke test (index.html has title)
+      # ② サーバが立ち上がるまで待つ（最長10秒）
+      - name: Wait for server
         run: |
-          curl -sSf http://localhost:4173/index.html | grep -q "筋トレメモ"
+          for i in {1..20}; do
+            curl -fsS http://localhost:4173/index.html >/dev/null && exit 0
+            sleep 0.5
+          done
+          echo "::error ::server did not start. server.log below:"; cat server.log
+          exit 1
 
+      # ③ Playwright を準備（ブラウザ本体もインストール）
+      - name: Install Playwright (with browsers)
+        run: |
+          npx --yes playwright@1.47.2 install --with-deps
+          npx --yes playwright@1.47.2 install-deps
+
+      # ④ 1ファイルだけの簡単テストを作成
+      - name: Create test file
+        run: |
+          cat > smoke.spec.ts <<'EOF'
+          import { test, expect } from "@playwright/test";
+
+          test("page loads and shows key UI", async ({ page }) => {
+            await page.goto("http://localhost:4173/");
+            // タイトル文字が見える
+            await expect(page.getByText("筋トレメモ")).toBeVisible();
+            // 追加ボタンが見える
+            await expect(page.getByRole("button", { name: "追加" })).toBeVisible();
+          });
+          EOF
+
+      # ⑤ テスト実行（失敗時スクショ等を保存）
+      - name: Run Playwright
+        run: npx --yes playwright test --reporter=line
+        env:
+          # ロケールやフォントレンダの差を減らすための環境変数（任意）
+          TZ: Asia/Tokyo
+
+      # ⑥ 後片付け：サーバ停止（必ず）
       - name: Stop server
         if: always()
-        run: kill $SERVER_PID
+        run: |
+          if [ -f server.pid ]; then kill $(cat server.pid) || true; fi
+
+      # ⑦ 失敗時のアーティファクト（スクショ/ログ）を保存（任意）
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report
+            server.log
+          if-no-files-found: ignore
