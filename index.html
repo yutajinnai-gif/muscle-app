@@ -785,38 +785,43 @@ b.onclick = ()=> navigate(b.getAttribute("data-tab"));
 }
 
 function render(){
-hideError();
-const route=currentRoute();
-const root=$("#view");
-root.innerHTML =
-route==="home"    ? viewHome() :
-route==="history" ? viewHistory() :
-viewSettings();
+  hideError();
+  let route, root;                // ← ここでスコープを外に
+  try {
+    route = currentRoute();
+    root  = $("#view");
+    root.innerHTML = route==="home" ? viewHome()
+                 : route==="history" ? viewHistory()
+                 : viewSettings();
+  } catch(e){
+    showError("描画エラー: " + (e?.message || e));
+    return;                       // ← ここで打ち切る（throwしない）
+  }
 
-if(route==="home"){
-  renderRecent();
-  updateExerciseOptionsByPart();
-  bindHome();
-  setActionBarVisible(true);
-}else if(route==="history"){
-  setActionBarVisible(false);
-  renderHistory();
-  $("#flt-range")?.addEventListener("change", ()=>{
-    const v=$("#flt-range").value;
-    const today=new Date().toISOString().slice(0,10);
-    const setFrom=d=>$("#flt-from").value=d;
-    const setTo=d=>$("#flt-to").value=d;
-    if(v==="7"){ setFrom(new Date(Date.now()-6*864e5).toISOString().slice(0,10)); setTo(today); }
-    else if(v==="30"){ setFrom(new Date(Date.now()-29*864e5).toISOString().slice(0,10)); setTo(today); }
+  if (route==="home"){
+    renderRecent();
+    updateExerciseOptionsByPart();
+    bindHome();
+    setActionBarVisible(true);
+  } else if (route==="history"){
+    setActionBarVisible(false);
     renderHistory();
-  });
-  ["#flt-from","#flt-to","#flt-part","#flt-ex"].forEach(sel=> $(sel)?.addEventListener("change", renderHistory));
-}else if(route==="settings"){
-  setActionBarVisible(false);
-  bindSettings();
-}
-highlightTab();
+    $("#flt-range")?.addEventListener("change", ()=>{
+      const v=$("#flt-range").value;
+      const today=new Date().toISOString().slice(0,10);
+      const setFrom=d=>$("#flt-from").value=d;
+      const setTo=d=>$("#flt-to").value=d;
+      if(v==="7"){ setFrom(new Date(Date.now()-6*864e5).toISOString().slice(0,10)); setTo(today); }
+      else if(v==="30"){ setFrom(new Date(Date.now()-29*864e5).toISOString().slice(0,10)); setTo(today); }
+      renderHistory();
+    });
+    ["#flt-from","#flt-to","#flt-part","#flt-ex"].forEach(sel=> $(sel)?.addEventListener("change", renderHistory));
+  } else if (route==="settings"){
+    setActionBarVisible(false);
+    bindSettings();
+  }
 
+  highlightTab();
 }
 
 function setActionBarVisible(v){
