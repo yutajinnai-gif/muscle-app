@@ -838,7 +838,7 @@ function render(){
   }
 
   highlightTab();
-}
+
 
 function setActionBarVisible(v){
 const bar=$("#actionbar");
@@ -861,6 +861,7 @@ if ("serviceWorker" in navigator) {
     }
   });
 }
+/*
 (function registerPWA(){
 if(!("serviceWorker" in navigator)) return;
 const manifest = {
@@ -902,6 +903,7 @@ const swUrl = URL.createObjectURL(new Blob([swCode],{type:"text/javascript"}));
 navigator.serviceWorker.register(swUrl);
 
 })();
+*/
 
 render();
 
