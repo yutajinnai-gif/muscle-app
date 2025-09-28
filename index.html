@@ -5,28 +5,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>筋トレ記録アプリ | BUILD_TAG=FULL-20250928-SUPERSET-IPHONE-TUNE</title>
+  <title>筋トレ記録アプリ | BUILD_TAG=FULL-20250928-IPHONE-FIX-POS-KBSAFE-TIMED-BACKUP+WORKOUTROUTE</title>
   <meta name="color-scheme" content="light">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
-    /* iPhone向けチューニング：余白・幅・フォントの最小確保 */
+    :root { --nav-h: 64px; --kb: 0px; }
     input, select, textarea, button { font-size: 16px; }
-    main { padding-bottom: 108px; }
+    main { padding-bottom: calc(var(--nav-h) + 24px + env(safe-area-inset-bottom) + var(--kb)); }
+    nav { padding-bottom: calc(env(safe-area-inset-bottom)); transition: transform .2s ease, opacity .2s ease; }
+    body.kb-open nav { transform: translateY(100%); opacity: 0; pointer-events: none; }
     .shadow-soft { box-shadow: 0 10px 25px rgba(0,0,0,.08); }
     .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(2px); }
     .modal-card { max-width: 680px; }
     .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .min-w-0 { min-width: 0; }
-    @media (max-width: 430px) {
-      .wrap-pad { padding-left: 12px; padding-right: 12px; }
-      .narrow-input { max-width: 240px; }
-      .narrow-date { max-width: 220px; }
-    }
+    .wrap-pad { padding-left: 12px; padding-right: 12px; }
+    .narrow-date { max-width: 240px; }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
-  <!-- Error bar -->
   <div id="error-bar" class="fixed top-0 left-0 right-0 z-50 hidden">
     <div class="bg-red-600 text-white px-4 py-2 text-sm flex items-start gap-3">
       <span class="font-semibold">Script error</span>
@@ -45,9 +43,8 @@
 
 
   <main id="app" class="max-w-3xl mx-auto wrap-pad px-4 py-4 space-y-4">
-    <!-- HOME -->
+    <!-- DASHBOARD (#/home) -->
     <section id="view-home" class="hidden">
-      <!-- 日付は単独バーとして最上段に配置（重なり防止） -->
       <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-2">
         <div>
           <label class="text-xs text-gray-500 block">日付</label>
@@ -56,7 +53,6 @@
       </div>
 
 
-  <!-- 部位・統計・アクション -->
   <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
     <div>
       <label class="text-xs text-gray-500 block mb-1">部位（新規ブロックの初期値）</label>
@@ -79,15 +75,38 @@
         <div id="stat-month" class="text-2xl font-bold">0</div>
       </div>
     </div>
+    <div class="pt-1">
+      <button id="btn-start-or-resume" class="w-full px-4 py-3 rounded-xl bg-gray-900 text-white text-sm">
+        今日のトレーニングを開始
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- WORKOUT EDIT (#/workout) -->
+<section id="view-workout" class="hidden">
+  <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
     <div class="flex items-center justify-between">
-      <div class="text-sm text-gray-600">本日の記録</div>
+      <div class="text-sm">
+        <div class="text-[11px] text-gray-500">日付</div>
+        <div id="workout-date" class="font-semibold">-</div>
+      </div>
+      <div class="text-sm">
+        <div class="text-[11px] text-gray-500">部位</div>
+        <div id="workout-part" class="font-semibold">-</div>
+      </div>
       <div class="flex gap-2">
-        <button id="btn-add-block" class="px-3 py-2 rounded-xl bg-gray-900 text-white">ブロック追加</button>
-        <button id="btn-save-workout" class="px-3 py-2 rounded-xl bg-white border">保存</button>
+        <button id="btn-back-to-home" class="px-3 py-2 rounded-xl border text-sm">戻る</button>
+        <button id="btn-save-workout" class="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm">保存</button>
+      </div>
+    </div>
+    <div class="flex items-center justify-between">
+      <div class="text-sm text-gray-600">ブロック</div>
+      <div class="flex gap-2">
+        <button id="btn-add-block" class="px-3 py-2 rounded-xl border text-sm bg-white">ブロック追加</button>
       </div>
     </div>
   </div>
-
   <div id="blocks" class="space-y-4"></div>
 </section>
 
@@ -123,6 +142,10 @@
         <label class="text-xs text-gray-500">角度</label>
         <select id="filter-ang" class="w-full border rounded-lg px-3 py-2"></select>
       </div>
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500">ポジション</label>
+        <select id="filter-pos" class="w-full border rounded-lg px-3 py-2"></select>
+      </div>
     </div>
     <div class="flex gap-2">
       <button id="btn-apply-filter" class="px-3 py-2 rounded-xl bg-gray-900 text-white">絞り込み</button>
@@ -156,35 +179,50 @@
           <textarea id="list-equip" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
         <div>
-          <label class="text-xs text-gray-500">アタッチメント（1行1項目 / 先頭は「なし」を推奨）</label>
+          <label class="text-xs text-gray-500">アタッチメント（1行1項目／先頭は「なし」を推奨）</label>
           <textarea id="list-attach" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
         <div>
-          <label class="text-xs text-gray-500">角度（1行1項目 / 先頭は「なし」を推奨）</label>
+          <label class="text-xs text-gray-500">角度（1行1項目）</label>
           <textarea id="list-angle" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500">ポジション（1行1項目）</label>
+          <textarea id="list-position" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
       </div>
     </div>
 
     <div class="border-t pt-3">
-      <div class="text-sm font-semibold mb-1">種目マスタ（部位ひも付け）</div>
-      <div class="text-xs text-gray-500 mb-2">行追加→種目名入力→対象部位にチェック。保存で反映。表示は常に「あいうえお順」。</div>
-      <div class="overflow-auto">
-        <table class="w-full text-sm border">
-          <thead>
-            <tr class="bg-gray-50">
-              <th class="border px-2 py-1 text-left">削除</th>
-              <th class="border px-2 py-1 text-left">種目名</th>
-              <th class="border px-2 py-1 text-left">部位</th>
-            </tr>
-          </thead>
-          <tbody id="exercise-table-body"></tbody>
-        </table>
-      </div>
+      <div class="text-sm font-semibold mb-1">種目マスタ（部位別管理）</div>
+      <p class="text-xs text-gray-500 mb-2">※ 種目名は器具名や角度名を含めない形式。表示は常にあいうえお順。削除は確認ポップアップあり。</p>
+      <div id="part-boxes" class="space-y-3"></div>
       <div class="flex gap-2 mt-2">
-        <button id="btn-add-ex-row" class="px-3 py-2 rounded-xl bg-white border">行を追加</button>
         <button id="btn-save-lists" class="px-3 py-2 rounded-xl bg-gray-900 text-white">保存</button>
         <button id="btn-reset-defaults" class="px-3 py-2 rounded-xl bg-white border">デフォルト復元</button>
+      </div>
+    </div>
+
+    <div class="border-t pt-3">
+      <div class="text-sm font-semibold mb-1">バックアップ</div>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <label class="text-sm">自動バックアップ</label>
+          <input id="bk-auto" type="checkbox" class="w-5 h-5">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-gray-500">頻度（分）</label>
+            <input id="bk-frequency" type="number" min="5" class="w-full border rounded px-2 py-1" />
+          </div>
+          <div class="text-xs text-gray-500 flex items-end">最終: <span id="bk-last" class="ml-1">-</span></div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="bk-choose" class="px-3 py-2 rounded-xl border">保存先を選ぶ</button>
+          <button id="bk-now" class="px-3 py-2 rounded-xl border">今すぐバックアップ</button>
+          <button id="bk-restore" class="px-3 py-2 rounded-xl border">バックアップから復元</button>
+        </div>
+        <div class="text-xs text-gray-500">iPhoneでは「今すぐバックアップ」→共有→Files（iCloud Drive）に保存で同期可能。</div>
       </div>
     </div>
 
@@ -198,7 +236,7 @@
         </label>
         <button id="btn-clear-data" class="px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200">全データ削除</button>
       </div>
-      <p class="text-xs text-gray-500 mt-2">CSV列: date,part,exercise,equipment,attachment,angle,setIndex,warmup,weight,repsSelf,repsAssist,note,oneRM</p>
+      <p class="text-xs text-gray-500 mt-2">CSV列: date,part,exercise,equipment,attachment,angle,position,setIndex,warmup,weight,repsSelf,repsAssist,durationSec,note,oneRM</p>
     </div>
   </div>
 </section>
@@ -206,18 +244,18 @@
   </main>
 
 
-  <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200">
-    <div class="max-w-3xl mx-auto wrap-pad px-6">
-      <div class="grid grid-cols-3">
-        <button data-route="#/home" class="tab-btn flex flex-col items-center py-2 gap-0.5">
+  <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200" style="height: var(--nav-h);">
+    <div class="max-w-3xl mx-auto wrap-pad px-6 h-full">
+      <div class="grid grid-cols-3 h-full">
+        <button data-route="#/home" class="tab-btn flex flex-col items-center justify-center gap-0.5">
           <span class="text-base">🏠</span>
           <span class="text-xs">ホーム</span>
         </button>
-        <button data-route="#/history" class="tab-btn flex flex-col items-center py-2 gap-0.5">
+        <button data-route="#/history" class="tab-btn flex flex-col items-center justify-center gap-0.5">
           <span class="text-base">🗂️</span>
           <span class="text-xs">履歴</span>
         </button>
-        <button data-route="#/settings" class="tab-btn flex flex-col items-center py-2 gap-0.5">
+        <button data-route="#/settings" class="tab-btn flex flex-col items-center justify-center gap-0.5">
           <span class="text-base">⚙️</span>
           <span class="text-xs">設定</span>
         </button>
@@ -242,34 +280,29 @@
           <button class="btn-del-block px-2 py-1.5 rounded-lg border border-red-200 text-red-700 text-sm">ブロック削除</button>
         </div>
       </div>
-
-
-  <!-- 選択済み種目（iPhone最適化：種目名は1行、器具/アタッチ/角度は改行） -->
-  <div class="ex-config space-y-3"></div>
-
-  <!-- Sets area -->
-  <div class="set-area space-y-2">
-    <div class="flex items-center justify-between">
-      <div class="text-sm text-gray-600">セット</div>
-      <div class="flex gap-2">
-        <button class="btn-add-set px-2 py-1.5 rounded-md bg-white border text-sm">セット追加</button>
-        <button class="btn-clear-sets px-2 py-1.5 rounded-md border text-sm">全セット削除</button>
+      <div class="ex-config space-y-3"></div>
+      <div class="set-area space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="text-sm text-gray-600">セット</div>
+          <div class="flex gap-2">
+            <button class="btn-add-set px-2 py-1.5 rounded-md bg-white border text-sm">セット追加</button>
+            <button class="btn-clear-sets px-2 py-1.5 rounded-md border text-sm">全セット削除</button>
+          </div>
+        </div>
+        <div class="set-list space-y-2"></div>
       </div>
     </div>
-    <div class="set-list space-y-2"></div>
-  </div>
-</div>
-
   </template>
 
 
   <template id="tpl-ex-config-row">
     <div class="ex-config-row space-y-1">
       <div class="text-sm font-semibold ex-name">種目名</div>
-      <div class="grid grid-cols-3 gap-1">
-        <select class="ex-eq col-span-3 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-att col-span-3 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-ang col-span-3 sm:col-span-1 border rounded-md px-2 py-1"></select>
+      <div class="grid grid-cols-4 gap-1">
+        <select class="ex-eq col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-att col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-ang col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-pos col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
       </div>
       <div class="text-[11px] text-gray-500 ex-meta">最高重量: - / 最高1RM: - / 前回: -</div>
     </div>
@@ -295,10 +328,14 @@
     <div class="ex-item space-y-1">
       <div class="text-xs ex-title font-medium">種目1</div>
       <div class="grid grid-cols-12 gap-1 items-center">
-        <input type="number" inputmode="decimal" placeholder="重量" class="ex-weight col-span-6 sm:col-span-3 border rounded px-2 py-1" />
-        <input type="number" inputmode="numeric" placeholder="自力" class="ex-reps col-span-3 sm:col-span-2 border rounded px-2 py-1" />
-        <input type="number" inputmode="numeric" placeholder="補助" class="ex-assist col-span-3 sm:col-span-2 border rounded px-2 py-1" />
-        <input type="text" placeholder="メモ" class="ex-note col-span-12 sm:col-span-5 border rounded px-2 py-1" />
+        <input type="number" inputmode="decimal" placeholder="重量" class="ex-weight col-span-4 border rounded px-2 py-1" />
+        <input type="number" inputmode="numeric" placeholder="自力" class="ex-reps col-span-2 border rounded px-2 py-1" />
+        <input type="number" inputmode="numeric" placeholder="補助" class="ex-assist col-span-2 border rounded px-2 py-1" />
+        <div class="col-span-4 flex items-center gap-1">
+          <input type="number" inputmode="numeric" placeholder="時間(秒)" class="ex-sec flex-1 border rounded px-2 py-1" />
+          <button class="ex-sec-toggle px-2 py-1 rounded border text-xs">▶</button>
+        </div>
+        <input type="text" placeholder="メモ" class="ex-note col-span-12 border rounded px-2 py-1" />
         <div class="col-span-12 text-[11px] text-gray-500">推定1RM: <span class="ex-1rm">-</span> kg</div>
       </div>
     </div>
@@ -306,7 +343,6 @@
 
 
   <script>
-    // ===== Error Bar =====
     (()=> {
       const bar = document.getElementById('error-bar');
       const text = document.getElementById('error-text');
@@ -318,7 +354,6 @@
       window.__forceError = ()=> { throw new Error('Forced error'); };
     })();
 
-    // ===== Utils =====
     const $ = (sel, root=document)=> root.querySelector(sel);
     const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
     const debounce = (fn, ms=300)=> { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
@@ -330,127 +365,246 @@
     const sortJa = (arr)=> arr.slice().sort((a,b)=> String(a).localeCompare(String(b),'ja',{usage:'sort',sensitivity:'base'}));
     const sortExerciseMapJa = (map)=> map.slice().sort((a,b)=> (a.name||'').localeCompare(b.name||'','ja',{usage:'sort',sensitivity:'base'}));
 
-    // ===== Storage with Schema =====
-    const SCHEMA_VERSION = 4; // iPhone tune + ja sort + date bar & filters width
+    const SCHEMA_VERSION = 8;
     const NS = 'workout-app';
+    const K_LISTS     = NS+':lists';
+    const K_WORKOUTS  = NS+':workouts';
+    const K_INPROG    = NS+':inProgress';
+    const K_BACKUPCFG = NS+':backupConfig';
+
     const store = {
-      get(key, d=null){ try{ const raw = localStorage.getItem(NS+':'+key); if(!raw) return d; const obj = JSON.parse(raw); return obj&&obj.v===SCHEMA_VERSION ? obj.data : d; }catch{ return d; } },
-      set(key, data){ localStorage.setItem(NS+':'+key, JSON.stringify({v:SCHEMA_VERSION, data})); },
-      clearAll(){ Object.keys(localStorage).filter(k=>k.startsWith(NS+':')).forEach(k=>localStorage.removeItem(k)); }
+      getRaw(key){ try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }catch{ return null; } },
+      setRaw(key, obj){ localStorage.setItem(key, JSON.stringify(obj)); },
+      get(key, fallback){
+        const obj = store.getRaw(key);
+        if(!obj) return fallback;
+        return ('data' in obj) ? obj.data : obj;
+      },
+      set(key, data){ store.setRaw(key, { v: SCHEMA_VERSION, data }); },
+      getAny(key, fallback){
+        const obj = store.getRaw(key);
+        if(!obj) return fallback;
+        return ('data' in obj) ? obj.data : obj;
+      }
     };
 
-    // ===== Defaults =====
     const DEFAULTS = {
       parts: ['胸','背中','肩','腕','脚','腹筋'],
       equip: ['バーベル','ダンベル','マシン','ケーブル','自重'],
       attach: ['なし','ストレートバー','Vバー','ロープ','Dハンドル','EZバー'],
       angle: ['なし','フラット','インクライン','デクライン','ナチュラル'],
-      // メジャー種目（必要に応じて削除可）
+      position: ['なし','ナロー','ミディアム','ワイド','オーバーグリップ','アンダーグリップ','ニュートラル'],
       exerciseMap: [
-        // 胸
-        { name:'インクラインダンベルプレス', parts:['胸','肩'] },
-        { name:'インクラインベンチプレス', parts:['胸','肩'] },
-        { name:'ケーブルクロスオーバー', parts:['胸'] },
-        { name:'ダンベルベンチプレス', parts:['胸'] },
-        { name:'ダンベルフライ', parts:['胸'] },
-        { name:'デクラインベンチプレス', parts:['胸'] },
-        { name:'ディップス(胸)', parts:['胸'] },
-        { name:'プッシュアップ', parts:['胸'] },
-        { name:'ペックデックフライ', parts:['胸'] },
         { name:'ベンチプレス', parts:['胸'] },
-        // 背中
-        { name:'Tバーロー', parts:['背中'] },
-        { name:'シーテッドロー', parts:['背中'] },
-        { name:'ストレートアームプルダウン', parts:['背中'] },
-        { name:'チンアップ', parts:['背中','腕'] },
+        { name:'フライ', parts:['胸'] },
+        { name:'クロスオーバー', parts:['胸'] },
+        { name:'ペックフライ', parts:['胸'] },
+        { name:'プッシュアップ', parts:['胸'] },
+        { name:'ディップス', parts:['胸','腕'] },
         { name:'デッドリフト', parts:['背中','脚'] },
-        { name:'バーベルローイング', parts:['背中'] },
-        { name:'ペンドレイロー', parts:['背中'] },
+        { name:'ローイング', parts:['背中'] },
+        { name:'ワンハンドロー', parts:['背中'] },
+        { name:'シーテッドロー', parts:['背中'] },
+        { name:'ラットプルダウン', parts:['背中'] },
         { name:'プルアップ', parts:['背中'] },
+        { name:'チンアップ', parts:['背中','腕'] },
         { name:'フェイスプル', parts:['背中','肩'] },
-        { name:'ラットプルダウン(クローズ)', parts:['背中'] },
-        { name:'ラットプルダウン(ワイド)', parts:['背中'] },
-        { name:'ワンハンドダンベルロー', parts:['背中'] },
-        // 肩
-        { name:'アップライトロー', parts:['肩'] },
-        { name:'アーノルドプレス', parts:['肩'] },
-        { name:'ショルダープレス(ダンベル)', parts:['肩'] },
-        { name:'ショルダープレス(バーベル)', parts:['肩'] },
+        { name:'ストレートアームプルダウン', parts:['背中'] },
+        { name:'ショルダープレス', parts:['肩'] },
         { name:'サイドレイズ', parts:['肩'] },
         { name:'フロントレイズ', parts:['肩'] },
-        { name:'リアレイズ(リバースペックデック)', parts:['肩','背中'] },
-        // 腕
-        { name:'オーバーヘッドトライセプスエクステンション(ケーブル)', parts:['腕'] },
-        { name:'オーバーヘッドトライセプスエクステンション(ダンベル)', parts:['腕'] },
-        { name:'クローズグリップベンチプレス', parts:['腕','胸'] },
-        { name:'ケーブルカール', parts:['腕'] },
-        { name:'スカルクラッシャー(ライイングトライセプスエクステンション)', parts:['腕'] },
+        { name:'リアレイズ', parts:['肩','背中'] },
+        { name:'アップライトロー', parts:['肩'] },
+        { name:'アーノルドプレス', parts:['肩'] },
+        { name:'バイセプスカール', parts:['腕'] },
         { name:'ハンマーカール', parts:['腕'] },
-        { name:'バイセプスカール(ダンベル)', parts:['腕'] },
-        { name:'バイセプスカール(バーベル)', parts:['腕'] },
-        { name:'トライセプスプレスダウン', parts:['腕'] },
-        { name:'ディップス(上腕三頭筋)', parts:['腕'] },
         { name:'プリーチャーカール', parts:['腕'] },
-        // 脚
-        { name:'カーフレイズ(シーテッド)', parts:['脚'] },
-        { name:'カーフレイズ(スタンディング)', parts:['脚'] },
-        { name:'スクワット(フロント)', parts:['脚'] },
-        { name:'スクワット(バック)', parts:['脚'] },
+        { name:'トライセプスエクステンション', parts:['腕'] },
+        { name:'オーバーヘッドトライセプスエクステンション', parts:['腕'] },
+        { name:'スカルクラッシャー', parts:['腕'] },
+        { name:'プレスダウン', parts:['腕'] },
+        { name:'クローズグリップベンチプレス', parts:['腕','胸'] },
+        { name:'スクワット', parts:['脚'] },
+        { name:'レッグプレス', parts:['脚'] },
         { name:'ハックスクワット', parts:['脚'] },
         { name:'ブルガリアンスクワット', parts:['脚'] },
-        { name:'ヒップスラスト', parts:['脚'] },
         { name:'ランジ', parts:['脚'] },
-        { name:'ルーマニアンデッドリフト', parts:['脚','背中'] },
         { name:'レッグエクステンション', parts:['脚'] },
-        { name:'レッグカール(シーテッド)', parts:['脚'] },
-        { name:'レッグカール(ライイング)', parts:['脚'] },
-        { name:'レッグプレス', parts:['脚'] },
-        // 腹筋
-        { name:'アブローラー', parts:['腹筋'] },
+        { name:'レッグカール', parts:['脚'] },
+        { name:'ルーマニアンデッドリフト', parts:['脚','背中'] },
+        { name:'ヒップスラスト', parts:['脚'] },
+        { name:'カーフレイズ', parts:['脚'] },
         { name:'クランチ', parts:['腹筋'] },
-        { name:'ケーブルクランチ', parts:['腹筋'] },
         { name:'ハンギングレッグレイズ', parts:['腹筋'] },
+        { name:'ケーブルクランチ', parts:['腹筋'] },
         { name:'プランク', parts:['腹筋'] },
-        { name:'リバースクランチ', parts:['腹筋'] },
-        { name:'ロシアンツイスト', parts:['腹筋'] }
+        { name:'アブローラー', parts:['腹筋'] },
+        { name:'ロシアンツイスト', parts:['腹筋'] },
+        { name:'リバースクランチ', parts:['腹筋'] }
       ]
     };
 
-    // ===== App State =====
-    const state = {
-      lists: null,           // {parts, equip, attach, angle, exerciseMap}
-      workouts: null,        // [{id,date,blocks:[{part,exs:[{name,eq,att,ang}],sets:[{warm,items:[{w,reps,assist,note,oneRM}]}]}]}]
-      inProgress: null,      // {date, part (default for new blocks), blocks:[...]}
-      chart: null
-    };
+    const state = { lists:null, workouts:null, inProgress:null, chart:null };
 
-    // ===== Init =====
-    function initData(){
-      let lists = store.get('lists');
-      if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); }
-      // ensure defaults + sort bases
-      if(lists.attach[0] !== 'なし'){ lists.attach = ['なし', ...lists.attach.filter(x=>x!=='なし')]; }
-      if(lists.angle[0] !== 'なし'){ lists.angle = ['なし', ...lists.angle.filter(x=>x!=='なし')]; }
-      // 常に表示はあいうえお順で並べる（保存順は保持）
-      lists.parts = sortJa(lists.parts);
-      lists.equip = sortJa(lists.equip);
-      lists.attach = sortJa(lists.attach);
-      lists.angle = sortJa(lists.angle);
-      lists.exerciseMap = sortExerciseMapJa(lists.exerciseMap);
-      state.lists = lists;
-      store.set('lists', lists);
-
-      let workouts = store.get('workouts', []);
-      state.workouts = workouts;
-
-      let inProgress = store.get('inProgress', { date: todayISO(), part: '胸', blocks: [] });
-      if(!inProgress.date) inProgress.date = todayISO();
-      if(!inProgress.blocks) inProgress.blocks = [];
-      state.inProgress = inProgress;
+    function cleanupExercises(map){
+      const banWords = ['ダンベル','バーベル','ケーブル','インクライン','デクライン','フラット','(ダンベル)','(バーベル)'];
+      const norm = (name)=> banWords.reduce((s,w)=> s.replaceAll(w,''), String(name)).replace(/\s+/g,'').replace(/[（）]/g,'').trim();
+      const out = []; const seen = new Set();
+      (map||[]).forEach(e=>{
+        const n = norm(e.name||'');
+        if(!n) return;
+        if(!seen.has(n)){ seen.add(n); out.push({ name:n, parts:Array.from(new Set(e.parts||[])) }); }
+        else {
+          const idx = out.findIndex(x=> x.name===n);
+          out[idx].parts = Array.from(new Set([...(out[idx].parts||[]), ...(e.parts||[])]));
+        }
+      });
+      return sortExerciseMapJa(out);
     }
-    function persist(){ store.set('lists', state.lists); store.set('workouts', state.workouts); store.set('inProgress', state.inProgress); }
 
-    // ===== Router =====
+    async function migrateAllIfNeeded(){
+      let lists = store.getAny(K_LISTS, null);
+      if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); }
+      const uniq = a => Array.from(new Set(a||[]));
+      const putNoneFirst = a => {
+        const arr = uniq(a||[]);
+        const rest = arr.filter(x=>x!=='なし');
+        return ['なし', ...rest];
+      };
+      if(!lists.position) lists.position = DEFAULTS.position.slice();
+      lists.attach   = putNoneFirst(lists.attach || DEFAULTS.attach);
+      lists.angle    = putNoneFirst(lists.angle  || DEFAULTS.angle);
+      lists.position = putNoneFirst(lists.position);
+      lists.exerciseMap = cleanupExercises(lists.exerciseMap || DEFAULTS.exerciseMap);
+      lists.parts     = sortJa(lists.parts || DEFAULTS.parts);
+      lists.equip     = sortJa(lists.equip || DEFAULTS.equip);
+      lists.attach    = sortJa(lists.attach);
+      lists.angle     = sortJa(lists.angle);
+      lists.position  = sortJa(lists.position);
+      store.set(K_LISTS, lists);
+
+      let workouts = store.getAny(K_WORKOUTS, []);
+      workouts.forEach(w=>{
+        (w.blocks||[]).forEach(b=>{
+          if(!b.part && w.part) b.part = w.part;
+          (b.exs||[]).forEach(ex=>{
+            if(ex.pos == null) ex.pos = 'なし';
+            if(ex.att == null) ex.att = 'なし';
+            if(ex.ang == null) ex.ang = 'なし';
+          });
+          (b.sets||[]).forEach(s=>{
+            (s.items||[]).forEach(it=>{
+              if(it.sec == null) it.sec = 0;
+              if(typeof it.oneRM !== 'number') it.oneRM = 0;
+            });
+          });
+        });
+      });
+      store.set(K_WORKOUTS, workouts);
+
+      let inProg = store.getAny(K_INPROG, { date: todayISO(), part:'胸', blocks: [] });
+      if(!inProg.date) inProg.date = todayISO();
+      if(!inProg.part) inProg.part = '胸';
+      if(!Array.isArray(inProg.blocks)) inProg.blocks = [];
+      store.set(K_INPROG, inProg);
+
+      let backupCfg = store.getAny(K_BACKUPCFG, null);
+      if(!backupCfg){
+        backupCfg = { auto:true, frequencyMin:120, lastAt:null, persistGranted:false };
+        store.set(K_BACKUPCFG, backupCfg);
+      }
+    }
+
+    async function requestPersistence(){
+      if(navigator.storage && navigator.storage.persist){
+        try{
+          const granted = await navigator.storage.persist();
+          const cfg = store.get(K_BACKUPCFG, {auto:true,frequencyMin:120,lastAt:null,persistGranted:false});
+          cfg.persistGranted = !!granted;
+          store.set(K_BACKUPCFG, cfg);
+        }catch{}
+      }
+    }
+
+    async function getBackupConfig(){ return store.get(K_BACKUPCFG, {auto:true,frequencyMin:120,lastAt:null,persistGranted:false}); }
+    function setBackupConfig(cfg){ store.set(K_BACKUPCFG, cfg); }
+
+    function serializeAll(){
+      return JSON.stringify({
+        version: SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        lists: store.get(K_LISTS, null),
+        workouts: store.get(K_WORKOUTS, []),
+        inProgress: store.get(K_INPROG, null)
+      });
+    }
+
+    async function backupNow(interactive=false){
+      const cfg = await getBackupConfig();
+      const blob = new Blob([serializeAll()], {type:'application/json'});
+      const fileName = `workout_backup_${todayISO()}.json`;
+
+      try{
+        if (navigator.storage && navigator.storage.getDirectory){
+          const root = await navigator.storage.getDirectory();
+          const handle = await root.getFileHandle('workout_backup.json', { create:true });
+          const ws = await handle.createWritable();
+          await ws.write(blob);
+          await ws.close();
+          const c = store.get(K_BACKUPCFG, cfg); c.lastAt = new Date().toISOString(); store.set(K_BACKUPCFG, c);
+        }
+      }catch(e){}
+
+      if(navigator.share && interactive){
+        try{
+          const file = new File([blob], fileName, { type:'application/json' });
+          await navigator.share({ files:[file], title:'Workout Backup', text:'バックアップを保存' });
+          const c = store.get(K_BACKUPCFG, cfg); c.lastAt = new Date().toISOString(); store.set(K_BACKUPCFG, c);
+          return true;
+        }catch(e){}
+      }
+
+      if(interactive){
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        document.body.appendChild(a); a.click(); a.remove();
+        const c = store.get(K_BACKUPCFG, cfg); c.lastAt = new Date().toISOString(); store.set(K_BACKUPCFG, c);
+      }
+      return true;
+    }
+
+    async function restoreFromFile(){
+      try{
+        if(!window.showOpenFilePicker){ alert('このブラウザはファイル選択APIに未対応です。CSVインポートや共有からファイル取得をご利用ください。'); return; }
+        const [fileHandle] = await window.showOpenFilePicker({ types:[{description:'JSON', accept:{'application/json':['.json']}}] });
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        const obj = JSON.parse(text);
+        if(!obj.lists || !obj.workouts){ alert('不正なバックアップファイルです。'); return; }
+        store.set(K_LISTS, obj.lists);
+        store.set(K_WORKOUTS, obj.workouts);
+        if(obj.inProgress) store.set(K_INPROG, obj.inProgress);
+        alert('復元しました。再描画します。');
+        renderRoute();
+      }catch(e){ alert('復元がキャンセル/失敗しました。'); }
+    }
+
+    let _bkTicker = null;
+    function startAutoBackupTicker(){
+      if(_bkTicker) clearInterval(_bkTicker);
+      const cfg = store.get(K_BACKUPCFG, {auto:true,frequencyMin:120,lastAt:null,persistGranted:false});
+      if(!cfg.auto) return;
+      const ms = Math.max(5, Number(cfg.frequencyMin||120)) * 60 * 1000;
+      _bkTicker = setInterval(()=> backupNow(false), ms);
+    }
+
+    async function afterDataChanged(){
+      requestPersistence();
+      const cfg = await getBackupConfig();
+      if(cfg.auto){ try{ await backupNow(false); }catch{} }
+    }
+
     function setActiveTab(hash){
       $$('.tab-btn').forEach(btn=>{
         const active = btn.getAttribute('data-route') === hash;
@@ -459,36 +613,47 @@
     }
     function renderRoute(){
       const hash = location.hash || '#/home';
-      $('#view-home').classList.add('hidden');
-      $('#view-history').classList.add('hidden');
-      $('#view-settings').classList.add('hidden');
-      if(hash.startsWith('#/home')) { $('#view-home').classList.remove('hidden'); renderHome(); }
-      else if(hash.startsWith('#/history')) { $('#view-history').classList.remove('hidden'); renderHistory(); }
-      else { $('#view-settings').classList.remove('hidden'); renderSettings(); }
+      ['#view-home','#view-workout','#view-history','#view-settings'].forEach(id=>{
+        const el = document.querySelector(id);
+        if(el) el.classList.add('hidden');
+      });
+      if(hash.startsWith('#/home')) { document.querySelector('#view-home').classList.remove('hidden'); renderHome(); }
+      else if(hash.startsWith('#/workout')) { document.querySelector('#view-workout').classList.remove('hidden'); renderWorkout(); }
+      else if(hash.startsWith('#/history')) { document.querySelector('#view-history').classList.remove('hidden'); renderHistory(); }
+      else { document.querySelector('#view-settings').classList.remove('hidden'); renderSettings(); }
       setActiveTab(hash);
     }
     window.addEventListener('hashchange', renderRoute);
 
-    // ===== 1RM =====
     function calc1RM(weight, reps){
       const w = Number(weight||0), r = Number(reps||0);
       if(w<=0 || r<=0) return 0;
       return Math.round(w * (1 + r/30) * 10) / 10;
     }
-
-    // ===== Stats =====
     function computeTrainingDays(rangeDays){
       const cutoff = Date.now() - rangeDays*24*3600*1000;
-      const days = new Set(state.workouts.filter(w => new Date(w.date||todayISO()).getTime() >= cutoff).map(w => w.date||todayISO()));
+      const days = new Set(store.get(K_WORKOUTS, []).filter(w => new Date(w.date||todayISO()).getTime() >= cutoff).map(w => w.date||todayISO()));
       return days.size;
     }
 
-    // ===== Home =====
+    function initData(){
+      state.lists = store.get(K_LISTS, JSON.parse(JSON.stringify(DEFAULTS)));
+      state.workouts = store.get(K_WORKOUTS, []);
+      state.inProgress = store.get(K_INPROG, { date: todayISO(), part: '胸', blocks: [] });
+      if(!state.inProgress.date) state.inProgress.date = todayISO();
+      if(!state.inProgress.blocks) state.inProgress.blocks = [];
+    }
+    function persist(){
+      store.set(K_LISTS, state.lists);
+      store.set(K_WORKOUTS, state.workouts);
+      store.set(K_INPROG, state.inProgress);
+    }
+
+    /* DASHBOARD */
     function renderHome(){
-      // date input
       const dateEl = $('#inp-date');
       dateEl.value = state.inProgress.date || todayISO();
-      dateEl.onchange = (e)=> { state.inProgress.date = e.target.value || todayISO(); persist(); };
+      dateEl.onchange = (e)=> { state.inProgress.date = e.target.value || todayISO(); persist(); afterDataChanged(); };
 
       $('#stat-week').textContent = computeTrainingDays(7);
       $('#stat-month').textContent = computeTrainingDays(30);
@@ -502,61 +667,57 @@
         b.onclick = ()=>{ state.inProgress.part = b.dataset.part; persist(); renderHome(); };
       });
 
-      const wrap = $('#blocks');
-      wrap.innerHTML = '';
-      state.inProgress.blocks.forEach((block, idx)=>{
-        wrap.appendChild(renderBlock(block, idx));
-      });
-
-      // actions
-      $('#btn-add-block').onclick = addBlock;
-      $('#btn-save-workout').onclick = saveWorkout;
+      const btn = $('#btn-start-or-resume');
+      if (btn) {
+        const hasBlocks = (state.inProgress.blocks||[]).length > 0;
+        btn.textContent = hasBlocks ? 'トレーニングを再開' : '今日のトレーニングを開始';
+        btn.onclick = ()=> { location.hash = '#/workout'; };
+      }
     }
 
+    /* WORKOUT */
+    function renderWorkout(){
+      $('#workout-date').textContent = state.inProgress.date || todayISO();
+      $('#workout-part').textContent = state.inProgress.part || '-';
+      $('#btn-back-to-home').onclick = ()=> { location.hash = '#/home'; };
+      $('#btn-save-workout').onclick = ()=> { saveWorkout(); location.hash = '#/home'; };
+      $('#btn-add-block').onclick = addBlock;
+      const wrap = $('#blocks');
+      wrap.innerHTML = '';
+      (state.inProgress.blocks||[]).forEach((block, idx)=> wrap.appendChild(renderBlock(block, idx)));
+    }
+    /* Builders */
     function renderBlock(block, idx){
       const frag = document.importNode($('#tpl-block').content, true);
-      const card = frag.querySelector('.block-card');
-      card.dataset.index = idx;
       frag.querySelector('.block-index').textContent = '#'+(idx+1);
-      frag.querySelector('.block-part').textContent = `（${block.part}）`;
+      frag.querySelector('.block-part').textContent = `（${block.part || state.inProgress.part}）`;
 
-      // open chooser
       frag.querySelector('.btn-choose-ex').onclick = ()=> openExerciseChooser(idx);
-
-      // delete block
       frag.querySelector('.btn-del-block').onclick = async ()=>{
         if(await confirmAction('ブロックを削除しますか？')){
           state.inProgress.blocks.splice(idx,1);
-          persist(); renderHome();
+          persist(); renderWorkout(); afterDataChanged();
         }
       };
 
-      // ex config rows
       const cfgWrap = frag.querySelector('.ex-config');
-      block.exs.forEach((ex)=>{
-        cfgWrap.appendChild(renderExConfigRow(block, ex));
-      });
+      (block.exs||[]).forEach(ex=> cfgWrap.appendChild(renderExConfigRow(block, ex)));
 
-      // sets area
       const setWrap = frag.querySelector('.set-list');
-      frag.querySelector('.btn-add-set').onclick = ()=> addSet(block, true); // copy last set
+      frag.querySelector('.btn-add-set').onclick = ()=> { addSet(block, true); };
       frag.querySelector('.btn-clear-sets').onclick = async ()=>{
         if(await confirmAction('このブロックの全セットを削除しますか？')){
-          block.sets = [];
-          persist(); renderHome();
+          block.sets = []; persist(); renderWorkout(); afterDataChanged();
         }
       };
-      (block.sets||[]).forEach((set, sIdx)=>{
-        setWrap.appendChild(renderSetCard(block, set, sIdx));
-      });
+      (block.sets||[]).forEach((set, sIdx)=> setWrap.appendChild(renderSetCard(block, set, sIdx)));
 
       return frag;
     }
 
     function addBlock(){
-      // 新規ブロックは“現在選択中の部位”を固定保持
       state.inProgress.blocks.push({ part: state.inProgress.part, exs: [], sets: [] });
-      persist(); renderHome();
+      persist(); renderWorkout();
       setTimeout(()=> window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 0);
       const idx = state.inProgress.blocks.length - 1;
       setTimeout(()=> openExerciseChooser(idx), 50);
@@ -564,10 +725,7 @@
 
     function openExerciseChooser(blockIdx){
       const part = state.inProgress.blocks[blockIdx].part || state.inProgress.part;
-      // 部位紐付けされた種目をあいうえお順で
-      const allowed = sortJa(
-        state.lists.exerciseMap.filter(e=> Array.isArray(e.parts) && e.parts.includes(part)).map(e=> e.name)
-      );
+      const allowed = sortJa(state.lists.exerciseMap.filter(e=> (e.parts||[]).includes(part)).map(e=> e.name));
       const current = new Set((state.inProgress.blocks[blockIdx].exs||[]).map(e=> e.name));
 
       const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
@@ -600,44 +758,42 @@
         applySelectedExercises(blockIdx, checked);
         bg.remove();
       };
-      bg.addEventListener('click', e=> { if(e.target===bg) bg.remove(); });
+      bg.addEventListener('click', e=> { if(e.target===bg){ bg.remove(); } });
     }
 
     function applySelectedExercises(blockIdx, names){
       const block = state.inProgress.blocks[blockIdx];
       const before = block.exs || [];
-      // exs自体の表示順は選択順を維持（管理上はそれでOK）
       block.exs = names.map(name=>{
         const found = before.find(e=> e.name===name);
-        return found || { name, eq: state.lists.equip[0]||'', att: 'なし', ang: 'なし' };
+        return found || { name, eq: state.lists.equip[0]||'', att: 'なし', ang: 'なし', pos: 'なし' };
       });
 
-      // align existing sets to new exercises
       (block.sets||[]).forEach(set=>{
         const items = set.items||[];
         const next = names.map((name)=>{
           const prevIdx = before.findIndex(e=> e.name===name);
           if(prevIdx>=0 && items[prevIdx]) return items[prevIdx];
-          return { w:0, reps:0, assist:0, note:'', oneRM:0 };
+          return { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
         });
         set.items = next;
       });
 
-      // セット未作成なら1セット自動生成
       if (!block.sets || block.sets.length === 0) {
-        const items = names.map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0 }));
+        const items = names.map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 }));
         block.sets = [{ warm:false, items }];
       }
 
-      persist(); renderHome();
+      persist(); renderWorkout(); afterDataChanged();
     }
 
     function renderExConfigRow(block, ex){
       const node = document.importNode($('#tpl-ex-config-row').content, true);
       node.querySelector('.ex-name').textContent = ex.name;
-      fillSelect(node.querySelector('.ex-eq'), state.lists.equip, ex.eq || state.lists.equip[0] || '', v=>{ ex.eq=v; persist(); });
-      fillSelect(node.querySelector('.ex-att'), state.lists.attach, ex.att || 'なし', v=>{ ex.att=v; persist(); });
-      fillSelect(node.querySelector('.ex-ang'), state.lists.angle, ex.ang || 'なし', v=>{ ex.ang=v; persist(); });
+      fillSelect(node.querySelector('.ex-eq'), state.lists.equip, ex.eq || state.lists.equip[0] || '', v=>{ ex.eq=v; persist(); afterDataChanged(); });
+      fillSelect(node.querySelector('.ex-att'), state.lists.attach, ex.att || 'なし', v=>{ ex.att=v; persist(); afterDataChanged(); });
+      fillSelect(node.querySelector('.ex-ang'), state.lists.angle, ex.ang || 'なし', v=>{ ex.ang=v; persist(); afterDataChanged(); });
+      fillSelect(node.querySelector('.ex-pos'), state.lists.position, ex.pos || 'なし', v=>{ ex.pos=v; persist(); afterDataChanged(); });
       updateExMetaLine(node, ex);
       return node;
     }
@@ -657,36 +813,33 @@
       node.querySelector('.set-no').textContent = '#'+(sIdx+1);
       const warm = node.querySelector('.set-warm');
       warm.checked = !!set.warm;
-      warm.addEventListener('input', ()=> { set.warm = warm.checked; persist(); });
+      warm.addEventListener('input', ()=> { set.warm = warm.checked; persist(); afterDataChanged(); });
 
       const itemsWrap = node.querySelector('.ex-items');
       ensureSetItems(block, set);
-      block.exs.forEach((ex, i)=>{
-        itemsWrap.appendChild(renderExItemRow(block, set, i, ex));
-      });
+      (block.exs||[]).forEach((ex, i)=> itemsWrap.appendChild(renderExItemRow(block, set, i, ex)));
 
       node.querySelector('.btn-dup-set').onclick = ()=> {
         const source = block.sets[sIdx];
         const cloned = JSON.parse(JSON.stringify(source));
         block.sets.splice(sIdx+1, 0, cloned);
-        persist(); renderHome();
+        persist(); renderWorkout(); afterDataChanged();
       };
       node.querySelector('.btn-del-set').onclick = ()=> {
         block.sets.splice(sIdx,1);
-        persist(); renderHome();
+        persist(); renderWorkout(); afterDataChanged();
       };
       return node;
     }
 
     function ensureSetItems(block, set){
       if(!set.items) set.items = [];
-      if(set.items.length < block.exs.length){
-        const last = set.items[set.items.length-1] || { w:0, reps:0, assist:0, note:'', oneRM:0 };
-        for(let i=set.items.length; i<block.exs.length; i++){
-          set.items[i] = { ...last };
-        }
-      } else if(set.items.length > block.exs.length){
-        set.items = set.items.slice(0, block.exs.length);
+      const need = (block.exs||[]).length;
+      if(set.items.length < need){
+        const last = set.items[set.items.length-1] || { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
+        for(let i=set.items.length; i<need; i++){ set.items[i] = { ...last }; }
+      } else if(set.items.length > need){
+        set.items = set.items.slice(0, need);
       }
     }
 
@@ -697,47 +850,69 @@
         const cloned = JSON.parse(JSON.stringify(last));
         block.sets.push(cloned);
       } else {
-        const items = (block.exs||[]).map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0 }));
+        const items = (block.exs||[]).map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 }));
         block.sets.push({ warm:false, items });
       }
-      persist(); renderHome();
+      persist(); renderWorkout(); afterDataChanged();
       setTimeout(()=> window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }), 0);
     }
 
     function renderExItemRow(block, set, idx, ex){
       const node = document.importNode($('#tpl-ex-item-row').content, true);
-      const item = set.items[idx];
-      node.querySelector('.ex-title').textContent = ex.name;
+      const item = set.items[idx] ||= { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
       const elW = node.querySelector('.ex-weight');
       const elR = node.querySelector('.ex-reps');
       const elA = node.querySelector('.ex-assist');
       const elN = node.querySelector('.ex-note');
       const elOne = node.querySelector('.ex-1rm');
+      const elSec = node.querySelector('.ex-sec');
+      const elSecToggle = node.querySelector('.ex-sec-toggle');
 
       elW.value = item.w || '';
       elR.value = item.reps || '';
       elA.value = item.assist || '';
       elN.value = item.note || '';
-      elOne.textContent = item.oneRM || '-';
+      elSec.value = item.sec || '';
 
       const recalc = debounce(()=>{
-        const one = calc1RM(elW.value, elR.value);
-        item.w = Number(elW.value||0);
-        item.reps = Number(elR.value||0);
+        const weight = Number(elW.value||0);
+        const reps = Number(elR.value||0);
+        const sec = Number(elSec.value||0);
+        item.w = weight;
+        item.reps = reps;
         item.assist = Number(elA.value||0);
         item.note = elN.value || '';
-        item.oneRM = one||0;
-        elOne.textContent = item.oneRM || '-';
+        item.sec = sec;
+        item.oneRM = sec>0 ? 0 : calc1RM(weight, reps);
+        elOne.textContent = item.sec>0 ? '-' : (item.oneRM || '-');
         persist();
-      }, 200);
+      }, 120);
 
-      [elW, elR, elA, elN].forEach(el=> el.addEventListener('input', recalc));
+      [elW, elR, elA, elN, elSec].forEach(el=> el.addEventListener('input', ()=> { recalc(); afterDataChanged(); }));
+
+      let startedAt = null; let timerId = null;
+      function setToggleRunning(running){ elSecToggle.textContent = running ? '■' : '▶'; }
+      elSecToggle.addEventListener('click', ()=>{
+        if(startedAt){
+          const elapsed = Math.round((Date.now() - startedAt)/1000);
+          startedAt = null;
+          if(timerId){ clearInterval(timerId); timerId=null; }
+          elSec.value = String((Number(elSec.value)||0) + elapsed);
+          setToggleRunning(false);
+          recalc(); afterDataChanged();
+        }else{
+          startedAt = Date.now();
+          setToggleRunning(true);
+          timerId = setInterval(()=>{}, 1000);
+        }
+      });
+
+      elOne.textContent = item.sec>0 ? '-' : (item.oneRM || '-');
       return node;
     }
 
     function fillSelect(sel, items, value, onChange){
-      // 表示は常にあいうえお順
-      const ordered = sortJa(items);
+      const ordered = sortJa(items||[]);
       sel.innerHTML = '';
       ordered.forEach(v=>{
         const opt = document.createElement('option'); opt.value=v; opt.textContent=v; sel.appendChild(opt);
@@ -746,13 +921,14 @@
       sel.onchange = e=> onChange(e.target.value);
     }
 
-    // ===== Save Workout =====
+    /* Save workout & history */
     function saveWorkout(){
       const copy = JSON.parse(JSON.stringify(state.inProgress));
-      // prune empties
       copy.blocks.forEach(b=>{
         b.sets = (b.sets||[]).map(s=>{
-          s.items = (s.items||[]).filter(it=> (Number(it.w)>0 && Number(it.reps)>0) || it.note);
+          s.items = (s.items||[]).filter(it=>{
+            return (Number(it.sec)>0) || (Number(it.w)>0 && Number(it.reps)>0) || it.note;
+          });
           return s;
         }).filter(s=> s.items.length>0);
       });
@@ -761,13 +937,12 @@
       copy.id = 'w_'+Date.now();
       state.workouts.push(copy);
       state.inProgress = { date: state.inProgress.date || todayISO(), part: state.inProgress.part, blocks: [] };
-      persist(); alert('保存しました'); renderHome();
+      persist(); alert('保存しました'); afterDataChanged();
     }
 
-    // ===== Flatten (history / CSV) =====
     function flattenSets(){
       const rows = [];
-      state.workouts.forEach(w=>{
+      (store.get(K_WORKOUTS, [])).forEach(w=>{
         (w.blocks||[]).forEach(b=>{
           (b.sets||[]).forEach((s, sIdx)=>{
             (b.exs||[]).forEach((ex, exIdx)=>{
@@ -780,11 +955,13 @@
                 equipment: ex.eq||'',
                 attachment: ex.att||'なし',
                 angle: ex.ang||'なし',
+                position: ex.pos||'なし',
                 setIndex: sIdx+1,
                 warmup: !!s.warm,
                 weight: Number(it.w||0),
                 repsSelf: Number(it.reps||0),
                 repsAssist: Number(it.assist||0),
+                durationSec: Number(it.sec||0),
                 note: it.note||'',
                 oneRM: Number(it.oneRM||0)
               });
@@ -795,28 +972,32 @@
       return rows.sort((a,b)=> a.date<b.date ? -1 : 1);
     }
 
-    // ===== History =====
     function renderHistory(){
       const parts = ['(指定なし)', ...sortJa(state.lists.parts)];
-      const exs = ['(指定なし)', ...sortJa(unique(flattenSets().map(r=>r.exercise)))];
+      const exs = ['(指定なし)', ...sortJa(Array.from(new Set(flattenSets().map(r=>r.exercise))))];
       const eqs = ['(指定なし)', ...sortJa(state.lists.equip)];
       const atts = ['(指定なし)', ...sortJa(state.lists.attach)];
       const angs = ['(指定なし)', ...sortJa(state.lists.angle)];
+      const poss = ['(指定なし)', ...sortJa(state.lists.position)];
       fillSelect($('#filter-part'), parts, '(指定なし)', ()=>{});
       fillSelect($('#filter-ex'), exs, '(指定なし)', ()=>{});
       fillSelect($('#filter-eq'), eqs, '(指定なし)', ()=>{});
       fillSelect($('#filter-att'), atts, '(指定なし)', ()=>{});
       fillSelect($('#filter-ang'), angs, '(指定なし)', ()=>{});
+      fillSelect($('#filter-pos'), poss, '(指定なし)', ()=>{});
 
       $('#btn-apply-filter').onclick = ()=> applyFilter();
-      $('#btn-clear-filter').onclick = ()=> { $('#filter-start').value=''; $('#filter-end').value=''; ['part','ex','eq','att','ang'].forEach(id=> $('#filter-'+id).value='(指定なし)'); applyFilter(); };
+      $('#btn-clear-filter').onclick = ()=> {
+        $('#filter-start').value=''; $('#filter-end').value='';
+        ['part','ex','eq','att','ang','pos'].forEach(id=> $('#filter-'+id).value='(指定なし)');
+        applyFilter();
+      };
 
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       const exParam = params.get('exercise');
       if(exParam){ $('#filter-ex').value = exParam; }
       applyFilter();
     }
-    function unique(arr){ return Array.from(new Set(arr)); }
 
     function applyFilter(){
       const start = $('#filter-start').value;
@@ -826,6 +1007,7 @@
       const eq = $('#filter-eq').value;
       const att = $('#filter-att').value;
       const ang = $('#filter-ang').value;
+      const pos = $('#filter-pos').value;
 
       let rows = flattenSets();
       if(start) rows = rows.filter(r => r.date >= start);
@@ -835,14 +1017,13 @@
       if(eq && eq!=='(指定なし)') rows = rows.filter(r => r.equipment===eq);
       if(att && att!=='(指定なし)') rows = rows.filter(r => r.attachment===att);
       if(ang && ang!=='(指定なし)') rows = rows.filter(r => r.angle===ang);
+      if(pos && pos!=='(指定なし)') rows = rows.filter(r => r.position===pos);
 
       renderHistoryList(rows);
       if(ex && ex!=='(指定なし)'){
         const dailyMax = aggregateDailyMax1RM(rows);
         renderChart(dailyMax.labels, dailyMax.values, true);
-      } else {
-        renderChart([], [], false);
-      }
+      } else { renderChart([], [], false); }
     }
 
     function aggregateDailyMax1RM(rows){
@@ -873,14 +1054,15 @@
         title.innerHTML = `<div class="text-sm font-semibold">${w.date} / ${partsInWorkout}</div>`;
         card.appendChild(title);
         items.forEach(r=>{
+          const timeLabel = r.durationSec ? ` / 時間 ${r.durationSec}s` : '';
           const row = document.createElement('div');
           row.className = 'mt-2 text-sm grid grid-cols-12 gap-1';
           row.innerHTML = `
-            <div class="col-span-5 truncate-2">${r.exercise} <span class="text-xs text-gray-500">(${r.equipment} / ${r.attachment} / ${r.angle})</span></div>
+            <div class="col-span-6 truncate-2">${r.exercise} <span class="text-xs text-gray-500">(${r.equipment} / ${r.attachment} / ${r.angle} / ${r.position})</span></div>
             <div class="col-span-3">重量 ${r.weight}kg</div>
-            <div class="col-span-2">自 ${r.repsSelf}</div>
+            <div class="col-span-1">自 ${r.repsSelf}</div>
             <div class="col-span-2">補 ${r.repsAssist}</div>
-            <div class="col-span-12 text-[11px] text-gray-500">部位:${r.part} / 1RM:${r.oneRM || '-'}kg / S${r.setIndex} ${r.note ? ' / '+escapeHtml(r.note) : ''}</div>
+            <div class="col-span-12 text-[11px] text-gray-500">部位:${r.part}${timeLabel} / 1RM:${r.oneRM || '-'}kg / S${r.setIndex} ${r.note ? ' / '+escapeHtml(r.note) : ''}</div>
           `;
           card.appendChild(row);
         });
@@ -890,8 +1072,7 @@
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       const exParam = params.get('exercise');
       const backBtn = $('#btn-back-to-home-from-simple');
-      backBtn.classList.toggle('hidden', !exParam);
-      backBtn.onclick = ()=> { location.hash = '#/home'; };
+      if(backBtn){ backBtn.classList.toggle('hidden', !exParam); backBtn.onclick = ()=> { location.hash = '#/workout'; }; }
     }
 
     function renderChart(labels, values, show){
@@ -907,83 +1088,145 @@
       });
     }
 
-    // ===== Settings (checkbox matrix) =====
+    /* SETTINGS */
     function renderSettings(){
       $('#list-parts').value = sortJa(state.lists.parts).join('\n');
       $('#list-equip').value = sortJa(state.lists.equip).join('\n');
       $('#list-attach').value = sortJa(state.lists.attach).join('\n');
       $('#list-angle').value = sortJa(state.lists.angle).join('\n');
+      $('#list-position').value = sortJa(state.lists.position).join('\n');
 
-      const tbody = $('#exercise-table-body');
-      tbody.innerHTML = '';
+      const boxes = $('#part-boxes');
+      boxes.innerHTML = '';
       const parts = sortJa(state.lists.parts);
 
-      // 表示は常に種目名あいうえお順
-      sortExerciseMapJa(state.lists.exerciseMap).forEach((row)=> {
-        tbody.appendChild(renderExerciseRow(row, parts));
+      parts.forEach(part=>{
+        const card = document.createElement('div');
+        card.className = 'rounded-xl border p-3 bg-white shadow-soft';
+        const head = document.createElement('div');
+        head.className = 'flex items-center justify-between mb-2';
+        head.innerHTML = `<div class="text-sm font-semibold">${part} の種目</div>`;
+        const addBtn = document.createElement('button');
+        addBtn.className = 'px-2 py-1.5 rounded-md border text-xs';
+        addBtn.textContent = '追加';
+        head.appendChild(addBtn);
+        card.appendChild(head);
+
+        const list = document.createElement('div');
+        list.className = 'space-y-1';
+        card.appendChild(list);
+
+        function refreshList(){
+          list.innerHTML = '';
+          const rows = sortExerciseMapJa(state.lists.exerciseMap).filter(e=> (e.parts||[]).includes(part));
+          if(rows.length===0){
+            list.innerHTML = `<div class="text-xs text-gray-500">まだありません。</div>`;
+          }else{
+            rows.forEach(row=> list.appendChild(renderExerciseRowByPart(row, part, refreshList)));
+          }
+        }
+
+        addBtn.onclick = async ()=>{
+          const name = await promptModal('新しい種目名を入力（器具名・角度名は含めない）');
+          if(!name) return;
+          const clean = cleanupExercises([{name, parts:[part]}])[0];
+          if(!clean) return;
+          const idx = state.lists.exerciseMap.findIndex(e=> e.name===clean.name);
+          if(idx>=0){
+            const pset = new Set(state.lists.exerciseMap[idx].parts||[]);
+            pset.add(part);
+            state.lists.exerciseMap[idx].parts = Array.from(pset);
+          }else{
+            state.lists.exerciseMap.push({ name: clean.name, parts:[part] });
+          }
+          state.lists.exerciseMap = sortExerciseMapJa(state.lists.exerciseMap);
+          persist(); refreshList(); afterDataChanged();
+        };
+
+        refreshList();
+        boxes.appendChild(card);
       });
 
-      $('#btn-add-ex-row').onclick = ()=>{
-        const newRow = { name:'', parts:[] };
-        state.lists.exerciseMap.push(newRow);
-        tbody.appendChild(renderExerciseRow(newRow, parts));
-      };
+      $('#btn-save-lists').onclick = ()=> { saveLists(); };
+      $('#btn-reset-defaults').onclick = ()=> { resetDefaults(); };
 
-      // actions are bound globally
+      const cfg = store.get(K_BACKUPCFG, {auto:true,frequencyMin:120,lastAt:null,persistGranted:false});
+      const elAuto = document.getElementById('bk-auto');
+      const elFreq = document.getElementById('bk-frequency');
+      const elLast = document.getElementById('bk-last');
+      if(elAuto){ elAuto.checked = !!cfg.auto; elAuto.onchange = ()=> { const c=store.get(K_BACKUPCFG,cfg); c.auto = elAuto.checked; store.set(K_BACKUPCFG,c); startAutoBackupTicker(); }; }
+      if(elFreq){ elFreq.value = cfg.frequencyMin || 120; elFreq.oninput = ()=> { const c=store.get(K_BACKUPCFG,cfg); c.frequencyMin = Math.max(5, Number(elFreq.value||120)); store.set(K_BACKUPCFG,c); startAutoBackupTicker(); }; }
+      if(elLast){ elLast.textContent = cfg.lastAt ? new Date(cfg.lastAt).toLocaleString() : '-'; }
+      const chooseBtn = document.getElementById('bk-choose');
+      if(chooseBtn){ chooseBtn.onclick = ()=> alert('OPFSに自動保存します。iCloudへは「今すぐバックアップ」を使い、共有シートからFiles(iCloud Drive)に保存してください。'); }
+      const nowBtn = document.getElementById('bk-now');
+      if(nowBtn){ nowBtn.onclick = async ()=> { await backupNow(true); const c=store.get(K_BACKUPCFG, {}); const elLast=document.getElementById('bk-last'); if(elLast){ elLast.textContent = c.lastAt ? new Date(c.lastAt).toLocaleString() : '-'; } }; }
+      const restoreBtn = document.getElementById('bk-restore');
+      if(restoreBtn){ restoreBtn.onclick = async ()=> { await restoreFromFile(); }; }
     }
 
-    function renderExerciseRow(row, parts){
-      const tr = document.createElement('tr');
-      tr.className = 'border-b';
-
-      const tdDel = document.createElement('td');
-      tdDel.className = 'border px-2 py-1';
-      const btnDel = document.createElement('button');
-      btnDel.className = 'px-2 py-1 rounded border text-xs';
-      btnDel.textContent = '×';
-      btnDel.onclick = ()=>{
-        const i = state.lists.exerciseMap.indexOf(row);
-        if(i>=0) { state.lists.exerciseMap.splice(i,1); tr.remove(); }
-      };
-      tdDel.appendChild(btnDel);
-
-      const tdName = document.createElement('td');
-      tdName.className = 'border px-2 py-1';
+    function renderExerciseRowByPart(row, part, refresh){
+      const wrap = document.createElement('div');
+      wrap.className = 'grid grid-cols-12 gap-1 items-center';
+      const nameCol = document.createElement('div');
+      nameCol.className = 'col-span-7';
       const ipt = document.createElement('input');
       ipt.type = 'text';
-      ipt.className = 'w-full border rounded px-2 py-1';
-      ipt.value = row.name || '';
-      ipt.oninput = ()=> { row.name = ipt.value.trim(); };
-      tdName.appendChild(ipt);
+      ipt.className = 'w-full border rounded px-2 py-1 text-sm';
+      ipt.value = row.name;
+      nameCol.appendChild(ipt);
 
-      const tdParts = document.createElement('td');
-      tdParts.className = 'border px-2 py-1';
-      const wrap = document.createElement('div');
-      wrap.className = 'flex flex-wrap gap-3';
-      parts.forEach(p=>{
-        const label = document.createElement('label');
-        label.className = 'inline-flex items-center gap-1';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = Array.isArray(row.parts) ? row.parts.includes(p) : false;
-        cb.onchange = ()=>{
-          if(!Array.isArray(row.parts)) row.parts = [];
-          if(cb.checked){
-            if(!row.parts.includes(p)) row.parts.push(p);
-          } else {
-            row.parts = row.parts.filter(x=> x!==p);
-          }
-        };
-        label.appendChild(cb);
-        label.appendChild(document.createTextNode(p));
-        wrap.appendChild(label);
-      });
-      tdParts.appendChild(wrap);
+      const btns = document.createElement('div');
+      btns.className = 'col-span-5 flex justify-end gap-2';
+      const btnSave = document.createElement('button');
+      btnSave.className = 'px-2 py-1.5 rounded-md border text-xs';
+      btnSave.textContent = '名称更新';
+      const btnDel = document.createElement('button');
+      btnDel.className = 'px-2 py-1.5 rounded-md border text-xs text-red-700 border-red-200';
+      btnDel.textContent = '削除';
 
-      tr.appendChild(tdDel);
-      tr.appendChild(tdName);
-      tr.appendChild(tdParts);
-      return tr;
+      btns.appendChild(btnSave);
+      btns.appendChild(btnDel);
+
+      btnSave.onclick = ()=>{
+        const newNameRaw = ipt.value.trim();
+        if(!newNameRaw) return;
+        const cleaned = cleanupExercises([{name:newNameRaw, parts:row.parts}])[0];
+        if(!cleaned) return;
+        const idxOther = state.lists.exerciseMap.findIndex(e=> e.name===cleaned.name);
+        const idxSelf  = state.lists.exerciseMap.findIndex(e=> e.name===row.name);
+        if(idxOther>=0 && idxOther!==idxSelf){
+          const merged = Array.from(new Set([...(state.lists.exerciseMap[idxOther].parts||[]), ...(state.lists.exerciseMap[idxSelf].parts||[])]));
+          state.lists.exerciseMap[idxOther].parts = merged;
+          state.lists.exerciseMap.splice(idxSelf,1);
+        }else{
+          state.lists.exerciseMap[idxSelf].name = cleaned.name;
+        }
+        state.lists.exerciseMap = sortExerciseMapJa(state.lists.exerciseMap);
+        persist(); refresh(); afterDataChanged();
+      };
+
+      btnDel.onclick = async ()=>{
+        const ok = await confirmAction(`「${row.name}」を${part}から削除します。よろしいですか？（他の部位に属していない場合は種目自体が削除されます）`);
+        if(!ok) return;
+        const idx = state.lists.exerciseMap.findIndex(e=> e.name===row.name);
+        if(idx<0) return;
+        const p = new Set(state.lists.exerciseMap[idx].parts||[]);
+        p.delete(part);
+        const newParts = Array.from(p);
+        if(newParts.length===0){
+          const ok2 = await confirmAction(`「${row.name}」はどの部位にも属さなくなります。種目自体を削除します。よろしいですか？`);
+          if(!ok2) return;
+          state.lists.exerciseMap.splice(idx,1);
+        }else{
+          state.lists.exerciseMap[idx].parts = newParts;
+        }
+        persist(); refresh(); afterDataChanged();
+      };
+
+      wrap.appendChild(nameCol);
+      wrap.appendChild(btns);
+      return wrap;
     }
 
     function saveLists(){
@@ -994,37 +1237,36 @@
       if(state.lists.attach[0] !== 'なし'){ state.lists.attach = ['なし', ...state.lists.attach.filter(x=>x!=='なし')]; }
       state.lists.angle = sortJa(parseLines($('#list-angle').value));
       if(state.lists.angle[0] !== 'なし'){ state.lists.angle = ['なし', ...state.lists.angle.filter(x=>x!=='なし')]; }
+      state.lists.position = sortJa(parseLines($('#list-position').value));
+      if(state.lists.position[0] !== 'なし'){ state.lists.position = ['なし', ...state.lists.position.filter(x=>x!=='なし')]; }
 
-      // 種目マップ：空行は掃除。内部順は保存時にもjaソートしておく
-      state.lists.exerciseMap = sortExerciseMapJa(
+      state.lists.exerciseMap = cleanupExercises(sortExerciseMapJa(
         state.lists.exerciseMap.filter(r=> (r.name && r.name.trim().length>0))
-      );
+      ));
 
       persist();
       alert('保存しました');
       if(location.hash.startsWith('#/home')) renderHome();
+      afterDataChanged();
     }
 
     function resetDefaults(){
       state.lists = JSON.parse(JSON.stringify(DEFAULTS));
-      if(state.lists.attach[0] !== 'なし'){ state.lists.attach = ['なし', ...state.lists.attach.filter(x=>x!=='なし')]; }
-      if(state.lists.angle[0] !== 'なし'){ state.lists.angle = ['なし', ...state.lists.angle.filter(x=>x!=='なし')]; }
-      // 初期表示も並び替え
       state.lists.parts = sortJa(state.lists.parts);
       state.lists.equip = sortJa(state.lists.equip);
       state.lists.attach = sortJa(state.lists.attach);
       state.lists.angle = sortJa(state.lists.angle);
-      state.lists.exerciseMap = sortExerciseMapJa(state.lists.exerciseMap);
-      persist(); renderSettings(); alert('デフォルトに復元しました');
+      state.lists.position = sortJa(state.lists.position);
+      state.lists.exerciseMap = cleanupExercises(sortExerciseMapJa(state.lists.exerciseMap));
+      persist(); renderSettings(); alert('デフォルトに復元しました'); afterDataChanged();
     }
 
-    // ===== CSV Export/Import =====
     function exportCSV(){
       const rows = flattenSets().map(r=>[
-        r.date, r.part, r.exercise, r.equipment, r.attachment, r.angle, r.setIndex,
-        r.warmup ? 1 : 0, r.weight, r.repsSelf, r.repsAssist, r.note, r.oneRM
+        r.date, r.part, r.exercise, r.equipment, r.attachment, r.angle, r.position,
+        r.setIndex, r.warmup ? 1 : 0, r.weight, r.repsSelf, r.repsAssist, r.durationSec, r.note, r.oneRM
       ]);
-      rows.unshift(['date','part','exercise','equipment','attachment','angle','setIndex','warmup','weight','repsSelf','repsAssist','note','oneRM']);
+      rows.unshift(['date','part','exercise','equipment','attachment','angle','position','setIndex','warmup','weight','repsSelf','repsAssist','durationSec','note','oneRM']);
       const blob = new Blob([toCSV(rows)], {type:'text/csv;charset=utf-8;'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -1039,8 +1281,8 @@
         const rows = parseCSV(text);
         const header = rows.shift() || [];
         const idx = name => header.indexOf(name);
-        const dateI=idx('date'), partI=idx('part'), exI=idx('exercise'), eqI=idx('equipment'), attI=idx('attachment'), angI=idx('angle'),
-              sI=idx('setIndex'), warmI=idx('warmup'), wI=idx('weight'), rsI=idx('repsSelf'), raI=idx('repsAssist'), noteI=idx('note'), oneI=idx('oneRM');
+        const dateI=idx('date'), partI=idx('part'), exI=idx('exercise'), eqI=idx('equipment'), attI=idx('attachment'), angI=idx('angle'), posI=idx('position'),
+              sI=idx('setIndex'), warmI=idx('warmup'), wI=idx('weight'), rsI=idx('repsSelf'), raI=idx('repsAssist'), durI=idx('durationSec'), noteI=idx('note'), oneI=idx('oneRM');
         if(dateI<0 || partI<0 || exI<0){ alert('CSVヘッダが不正です'); return; }
 
         const groups = {};
@@ -1053,11 +1295,13 @@
             equipment: r[eqI]||'',
             attachment: r[attI]||'なし',
             angle: r[angI]||'なし',
+            position: r[posI]||'なし',
             setIndex: Number(r[sI]||1),
             warmup: Number(r[warmI]||0)>0,
             weight: Number(r[wI]||0),
             repsSelf: Number(r[rsI]||0),
             repsAssist: Number(r[raI]||0),
+            durationSec: Number(r[durI]||0),
             note: r[noteI]||'',
             oneRM: Number(r[oneI]||0)
           });
@@ -1069,16 +1313,17 @@
           const maxSet = Math.max(0, ...items.map(it=> it.setIndex||0));
           const exs = exNames.map(name=>{
             const any = items.find(it=> it.exercise===name) || {};
-            return { name, eq:any.equipment||'', att:any.attachment||'なし', ang:any.angle||'なし' };
+            const cleanedName = cleanupExercises([{name, parts:[]}])[0]?.name || name;
+            return { name: cleanedName, eq:any.equipment||'', att:any.attachment||'なし', ang:any.angle||'なし', pos:any.position||'なし' };
           });
           const sets = [];
           for(let s=1; s<=Math.max(1, maxSet); s++){
-            const set = { warm:false, items: exNames.map(()=> ({ w:0,reps:0,assist:0,note:'',oneRM:0 })) };
+            const set = { warm:false, items: exNames.map(()=> ({ w:0,reps:0,assist:0,sec:0,note:'',oneRM:0 })) };
             exNames.forEach((name, i)=>{
               const it = items.find(it=> it.exercise===name && it.setIndex===s);
               if(it){
                 set.warm = set.warm || !!it.warmup;
-                set.items[i] = { w:it.weight, reps:it.repsSelf, assist:it.repsAssist, note:it.note, oneRM: it.oneRM||calc1RM(it.weight,it.repsSelf) };
+                set.items[i] = { w:it.weight, reps:it.repsSelf, assist:it.repsAssist, sec:it.durationSec||0, note:it.note, oneRM: it.durationSec>0?0:(it.oneRM||calc1RM(it.weight,it.repsSelf)) };
               }
             });
             sets.push(set);
@@ -1086,7 +1331,7 @@
           state.workouts.push({ id:'w_'+Date.now()+Math.random(), date, blocks:[{ part, exs, sets }] });
         });
 
-        persist(); alert('インポート完了'); if(location.hash.startsWith('#/history')) renderHistory();
+        persist(); alert('インポート完了'); if(location.hash.startsWith('#/history')) renderHistory(); afterDataChanged();
       };
       reader.readAsText(file);
     }
@@ -1102,7 +1347,31 @@
       return rows;
     }
 
-    // ===== Modals =====
+    /* Keyboard-safe */
+    (function setupKeyboardSafe(){
+      if (window.visualViewport) {
+        const vv = window.visualViewport;
+        const update = ()=>{
+          const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+          document.documentElement.style.setProperty('--kb', kb + 'px');
+          document.body.classList.toggle('kb-open', kb > 80);
+        };
+        vv.addEventListener('resize', update);
+        vv.addEventListener('scroll', update);
+        window.addEventListener('orientationchange', ()=> setTimeout(update, 300));
+        update();
+      }
+      const ensureVisible = (el)=>{
+        try { el.scrollIntoView({ block:'center', behavior:'smooth' }); } catch {}
+      };
+      document.addEventListener('focusin', (e)=>{
+        const el = e.target;
+        if (el.matches('input, textarea, select')) {
+          setTimeout(()=> ensureVisible(el), 250);
+        }
+      });
+    })();
+
     async function confirmAction(message){
       const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
       const card = document.createElement('div'); card.className='modal-card bg-white rounded-2xl p-4 shadow-soft border';
@@ -1121,32 +1390,60 @@
         bg.addEventListener('click', e=> { if(e.target===bg){ cleanup(); resolve(false); } });
       });
     }
-
-    // ===== Bindings =====
+    async function promptModal(message){
+      const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
+      const card = document.createElement('div'); card.className='modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw] max-w-md';
+      card.innerHTML = `
+        <div class="text-sm text-gray-700 mb-2">${escapeHtml(message)}</div>
+        <input type="text" class="w-full border rounded px-3 py-2 mb-3" />
+        <div class="flex justify-end gap-2">
+          <button class="px-3 py-2 rounded-xl bg-white border">キャンセル</button>
+          <button class="px-3 py-2 rounded-xl bg-gray-900 text-white">OK</button>
+        </div>`;
+      bg.appendChild(card); document.body.appendChild(bg);
+      const [ipt] = card.getElementsByTagName('input');
+      ipt.focus();
+      return new Promise(resolve=>{
+        const [btnCancel, btnOk] = card.querySelectorAll('button');
+        const cleanup = ()=> bg.remove();
+        btnCancel.onclick = ()=> { cleanup(); resolve(null); };
+        btnOk.onclick = ()=> { const v = ipt.value.trim(); cleanup(); resolve(v||null); };
+      });
+    }
     function bindGlobalUI(){
       $$('.tab-btn').forEach(btn=> btn.onclick = ()=> { location.hash = btn.getAttribute('data-route'); });
-
-      // settings
-      $('#btn-save-lists').onclick = saveLists;
-      $('#btn-reset-defaults').onclick = resetDefaults;
-      $('#btn-export-csv').onclick = exportCSV;
-      $('#input-import-csv').addEventListener('change', e=> {
+      const exportBtn = $('#btn-export-csv');
+      if(exportBtn) exportBtn.onclick = exportCSV;
+      const importInp = $('#input-import-csv');
+      if(importInp) importInp.addEventListener('change', e=> {
         const f = e.target.files && e.target.files[0]; if(f) importCSV(f); e.target.value='';
       });
-      $('#btn-clear-data').onclick = async ()=>{
+      const clearBtn = $('#btn-clear-data');
+      if(clearBtn) clearBtn.onclick = async ()=>{
         if(await confirmAction('本当に全データを削除しますか？（元に戻せません）')){
-          store.clearAll(); initData(); persist(); renderRoute();
+          localStorage.removeItem(K_LISTS);
+          localStorage.removeItem(K_WORKOUTS);
+          localStorage.removeItem(K_INPROG);
+          initData(); persist(); renderRoute(); afterDataChanged();
         }
       };
+      const chooseBtn = $('#bk-choose');
+      if(chooseBtn){ chooseBtn.onclick = ()=> alert('OPFSに自動保存します。iCloudへは「今すぐバックアップ」を使い、共有シートからFiles(iCloud Drive)に保存してください。'); }
+      const nowBtn = $('#bk-now');
+      if(nowBtn){ nowBtn.onclick = async ()=> { await backupNow(true); const c=store.get(K_BACKUPCFG, {}); const elLast=document.getElementById('bk-last'); if(elLast){ elLast.textContent = c.lastAt ? new Date(c.lastAt).toLocaleString() : '-'; } }; }
+      const restoreBtn = $('#bk-restore');
+      if(restoreBtn){ restoreBtn.onclick = async ()=> { await restoreFromFile(); }; }
     }
 
-    // ===== Boot =====
-    initData();
-    bindGlobalUI();
-    if(!location.hash) location.hash = '#/home';
-    renderRoute();
+    (async function boot(){
+      await migrateAllIfNeeded();
+      await requestPersistence();
+      initData();
+      bindGlobalUI();
+      startAutoBackupTicker();
+      if(!location.hash) location.hash = '#/home';
+      renderRoute();
+    })();
   </script>
-
-
 </body>
 </html>
