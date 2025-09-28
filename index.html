@@ -182,14 +182,20 @@
 
   // 部位変更時に種目候補とチップを差し替える
   function updateExerciseOptionsByPart() {
-    const part = $("#f-part")?.value || getLastPart();
+    // --- iPhone対策：datalist更新時に勝手に開かないようガード ---
+    const ex = $("#f-ex");
+    const wasFocused = (document.activeElement === ex);
+    if (wasFocused) ex.blur(); // 更新中にフォーカスがあるとiOSがリストを開くことがある
+    // --------------------------------------------------------------
+
+    const part = $("#f-part")?.value || getLastPart();  // ← 改行して通常のコードに
     const list = PARTS[part] || [];
-    // datalist
+
+    // datalist（種目候補）の差し替え
     const optionsHtml = list.map(n => `<option value="${n}"></option>`).join("");
-    $("#ex-list")?.replaceChildren();
     if ($("#ex-list")) $("#ex-list").innerHTML = optionsHtml;
 
-    // 最近チップ（対象部位の種目だけを表示）
+    // 最近チップ（対象部位のみ）
     const recents = getRecents().filter(n => list.includes(n));
     const chipsHtml = recents.map(n =>
       `<button type="button" class="px-2 py-1 text-xs rounded-full border hover:bg-slate-100 mr-2 mb-2" data-chip="${n}">${n}</button>`
@@ -204,6 +210,9 @@
         autofillFromLast();
       });
     });
+
+    // --- ガードの後処理：自動フォーカスは“しない”（ユーザー主導）
+    // if (wasFocused) { /* refocusしない */ }
   }
 
   // ====== データアクセス ======
@@ -420,13 +429,11 @@
       $("#f-part").addEventListener("change", () => {
         const p = $("#f-part").value;
         setLastPart(p);
-        updateExerciseOptionsByPart();
-        $("#f-ex").value = "";
-        $("#f-ex").focus();
+        updateExerciseOptionsByPart(); // 候補とチップだけ更新
+        // 自動フォーカスもクリアもしない
       });
 
       $("#f-ex").addEventListener("change", autofillFromLast);
-      $("#f-ex").addEventListener("blur",  autofillFromLast);
 
       $$("button[data-inc]").forEach(b => {
         b.addEventListener("click", () => adjustField(b.getAttribute("data-inc"), +1));
@@ -544,28 +551,23 @@
   }
 
  function bindHomeAutoFocus() {
-    // ホーム入場時はまず「種目」へ
-    $("#f-ex")?.focus();
+    // ★自動フォーカスはしない（ユーザーがタップしたときだけ開く）
 
     // 種目が確定（値が入った）ときだけ重量へ進む
     $("#f-ex")?.addEventListener("change", () => {
       const val = ($("#f-ex").value || "").trim();
-      if (val !== "") $("#f-weight")?.focus();
-    });
-    // ★ここに「f-ex の blur で重量へ」は入れない（原因だったため）
-
-    // 重量が入ったら回数へ（既存どおり、値が空なら進まない）
-    $("#f-weight")?.addEventListener("change", () => $("#f-reps")?.focus());
-    $("#f-weight")?.addEventListener("blur",   () => {
-      if ($("#f-weight")?.value !== "") $("#f-reps")?.focus();
+      if (val !== "") $("#f-weight")?.blur(); // ←フォーカス移動もしない。必要なら focus() に戻せます
     });
 
-    // 回数が入ったらメモへ（既存どおり）
-    $("#f-reps")?.addEventListener("change", () => $("#f-note")?.focus());
-    $("#f-reps")?.addEventListener("blur",   () => {
-      if ($("#f-reps")?.value !== "") $("#f-note")?.focus();
-    });
-}
+    // 重量が入ったら回数へ（自動移動はしない。必要なら下2行のコメントを外す）
+    $("#f-weight")?.addEventListener("change", () => { /* $("#f-reps")?.focus(); */ });
+    $("#f-weight")?.addEventListener("blur",   () => { /* if ($("#f-weight")?.value !== "") $("#f-reps")?.focus(); */ });
+
+    // 回数が入ったらメモへ（自動移動はしない）
+    $("#f-reps")?.addEventListener("change", () => { /* $("#f-note")?.focus(); */ });
+    $("#f-reps")?.addEventListener("blur",   () => { /* if ($("#f-reps")?.value !== "") $("#f-note")?.focus(); */ });
+  }
+  
   function highlightTab() {
     const route = currentRoute();
     $$(".tab").forEach(b => {
