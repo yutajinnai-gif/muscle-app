@@ -69,6 +69,16 @@
     RECENTS: `${NS}:recent-exercises`,        // 追加
     LAST_BY_EX: `${NS}:last-by-exercise`      // 追加
   };
+  // 部位ごとの種目マップ（必要に応じて自由に増やせます）
+  const PARTS = {
+    胸: ["ベンチプレス","インクラインベンチプレス","ダンベルプレス","ダンベルフライ","ケーブルクロス"],
+    背中: ["ラットプルダウン","シーテッドロウ","デッドリフト","ルーマニアンデッドリフト","ワンハンドロウ"],
+    脚: ["スクワット","フロントスクワット","レッグプレス","レッグエクステンション","レッグカール"],
+    肩: ["ショルダープレス","サイドレイズ","リアレイズ","フロントレイズ","アップライトロウ"],
+    腕: ["アームカール","プリーチャーカール","プレスダウン","フレンチプレス","ハンマーカール"]
+  };
+  const PART_ORDER = Object.keys(PARTS); // 表示順
+  const KEYS_LAST_PART = `${NS}:last-part`;
   const SCHEMA_VERSION = 1;
 
     // ＋/−ボタンの増分値をまとめた定数（ここに追記）
@@ -163,6 +173,39 @@
     setLastByEx(m);
   }
 
+  function getLastPart() {
+    return load(KEYS_LAST_PART, PART_ORDER[0] || "胸");
+  }
+  function setLastPart(p) {
+    save(KEYS_LAST_PART, p);
+  }
+
+  // 部位変更時に種目候補とチップを差し替える
+  function updateExerciseOptionsByPart() {
+    const part = $("#f-part")?.value || getLastPart();
+    const list = PARTS[part] || [];
+    // datalist
+    const optionsHtml = list.map(n => `<option value="${n}"></option>`).join("");
+    $("#ex-list")?.replaceChildren();
+    if ($("#ex-list")) $("#ex-list").innerHTML = optionsHtml;
+
+    // 最近チップ（対象部位の種目だけを表示）
+    const recents = getRecents().filter(n => list.includes(n));
+    const chipsHtml = recents.map(n =>
+      `<button type="button" class="px-2 py-1 text-xs rounded-full border hover:bg-slate-100 mr-2 mb-2" data-chip="${n}">${n}</button>`
+    ).join("");
+    const chipsWrap = $("#recent-chips");
+    if (chipsWrap) chipsWrap.innerHTML = chipsHtml;
+
+    // チップのイベントを張り直し
+    $$("#recent-chips [data-chip]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        $("#f-ex").value = btn.getAttribute("data-chip");
+        autofillFromLast();
+      });
+    });
+  }
+
   // ====== データアクセス ======
   function getLogs() { return load(KEYS.LOGS, []); }
   function setLogs(arr) { save(KEYS.LOGS, arr); }
@@ -180,13 +223,16 @@
   const today = new Date().toISOString().slice(0,10);
   const s = getSettings();
   const unit = s.unit;
-  const recents = getRecents();
+  const selectedPart = getLastPart();
+  const list = PARTS[selectedPart] || [];
 
-  const options = [...new Set([...recents, ...EXERCISE_MASTER])]
-    .map(name => `<option value="${name}"></option>`).join("");
-
-  const chips = recents.map(n =>
+  const options = list.map(name => `<option value="${name}"></option>`).join("");
+  const chips = getRecents().filter(n => list.includes(n)).map(n =>
     `<button type="button" class="px-2 py-1 text-xs rounded-full border hover:bg-slate-100 mr-2 mb-2" data-chip="${n}">${n}</button>`
+  ).join("");
+
+  const partOptions = PART_ORDER.map(p =>
+    `<option value="${p}" ${p===selectedPart?"selected":""}>${p}</option>`
   ).join("");
 
   return `
@@ -194,27 +240,35 @@
       <h2 class="text-base font-semibold">記録を追加</h2>
 
       <div class="grid grid-cols-2 gap-3">
-        <label class="col-span-2 text-sm">
+
+        <label class="text-sm">
+          <span class="block mb-1 text-slate-600">部位</span>
+          <select id="f-part" class="w-full border rounded-lg px-3 py-2">
+            ${partOptions}
+          </select>
+        </label>
+
+        <label class="text-sm">
           <span class="block mb-1 text-slate-600">日付</span>
           <input id="f-date" type="date" value="${today}"
             class="w-full border rounded-lg px-3 py-2">
         </label>
 
         <label class="col-span-2 text-sm">
-          <span class="block mb-1 text-slate-600">種目 <span class="text-xs text-slate-500">(入力か選択)</span></span>
+          <span class="block mb-1 text-slate-600">種目 <span class="text-xs text-slate-500">(部位に関連する種目のみ)</span></span>
           <input id="f-ex" list="ex-list" type="text" placeholder="例：ベンチプレス"
             enterkeyhint="next"
             class="w-full border rounded-lg px-3 py-2">
           <datalist id="ex-list">${options}</datalist>
         </label>
 
-        <div class="col-span-2 -mt-2">${chips ? `<div class="flex flex-wrap mt-1">${chips}</div>` : ""}</div>
+        <div id="recent-chips" class="col-span-2 -mt-2">${chips ? `<div class="flex flex-wrap mt-1">${chips}</div>` : ""}</div>
 
         <label class="text-sm">
           <span class="block mb-1 text-slate-600">重量 (${unit})</span>
           <div class="flex items-center gap-2">
             <button type="button" class="px-2 py-1 border rounded" data-dec="weight">−</button>
-            <input id="f-weight" type="number" inputmode="decimal" placeholder="${unit}"
+            <input id="f-weight" type="number" inputmode="decimal" step="any" placeholder="${unit}"
               enterkeyhint="next"
               class="w-full border rounded-lg px-3 py-2">
             <button type="button" class="px-2 py-1 border rounded" data-inc="weight">＋</button>
@@ -225,7 +279,7 @@
           <span class="block mb-1 text-slate-600">回数</span>
           <div class="flex items-center gap-2">
             <button type="button" class="px-2 py-1 border rounded" data-dec="reps">−</button>
-            <input id="f-reps" type="number" inputmode="numeric" placeholder="10"
+            <input id="f-reps" type="number" inputmode="numeric" step="1" placeholder="10"
               enterkeyhint="next"
               class="w-full border rounded-lg px-3 py-2">
             <button type="button" class="px-2 py-1 border rounded" data-inc="reps">＋</button>
@@ -355,21 +409,25 @@
       viewSettings();
 
     if (route === "home") {
-      // 既存：フォーム内ボタン
       $("#btn-add").addEventListener("click", onAdd);
       $("#btn-add-dup").addEventListener("click", onAddDuplicate);
       $("#btn-clear").addEventListener("click", onClearInputs);
       renderRecent();
 
-      // 既存：チップ・オートフィル・±
-      $$(".flex.flex-wrap [data-chip]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          $("#f-ex").value = btn.getAttribute("data-chip");
-          autofillFromLast();
-        });
+      // ここ！
+      updateExerciseOptionsByPart();
+
+      $("#f-part").addEventListener("change", () => {
+        const p = $("#f-part").value;
+        setLastPart(p);
+        updateExerciseOptionsByPart();
+        $("#f-ex").value = "";
+        $("#f-ex").focus();
       });
+
       $("#f-ex").addEventListener("change", autofillFromLast);
       $("#f-ex").addEventListener("blur",  autofillFromLast);
+
       $$("button[data-inc]").forEach(b => {
         b.addEventListener("click", () => adjustField(b.getAttribute("data-inc"), +1));
       });
@@ -377,24 +435,11 @@
         b.addEventListener("click", () => adjustField(b.getAttribute("data-dec"), -1));
       });
 
-      // ★追加：固定アクションバーのボタン結線
       document.getElementById("fab-add")?.addEventListener("click", onAdd);
       document.getElementById("fab-dup")?.addEventListener("click", onAddDuplicate);
 
-      // ★追加：自動フォーカスとアクションバー表示
       bindHomeAutoFocus();
       setActionBarVisible(true);
-
-    } else if (route === "history") {
-      // 履歴の削除/編集ボタン結線
-      bindItemButtons(root);
-      setActionBarVisible(false);
-
-    } else if (route === "settings") {
-      // 設定ボタン結線
-      $("#btn-save-settings").addEventListener("click", onSaveSettings);
-      $("#btn-clear-all").addEventListener("click", onClearAll);
-      setActionBarVisible(false);
     }
 
     highlightTab();
