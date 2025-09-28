@@ -543,27 +543,29 @@
     bar.classList.toggle('hidden', !v);
   }
 
-  function bindHomeAutoFocus() {
+ function bindHomeAutoFocus() {
     // ホーム入場時はまず「種目」へ
     $("#f-ex")?.focus();
 
-    // 種目が確定したら重量へ
-    $("#f-ex")?.addEventListener("change", () => $("#f-weight")?.focus());
-    $("#f-ex")?.addEventListener("blur",   () => $("#f-weight")?.focus());
+    // 種目が確定（値が入った）ときだけ重量へ進む
+    $("#f-ex")?.addEventListener("change", () => {
+      const val = ($("#f-ex").value || "").trim();
+      if (val !== "") $("#f-weight")?.focus();
+    });
+    // ★ここに「f-ex の blur で重量へ」は入れない（原因だったため）
 
-    // 重量が入ったら回数へ
+    // 重量が入ったら回数へ（既存どおり、値が空なら進まない）
     $("#f-weight")?.addEventListener("change", () => $("#f-reps")?.focus());
     $("#f-weight")?.addEventListener("blur",   () => {
       if ($("#f-weight")?.value !== "") $("#f-reps")?.focus();
     });
 
-    // 回数が入ったらメモへ
+    // 回数が入ったらメモへ（既存どおり）
     $("#f-reps")?.addEventListener("change", () => $("#f-note")?.focus());
     $("#f-reps")?.addEventListener("blur",   () => {
       if ($("#f-reps")?.value !== "") $("#f-note")?.focus();
     });
-  }
-
+}
   function highlightTab() {
     const route = currentRoute();
     $$(".tab").forEach(b => {
