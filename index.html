@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>筋トレ記録アプリ | BUILD_TAG=FULL-20250928-SUPERSET</title>
+  <title>筋トレ記録アプリ | BUILD_TAG=FULL-20250928-SUPERSET-PATCH</title>
   <meta name="color-scheme" content="light">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -19,6 +19,7 @@
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
+  <!-- Error bar -->
   <div id="error-bar" class="fixed top-0 left-0 right-0 z-50 hidden">
     <div class="bg-red-600 text-white px-4 py-2 text-sm flex items-start gap-3">
       <span class="font-semibold">Script error</span>
@@ -148,9 +149,21 @@
 
     <div class="border-t pt-3">
       <div class="text-sm font-semibold mb-1">種目マスタ（部位ひも付け）</div>
-      <p class="text-xs text-gray-500 mb-2">各行「種目名 : 部位1,部位2,…」形式。例）ベンチプレス : 胸</p>
-      <textarea id="list-exercise-map" rows="8" class="w-full border rounded-lg px-3 py-2"></textarea>
+      <div class="text-xs text-gray-500 mb-2">行追加→種目名入力→対象部位にチェック。保存で反映。</div>
+      <div class="overflow-auto">
+        <table class="w-full text-sm border">
+          <thead>
+            <tr class="bg-gray-50">
+              <th class="border px-2 py-1 text-left">削除</th>
+              <th class="border px-2 py-1 text-left">種目名</th>
+              <th class="border px-2 py-1 text-left">部位</th>
+            </tr>
+          </thead>
+          <tbody id="exercise-table-body"></tbody>
+        </table>
+      </div>
       <div class="flex gap-2 mt-2">
+        <button id="btn-add-ex-row" class="px-3 py-2 rounded-xl bg-white border">行を追加</button>
         <button id="btn-save-lists" class="px-3 py-2 rounded-xl bg-gray-900 text-white">保存</button>
         <button id="btn-reset-defaults" class="px-3 py-2 rounded-xl bg-white border">デフォルト復元</button>
       </div>
@@ -293,7 +306,7 @@
     const escapeHtml = s => String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
     // ===== Storage with Schema =====
-    const SCHEMA_VERSION = 2; // bumped for superset + exercise map
+    const SCHEMA_VERSION = 2; // superset + exercise map + block.part
     const NS = 'workout-app';
     const store = {
       get(key, d=null){ try{ const raw = localStorage.getItem(NS+':'+key); if(!raw) return d; const obj = JSON.parse(raw); return obj&&obj.v===SCHEMA_VERSION ? obj.data : d; }catch{ return d; } },
@@ -307,7 +320,6 @@
       equip: ['バーベル','ダンベル','マシン','ケーブル','自重'],
       attach: ['なし','ストレートバー','Vバー','ロープ','Dハンドル'],
       angle: ['なし','フラット','インクライン','デクライン','ナチュラル'],
-      // exercise map: {name, parts:[]}
       exerciseMap: [
         { name:'ベンチプレス', parts:['胸'] },
         { name:'インクラインダンベルプレス', parts:['胸','肩'] },
@@ -325,14 +337,13 @@
     // ===== App State =====
     const state = {
       lists: null,           // {parts:[], equip:[], attach:[], angle:[], exerciseMap:[{name,parts:[]}]}
-      workouts: null,        // [{id,date,part,blocks:[{exs:[{name,eq,att,ang}], sets:[{warm, items:[{w,reps,assist,note,oneRM}]}]}]}]
-      inProgress: null,      // {date, part, blocks:[...]}
+      workouts: null,        // [{id,date,blocks:[{part, exs:[{name,eq,att,ang}], sets:[{warm, items:[{w,reps,assist,note,oneRM}]}]}]}]
+      inProgress: null,      // {date, part (default for new blocks), blocks:[...]}
       chart: null
     };
 
-    // ===== Init / Migration =====
+    // ===== Migration (best-effort) =====
     function migrateOldStorage(){
-      // If old schema exists, try to read and upgrade roughly
       try{
         const oldListsRaw = localStorage.getItem(NS+':lists');
         const oldWorkoutsRaw = localStorage.getItem(NS+':workouts');
@@ -344,27 +355,26 @@
         }
         if(oldWorkoutsRaw && !JSON.parse(oldWorkoutsRaw).v){
           const oldWorkouts = JSON.parse(oldWorkoutsRaw)||[];
-          // flatten to new superset model (each old exercise becomes its own block with single exercise and per-set items)
           const newWorkouts = oldWorkouts.map(w=>{
             const blocks = [];
             (w.blocks||[]).forEach(b=>{
               (b.exs||[]).forEach(ex=>{
                 const items = (ex.sets||[]).map(s=>({ w:s.w||0, reps:s.reps||0, assist:s.assist||0, note:s.note||'', oneRM:s.oneRM||calc1RM(s.w,s.reps) }));
-                blocks.push({ exs:[{name:ex.name, eq:ex.eq||'', att:ex.att||'なし', ang:ex.ang||'なし'}], sets: items.length? [{warm:false, items}] : [] });
+                blocks.push({ part: w.part, exs:[{name:ex.name, eq:ex.eq||'', att:ex.att||'なし', ang:ex.ang||'なし'}], sets: items.length? [{warm:false, items}] : [] });
               });
             });
-            return { id:'w_'+Date.now()+Math.random(), date:w.date, part:w.part, blocks };
+            return { id:'w_'+Date.now()+Math.random(), date:w.date, blocks };
           });
           store.set('workouts', newWorkouts);
         }
       }catch{}
     }
 
+    // ===== Init =====
     function initData(){
       migrateOldStorage();
       let lists = store.get('lists');
       if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); store.set('lists', lists); }
-      // Ensure "なし" is default(1st) for attach/angle
       if(lists.attach[0] !== 'なし'){ lists.attach = ['なし', ...lists.attach.filter(x=>x!=='なし')]; }
       if(lists.angle[0] !== 'なし'){ lists.angle = ['なし', ...lists.angle.filter(x=>x!=='なし')]; }
       state.lists = lists;
@@ -438,9 +448,9 @@
       const card = frag.querySelector('.block-card');
       card.dataset.index = idx;
       frag.querySelector('.block-index').textContent = '#'+(idx+1);
-      frag.querySelector('.block-part').textContent = `（${state.inProgress.part}）`;
+      frag.querySelector('.block-part').textContent = `（${block.part}）`;
 
-      // choose exercises (multiselect) restricted by part
+      // open chooser
       frag.querySelector('.btn-choose-ex').onclick = ()=> openExerciseChooser(idx);
 
       // delete block
@@ -474,29 +484,36 @@
     }
 
     function addBlock(){
-      state.inProgress.blocks.push({ exs: [], sets: [] });
+      // 新規ブロックは“現在選択中の部位”を固定保持
+      state.inProgress.blocks.push({ part: state.inProgress.part, exs: [], sets: [] });
       persist(); renderHome();
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-      // open chooser immediately
       const idx = state.inProgress.blocks.length - 1;
       setTimeout(()=> openExerciseChooser(idx), 50);
     }
 
     function openExerciseChooser(blockIdx){
-      const part = state.inProgress.part;
+      const part = state.inProgress.blocks[blockIdx].part || state.inProgress.part;
       const allowed = state.lists.exerciseMap.filter(e=> e.parts.includes(part)).map(e=> e.name);
       const current = new Set((state.inProgress.blocks[blockIdx].exs||[]).map(e=> e.name));
+
       const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
       const card = document.createElement('div'); card.className='modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw]';
       card.innerHTML = `<div class="text-sm font-semibold mb-2">種目選択（${escapeHtml(part)}）</div>`;
       const list = document.createElement('div'); list.className='max-h-[60vh] overflow-auto space-y-1';
-      allowed.forEach(name=>{
-        const id = 'ex_'+Math.random().toString(36).slice(2);
-        const row = document.createElement('label'); row.className='flex items-center gap-2 text-sm';
-        row.innerHTML = `<input type="checkbox" id="${id}" ${current.has(name)?'checked':''}> <span>${escapeHtml(name)}</span>`;
-        row.querySelector('input').dataset.name = name;
-        list.appendChild(row);
-      });
+
+      if(allowed.length===0){
+        list.innerHTML = '<div class="text-sm text-gray-500">この部位に紐づく種目がありません。設定＞種目マスタで追加してください。</div>';
+      } else {
+        allowed.forEach(name=>{
+          const id = 'ex_'+Math.random().toString(36).slice(2);
+          const row = document.createElement('label'); row.className='flex items-center gap-2 text-sm';
+          row.innerHTML = `<input type="checkbox" id="${id}" ${current.has(name)?'checked':''}> <span>${escapeHtml(name)}</span>`;
+          row.querySelector('input').dataset.name = name;
+          list.appendChild(row);
+        });
+      }
+
       const actions = document.createElement('div'); actions.className='flex justify-end gap-2 mt-3';
       const btnCancel = document.createElement('button'); btnCancel.className='px-3 py-2 rounded-xl bg-white border'; btnCancel.textContent='キャンセル';
       const btnOk = document.createElement('button'); btnOk.className='px-3 py-2 rounded-xl bg-gray-900 text-white'; btnOk.textContent='OK';
@@ -516,21 +533,28 @@
     function applySelectedExercises(blockIdx, names){
       const block = state.inProgress.blocks[blockIdx];
       const before = block.exs || [];
-      // new exs in chosen order; default eq blank, att/ang "なし"
       block.exs = names.map(name=>{
         const found = before.find(e=> e.name===name);
         return found || { name, eq: state.lists.equip[0]||'', att: 'なし', ang: 'なし' };
       });
-      // align sets' items length with exs
+
+      // align existing sets to new exercises
       (block.sets||[]).forEach(set=>{
         const items = set.items||[];
-        const next = names.map((name, i)=>{
+        const next = names.map((name)=>{
           const prevIdx = before.findIndex(e=> e.name===name);
           if(prevIdx>=0 && items[prevIdx]) return items[prevIdx];
           return { w:0, reps:0, assist:0, note:'', oneRM:0 };
         });
         set.items = next;
       });
+
+      // セット未作成なら1セット自動生成
+      if (!block.sets || block.sets.length === 0) {
+        const items = names.map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0 }));
+        block.sets = [{ warm:false, items }];
+      }
+
       persist(); renderHome();
     }
 
@@ -561,7 +585,6 @@
       warm.checked = !!set.warm;
       warm.addEventListener('input', ()=> { set.warm = warm.checked; persist(); });
 
-      // ex items for each exercise
       const itemsWrap = node.querySelector('.ex-items');
       ensureSetItems(block, set);
       block.exs.forEach((ex, i)=>{
@@ -569,7 +592,6 @@
       });
 
       node.querySelector('.btn-dup-set').onclick = ()=> {
-        // deep copy of last or current
         const source = block.sets[sIdx];
         const cloned = JSON.parse(JSON.stringify(source));
         block.sets.splice(sIdx+1, 0, cloned);
@@ -584,7 +606,6 @@
 
     function ensureSetItems(block, set){
       if(!set.items) set.items = [];
-      // grow or shrink items to exs length
       if(set.items.length < block.exs.length){
         const last = set.items[set.items.length-1] || { w:0, reps:0, assist:0, note:'', oneRM:0 };
         for(let i=set.items.length; i<block.exs.length; i++){
@@ -662,13 +683,12 @@
       copy.blocks = copy.blocks.filter(b=> (b.exs||[]).length>0 && (b.sets||[]).length>0);
       if(copy.blocks.length===0){ alert('記録が空です。セットを入力してください。'); return; }
       copy.id = 'w_'+Date.now();
-      copy.part = state.inProgress.part;
       state.workouts.push(copy);
-      state.inProgress = { date: todayISO(), part: copy.part, blocks: [] };
+      state.inProgress = { date: todayISO(), part: state.inProgress.part, blocks: [] };
       persist(); alert('保存しました'); renderHome();
     }
 
-    // ===== Flatten for history/CSV =====
+    // ===== Flatten (history / CSV) =====
     function flattenSets(){
       const rows = [];
       state.workouts.forEach(w=>{
@@ -679,7 +699,7 @@
               rows.push({
                 id: w.id,
                 date: w.date,
-                part: w.part,
+                part: b.part || '不明',
                 exercise: ex.name,
                 equipment: ex.eq||'',
                 attachment: ex.att||'なし',
@@ -771,9 +791,10 @@
         const w = items[0];
         const card = document.createElement('div');
         card.className = 'rounded-2xl border bg-white p-3 shadow-soft';
+        const partsInWorkout = Array.from(new Set(items.map(i=>i.part))).join(' / ');
         const title = document.createElement('div');
         title.className = 'flex items-center justify-between';
-        title.innerHTML = `<div class="text-sm font-semibold">${w.date} / ${w.part}</div>`;
+        title.innerHTML = `<div class="text-sm font-semibold">${w.date} / ${partsInWorkout}</div>`;
         card.appendChild(title);
         items.forEach(r=>{
           const row = document.createElement('div');
@@ -783,7 +804,7 @@
             <div class="col-span-3">重量 ${r.weight}kg</div>
             <div class="col-span-2">自 ${r.repsSelf}</div>
             <div class="col-span-2">補 ${r.repsAssist}</div>
-            <div class="col-span-12 text-[11px] text-gray-500">1RM: ${r.oneRM || '-'}kg / S${r.setIndex} ${r.note ? ' / '+escapeHtml(r.note) : ''}</div>
+            <div class="col-span-12 text-[11px] text-gray-500">部位:${r.part} / 1RM:${r.oneRM || '-'}kg / S${r.setIndex} ${r.note ? ' / '+escapeHtml(r.note) : ''}</div>
           `;
           card.appendChild(row);
         });
@@ -810,13 +831,80 @@
       });
     }
 
-    // ===== Settings =====
+    // ===== Settings (checkbox matrix) =====
     function renderSettings(){
       $('#list-parts').value = state.lists.parts.join('\n');
       $('#list-equip').value = state.lists.equip.join('\n');
       $('#list-attach').value = state.lists.attach.join('\n');
       $('#list-angle').value = state.lists.angle.join('\n');
-      $('#list-exercise-map').value = state.lists.exerciseMap.map(e=> `${e.name} : ${e.parts.join(',')}`).join('\n');
+
+      const tbody = $('#exercise-table-body');
+      tbody.innerHTML = '';
+      const parts = state.lists.parts.slice();
+
+      state.lists.exerciseMap.forEach((row)=> {
+        tbody.appendChild(renderExerciseRow(row, parts));
+      });
+
+      $('#btn-add-ex-row').onclick = ()=>{
+        const newRow = { name:'', parts:[] };
+        state.lists.exerciseMap.push(newRow);
+        tbody.appendChild(renderExerciseRow(newRow, parts));
+      };
+    }
+
+    function renderExerciseRow(row, parts){
+      const tr = document.createElement('tr');
+      tr.className = 'border-b';
+
+      const tdDel = document.createElement('td');
+      tdDel.className = 'border px-2 py-1';
+      const btnDel = document.createElement('button');
+      btnDel.className = 'px-2 py-1 rounded border text-xs';
+      btnDel.textContent = '×';
+      btnDel.onclick = ()=>{
+        const i = state.lists.exerciseMap.indexOf(row);
+        if(i>=0) { state.lists.exerciseMap.splice(i,1); tr.remove(); }
+      };
+      tdDel.appendChild(btnDel);
+
+      const tdName = document.createElement('td');
+      tdName.className = 'border px-2 py-1';
+      const ipt = document.createElement('input');
+      ipt.type = 'text';
+      ipt.className = 'w-full border rounded px-2 py-1';
+      ipt.value = row.name || '';
+      ipt.oninput = ()=> { row.name = ipt.value.trim(); };
+      tdName.appendChild(ipt);
+
+      const tdParts = document.createElement('td');
+      tdParts.className = 'border px-2 py-1';
+      const wrap = document.createElement('div');
+      wrap.className = 'flex flex-wrap gap-3';
+      parts.forEach(p=>{
+        const label = document.createElement('label');
+        label.className = 'inline-flex items-center gap-1';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = Array.isArray(row.parts) ? row.parts.includes(p) : false;
+        cb.onchange = ()=>{
+          if(!Array.isArray(row.parts)) row.parts = [];
+          if(cb.checked){
+            if(!row.parts.includes(p)) row.parts.push(p);
+          } else {
+            row.parts = row.parts.filter(x=> x!==p);
+          }
+        };
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(p));
+        wrap.appendChild(label);
+      });
+      tdParts.appendChild(wrap);
+
+      tr.appendChild(tdDel);
+      tr.appendChild(tdName);
+      tr.appendChild(tdParts);
+      return tr;
     }
 
     function saveLists(){
@@ -828,23 +916,19 @@
       state.lists.angle = parseLines($('#list-angle').value);
       if(state.lists.angle[0] !== 'なし'){ state.lists.angle = ['なし', ...state.lists.angle.filter(x=>x!=='なし')]; }
 
-      const mapText = $('#list-exercise-map').value;
-      const exMap = [];
-      mapText.split('\n').forEach(line=>{
-        const m = line.split(':');
-        if(m.length>=1){
-          const name = m[0].trim();
-          const partsStr = (m[1]||'').split(',').map(x=>x.trim()).filter(Boolean);
-          if(name) exMap.push({ name, parts: partsStr });
-        }
-      });
-      state.lists.exerciseMap = exMap;
+      // exerciseMap は row 参照が生きているためそのまま保存。空行は掃除。
+      state.lists.exerciseMap = state.lists.exerciseMap.filter(r=> (r.name && r.name.trim().length>0));
+
       persist();
       alert('保存しました');
+      if(location.hash.startsWith('#/home')) renderHome();
     }
 
     function resetDefaults(){
       state.lists = JSON.parse(JSON.stringify(DEFAULTS));
+      // ensure defaults order
+      if(state.lists.attach[0] !== 'なし'){ state.lists.attach = ['なし', ...state.lists.attach.filter(x=>x!=='なし')]; }
+      if(state.lists.angle[0] !== 'なし'){ state.lists.angle = ['なし', ...state.lists.angle.filter(x=>x!=='なし')]; }
       persist(); renderSettings(); alert('デフォルトに復元しました');
     }
 
@@ -873,7 +957,6 @@
               sI=idx('setIndex'), warmI=idx('warmup'), wI=idx('weight'), rsI=idx('repsSelf'), raI=idx('repsAssist'), noteI=idx('note'), oneI=idx('oneRM');
         if(dateI<0 || partI<0 || exI<0){ alert('CSVヘッダが不正です'); return; }
 
-        // group by workout (date+part) -> block per exercise group
         const groups = {};
         rows.forEach(r=>{
           const date = r[dateI]; if(!date) return;
@@ -896,9 +979,7 @@
 
         Object.entries(groups).forEach(([key, items])=>{
           const [date, part] = key.split('|');
-          // regroup by exercise identity
           const exNames = Array.from(new Set(items.map(it=> it.exercise)));
-          // build sets count as max setIndex
           const maxSet = Math.max(0, ...items.map(it=> it.setIndex||0));
           const exs = exNames.map(name=>{
             const any = items.find(it=> it.exercise===name) || {};
@@ -916,7 +997,7 @@
             });
             sets.push(set);
           }
-          state.workouts.push({ id:'w_'+Date.now()+Math.random(), date, part, blocks:[{ exs, sets }] });
+          state.workouts.push({ id:'w_'+Date.now()+Math.random(), date, blocks:[{ part, exs, sets }] });
         });
 
         persist(); alert('インポート完了'); if(location.hash.startsWith('#/history')) renderHistory();
