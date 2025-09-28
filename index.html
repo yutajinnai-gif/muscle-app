@@ -8,12 +8,18 @@
   <meta name="color-scheme" content="light dark">
   <style>
     /* iOSのズーム誤爆抑止 */
-    input, select, textarea, button { font-size: 16px; }
+   input, select, textarea {
+    color: #000;            /* 黒文字 */
+    background-color: #fff; /* 白背景 */
+  }
+  button {
+    color: #000;
+  }
     /* 下タブのための余白 */
     main { padding-bottom: 84px; }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-white text-black">
   <!-- エラー帯 -->
   <div id="errbar" class="hidden fixed top-0 left-0 right-0 z-50 bg-red-600 text-white text-sm px-4 py-2"></div>
 
