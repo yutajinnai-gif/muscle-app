@@ -182,47 +182,29 @@
   const unit = s.unit;
   const recents = getRecents();
 
-  // datalist用オプションを生成（マスタ + 最近）
-  const options = [...new Set([...recents, ...EXERCISE_MASTER])].map(
-    name => `<option value="${name}"></option>`
-  ).join("");
+  const options = [...new Set([...recents, ...EXERCISE_MASTER])]
+    .map(name => `<option value="${name}"></option>`).join("");
 
   const chips = recents.map(n =>
     `<button type="button" class="px-2 py-1 text-xs rounded-full border hover:bg-slate-100 mr-2 mb-2" data-chip="${n}">${n}</button>`
   ).join("");
 
   return `
-    <input id="f-date"   type="date" value="${today}"
-    class="w-full border rounded-lg px-3 py-2">
-
-    <input id="f-ex"     list="ex-list" type="text" placeholder="例：ベンチプレス"
-      enterkeyhint="next"
-      class="w-full border rounded-lg px-3 py-2">
-
-    <input id="f-weight" type="number" inputmode="decimal" placeholder="${unit}"
-      enterkeyhint="next"
-      class="w-full border rounded-lg px-3 py-2">
-
-    <input id="f-reps"   type="number" inputmode="numeric" placeholder="10"
-      enterkeyhint="next"
-      class="w-full border rounded-lg px-3 py-2">
-
-    <input id="f-note"   type="text" placeholder="フォーム/感覚など"
-      enterkeyhint="done"
-      class="w-full border rounded-lg px-3 py-2">
-      
     <section class="space-y-4">
       <h2 class="text-base font-semibold">記録を追加</h2>
 
       <div class="grid grid-cols-2 gap-3">
         <label class="col-span-2 text-sm">
           <span class="block mb-1 text-slate-600">日付</span>
-          <input id="f-date" type="date" value="${today}" class="w-full border rounded-lg px-3 py-2">
+          <input id="f-date" type="date" value="${today}"
+            class="w-full border rounded-lg px-3 py-2">
         </label>
 
         <label class="col-span-2 text-sm">
           <span class="block mb-1 text-slate-600">種目 <span class="text-xs text-slate-500">(入力か選択)</span></span>
-          <input id="f-ex" list="ex-list" type="text" placeholder="例：ベンチプレス" class="w-full border rounded-lg px-3 py-2">
+          <input id="f-ex" list="ex-list" type="text" placeholder="例：ベンチプレス"
+            enterkeyhint="next"
+            class="w-full border rounded-lg px-3 py-2">
           <datalist id="ex-list">${options}</datalist>
         </label>
 
@@ -232,7 +214,9 @@
           <span class="block mb-1 text-slate-600">重量 (${unit})</span>
           <div class="flex items-center gap-2">
             <button type="button" class="px-2 py-1 border rounded" data-dec="weight">−</button>
-            <input id="f-weight" type="number" inputmode="decimal" placeholder="${unit}" class="w-full border rounded-lg px-3 py-2">
+            <input id="f-weight" type="number" inputmode="decimal" placeholder="${unit}"
+              enterkeyhint="next"
+              class="w-full border rounded-lg px-3 py-2">
             <button type="button" class="px-2 py-1 border rounded" data-inc="weight">＋</button>
           </div>
         </label>
@@ -241,14 +225,18 @@
           <span class="block mb-1 text-slate-600">回数</span>
           <div class="flex items-center gap-2">
             <button type="button" class="px-2 py-1 border rounded" data-dec="reps">−</button>
-            <input id="f-reps" type="number" inputmode="numeric" placeholder="10" class="w-full border rounded-lg px-3 py-2">
+            <input id="f-reps" type="number" inputmode="numeric" placeholder="10"
+              enterkeyhint="next"
+              class="w-full border rounded-lg px-3 py-2">
             <button type="button" class="px-2 py-1 border rounded" data-inc="reps">＋</button>
           </div>
         </label>
 
         <label class="col-span-2 text-sm">
           <span class="block mb-1 text-slate-600">メモ（任意）</span>
-          <input id="f-note" type="text" placeholder="フォーム/感覚など" class="w-full border rounded-lg px-3 py-2">
+          <input id="f-note" type="text" placeholder="フォーム/感覚など"
+            enterkeyhint="done"
+            class="w-full border rounded-lg px-3 py-2">
         </label>
       </div>
 
