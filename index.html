@@ -1,795 +1,660 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>筋トレメモ</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <meta name="color-scheme" content="light">
-  <style>
-    /* 基本的なスタイルは変更ありません */
-    input, select, textarea, button { font-size: 16px; }
-    main { padding-bottom: 160px; }
-    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(2px); }
-    .modal-card { max-width: 560px; }
-    .accent { color: #0f172a; }
-  </style>
-</head>
-<body class="bg-white text-black">
-  <div id="errbar" class="hidden fixed top-0 left-0 right-0 z-50 bg-red-600 text-white text-sm px-4 py-2"></div>
-
-  <header class="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-slate-200">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-      <h1 class="text-lg font-semibold accent">筋トレメモ</h1>
-    </div>
-  </header>
-
-  <main class="max-w-3xl mx-auto px-4 py-4" id="view"></main>
-
-  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur border-t border-slate-200">
-    <div class="max-w-3xl mx-auto grid grid-cols-3">
-      <button data-tab="home" class="tab px-4 py-3 text-sm font-medium">ホーム</button>
-      <button data-tab="history" class="tab px-4 py-3 text-sm font-medium">履歴</button>
-      <button data-tab="settings" class="tab px-4 py-3 text-sm font-medium">設定</button>
-    </div>
-  </nav>
-
-  <div id="actionbar" class="hidden fixed left-0 right-0 bottom-16 z-50">
-    <div class="max-w-3xl mx-auto px-4">
-      <div class="flex gap-3">
-        <button id="fab-add" class="w-full py-4 rounded-xl bg-blue-600 text-white text-lg font-semibold shadow-lg">追加</button>
-        <button id="fab-dup" class="py-4 px-5 rounded-xl bg-emerald-600 text-white text-lg font-semibold shadow-lg">＋1</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="modal" class="hidden"></div>
-
-  <script>
-  // ==================================
-  // アプリケーションスクリプト
-  // ==================================
-  console.log("BOOT", new Date().toISOString());
-
-  // ====== 定数/ユーティリティ ======
-  const NS = "muscle-app";
-  const KEYS = {
-    LOGS: `${NS}:workout-logs`,
-    SETTINGS: `${NS}:settings`,
-    SCHEMA: `${NS}:schema-version`,
-    RECENTS: `${NS}:recent-exercises`,
-    LAST_BY_EX: `${NS}:last-by-exercise`,
-  };
-  const SCHEMA_VERSION = 2;
-
-  const $  = (sel, root=document) => root.querySelector(sel);
-  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-
-  function showError(msg){ const bar=$("#errbar"); bar.textContent=msg; bar.classList.remove("hidden"); }
-  function hideError(){ $("#errbar").classList.add("hidden"); }
-
-  // グローバルなエラーハンドリング
-  window.onerror = (message)=>{ showError(String(message||"不明なエラー")); return false; };
-  window.onunhandledrejection = (e)=>{ showError(String(e.reason||e)); };
-
-  const toHalf = s => String(s ?? "").replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0)-0xFEE0));
-  const safeParse = (j, fb)=>{ try { return JSON.parse(j); } catch { return fb; } };
-  const load = (k, fb)=>{ const r=localStorage.getItem(k); return r==null?fb:safeParse(r,fb); };
-  const save = (k, v)=> localStorage.setItem(k, JSON.stringify(v));
-  const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : ("id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,8));
-
-  // デフォルトのトレーニング種目や器具のリスト
-  const PARTS_DEFAULT = {
-    "胸":   ["ベンチプレス","インクラインベンチプレス","ダンベルプレス","ダンベルフライ","ケーブルクロス"],
-    "背中": ["ラットプルダウン","シーテッドロウ","デッドリフト","ルーマニアンデッドリフト","ワンハンドロウ"],
-    "脚":   ["スクワット","フロントスクワット","レッグプレス","レッグエクステンション","レッグカール"],
-    "肩":   ["ショルダープレス","サイドレイズ","リアレイズ","フロントレイズ","アップライトロウ"],
-    "腕":   ["アームカール","プリーチャーカール","プレスダウン","フレンチプレス","ハンマーカール"]
-  };
-  const DEFAULT_INSTRUMENTS = ["バーベル","ダンベル","マシン","ケーブル","自重"];
-  const DEFAULT_ATTACHMENTS = ["マグ（ワイド）","マグ（ナロー）","マグ（ミドル）","ロープ","ストレートバー","Dハンドル"];
-  const DEFAULT_ANGLES = ["フラット","インクライン","デクライン","ニュートラル"];
-  const INCREMENTS = { kg: 2.5, lb: 5, reps: 1 };
-
-  // ====== 起動時のデータ処理（Bootstrap） ======
-  (function bootstrap(){
-    try {
-      const v = load(KEYS.SCHEMA, null);
-      if (v !== SCHEMA_VERSION) {
-        // データ形式のバージョンが違う場合、データを移行する
-        const prevSettings = load(KEYS.SETTINGS, {});
-        let logs = load(KEYS.LOGS, []);
-        
-        if (!Array.isArray(logs)) {
-          console.warn("Corrupted log data detected. Resetting logs.", logs);
-          logs = [];
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>筋トレ記録アプリ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        /* iOSでの入力欄ズームを防止 */
+        input, select, textarea {
+            font-size: 16px;
         }
+        /* スクロールバーのスタイル（任意） */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans antialiased">
 
-        logs = logs.map(x=>({
-          id: x.id || uid(),
-          date: x.date || new Date().toISOString().slice(0,10),
-          part: x.part || guessPart(x.exercise),
-          exercise: x.exercise || "",
-          instrument: x.instrument || "",
-          attachment: x.attachment || "",
-          angle: x.angle || "",
-          weight: Number(x.weight ?? 0),
-          unit: x.unit || (prevSettings?.unit || "kg"),
-          repsSelf: Number(x.repsSelf ?? x.reps ?? 0),
-          repsAssist: Number(x.repsAssist ?? 0),
-          note: x.note || ""
-        }));
-        save(KEYS.LOGS, logs);
-        
-        const initSettings = {
-          unit: prevSettings?.unit || "kg",
-          theme: "light",
-          parts: prevSettings?.parts || PARTS_DEFAULT,
-          instruments: prevSettings?.instruments || DEFAULT_INSTRUMENTS,
-          attachments: prevSettings?.attachments || DEFAULT_ATTACHMENTS,
-          angles: prevSettings?.angles || DEFAULT_ANGLES,
-          defaultPart: prevSettings?.defaultPart || Object.keys(PARTS_DEFAULT)[0],
-          defaultDateMode: prevSettings?.defaultDateMode || "today",
-          autofillEnabled: prevSettings?.autofillEnabled ?? true,
-        };
-        save(KEYS.SETTINGS, initSettings);
-        save(KEYS.SCHEMA, SCHEMA_VERSION);
-      } else {
-        // データ形式が最新の場合でも、念のため設定を最新の状態に保つ
-        const s = getSettings();
-        save(KEYS.SETTINGS, s);
-      }
-    } catch(e) {
-      showError("アプリの起動処理でエラーが発生しました。");
-      console.error("Bootstrap failed:", e);
-    }
-  })();
+    <div id="app-container" class="max-w-lg mx-auto bg-white min-h-screen pb-20">
 
-  // ====== データアクセス関数群 ======
-  
-  // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-  // ★ 修正点: この関数を修正しました
-  // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-  // 常にデフォルト値と結合することで、設定項目が欠けている状態を防ぎます。
-  function getSettings(){
-    const defaultSettings = {
-      unit: "kg",
-      theme: "light",
-      parts: PARTS_DEFAULT,
-      instruments: DEFAULT_INSTRUMENTS,
-      attachments: DEFAULT_ATTACHMENTS,
-      angles: DEFAULT_ANGLES,
-      defaultPart: Object.keys(PARTS_DEFAULT)[0],
-      defaultDateMode: "today",
-      autofillEnabled: true
-    };
-    const savedSettings = load(KEYS.SETTINGS, {});
-    // 保存された設定をデフォルト設定に上書きマージする
-    return { ...defaultSettings, ...savedSettings };
-  }
-
-  function setSettings(s){ save(KEYS.SETTINGS, s); }
-
-  function getRecents(){ return load(KEYS.RECENTS, []); }
-  function pushRecent(name){ const n=(name||"").trim(); if(!n) return; let r=getRecents().filter(x=>x!==n); r.unshift(n); if(r.length>10) r=r.slice(0,10); save(KEYS.RECENTS,r); }
-  function getLastByEx(){ return load(KEYS.LAST_BY_EX, {}); }
-  function rememberLast(ex, p){ const m=getLastByEx(); m[ex]={...m[ex],...p}; save(KEYS.LAST_BY_EX, m); }
-
-  function getLogs(){ return load(KEYS.LOGS, []); }
-  function setLogs(a){ save(KEYS.LOGS, a); }
-  function addLog(entry){ const arr=getLogs(); arr.unshift({id:uid(), ...entry}); setLogs(arr); }
-  function updateLog(id, patch){ setLogs(getLogs().map(x=>x.id===id?{...x,...patch}:x)); }
-  function removeLog(id){ setLogs(getLogs().filter(x=>x.id!==id)); }
-
-  // ====== ルーティング（画面遷移） ======
-  const routes = ["home","history","settings"];
-  function currentRoute(){ const h=location.hash.replace(/^#\/?/,""); return routes.includes(h)?h:"home"; }
-  function navigate(to){ if(!routes.includes(to)) to="home"; if(currentRoute()!==to) location.hash=`#/${to}`; render(); }
-  window.addEventListener("hashchange", ()=>{ render(); highlightTab(); });
-
-  // ====== データ操作ヘルパー ======
-  function getParts(){ return getSettings().parts; }
-  function partOrder(){ return Object.keys(getParts()); }
-  function exercisesOf(part){ return getParts()[part] || []; }
-  function guessPart(ex){ const p=getParts(); for(const k of Object.keys(p)){ if(p[k].includes(ex)) return k; } return partOrder()[0]||"胸"; }
-  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
-
-  // ====== Home画面のHTML生成 ======
-  function viewHome(){
-    const s = getSettings();
-    const today = new Date().toISOString().slice(0,10);
-    const initialDate = s.defaultDateMode==="last" && getLogs()[0]?.date ? getLogs()[0].date : today;
-    const selectedPart = s.defaultPart || partOrder()[0];
-    const exList = exercisesOf(selectedPart);
-
-    const partOptions = partOrder().map(p=>`<option value="${p}" ${p===selectedPart?'selected':''}>${p}</option>`).join("");
-    const exOptions = ['<option value="" disabled selected>選択してください</option>', ...exList.map(n=>`<option value="${n}">${n}</option>`)].join("");
-    const instOptions = s.instruments.map(n => `<option value="${n}">${n}</option>`).join("");
-    const attOptions  = s.attachments.map(n => `<option value="${n}">${n}</option>`).join("");
-    const angOptions  = s.angles.map(n => `<option value="${n}">${n}</option>`).join("");
-
-    return `
-      <section class="space-y-4">
-        <h2 class="text-base font-semibold accent">記録を追加</h2>
-        <div class="grid grid-cols-2 gap-3">
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">部位</span>
-            <select id="f-part" class="w-full border rounded-lg px-3 py-2">${partOptions}</select>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">日付</span>
-            <input id="f-date" type="date" value="${initialDate}" class="w-full border rounded-lg px-3 py-2">
-          </label>
-          <label class="col-span-2 text-sm">
-            <span class="block mb-1 text-slate-600">種目</span>
-            <select id="f-ex" class="w-full border rounded-lg px-3 py-2">${exOptions}</select>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">器具</span>
-            <select id="f-inst" class="w-full border rounded-lg px-3 py-2"><option value="">指定なし</option>${instOptions}</select>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">アタッチメント</span>
-            <select id="f-att" class="w-full border rounded-lg px-3 py-2"><option value="">指定なし</option>${attOptions}</select>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">角度</span>
-            <select id="f-ang" class="w-full border rounded-lg px-3 py-2"><option value="">指定なし</option>${angOptions}</select>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">セット数</span>
-            <input id="f-sets" type="number" inputmode="numeric" step="1" min="1" placeholder="1" class="w-full border rounded-lg px-3 py-2">
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">重量 (${s.unit})</span>
-            <div class="flex items-center gap-2">
-              <button type="button" class="px-2 py-1 border rounded" data-dec="weight">−</button>
-              <input id="f-weight" type="number" inputmode="decimal" step="any" placeholder="${s.unit}" class="w-full border rounded-lg px-3 py-2">
-              <button type="button" class="px-2 py-1 border rounded" data-inc="weight">＋</button>
+        <main id="main-content" class="p-4">
+            
+            <div id="home-screen">
+                <h1 class="text-2xl font-bold mb-4">ホーム</h1>
+                <div class="grid grid-cols-2 gap-4 mb-6 text-center">
+                    <div class="bg-gray-200 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">直近7日間</div>
+                        <div id="summary-7-days" class="text-2xl font-bold">0日</div>
+                    </div>
+                    <div class="bg-gray-200 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">直近30日間</div>
+                        <div id="summary-30-days" class="text-2xl font-bold">0日</div>
+                    </div>
+                </div>
+                <h2 class="text-xl font-semibold mb-3">部位を選択</h2>
+                <div id="part-selection" class="grid grid-cols-2 gap-4">
+                    </div>
             </div>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">レップ（自力）</span>
-            <div class="flex items-center gap-2">
-              <button type="button" class="px-2 py-1 border rounded" data-dec="repsSelf">−</button>
-              <input id="f-reps-self" type="number" inputmode="numeric" step="1" placeholder="10" class="w-full border rounded-lg px-3 py-2">
-              <button type="button" class="px-2 py-1 border rounded" data-inc="repsSelf">＋</button>
+            
+            <div id="record-screen" class="hidden">
+                 <div class="flex items-center mb-4">
+                    <button id="back-to-home-btn" class="mr-4 p-2 text-lg"><i class="fas fa-arrow-left"></i></button>
+                    <h1 id="record-title" class="text-2xl font-bold"></h1>
+                </div>
+                <div id="blocks-container" class="space-y-6">
+                    </div>
+                <button id="add-block-btn" class="w-full mt-6 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors">
+                    <i class="fas fa-plus mr-2"></i>種目ブロックを追加
+                </button>
+                <button id="finish-workout-btn" class="w-full mt-4 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors">
+                    <i class="fas fa-check mr-2"></i>トレーニングを完了
+                </button>
             </div>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1 text-slate-600">レップ（補助）</span>
-            <div class="flex items-center gap-2">
-              <button type="button" class="px-2 py-1 border rounded" data-dec="repsAssist">−</button>
-              <input id="f-reps-assist" type="number" inputmode="numeric" step="1" placeholder="0" class="w-full border rounded-lg px-3 py-2">
-              <button type="button" class="px-2 py-1 border rounded" data-inc="repsAssist">＋</button>
+
+            <div id="history-screen" class="hidden">
+                <h1 class="text-2xl font-bold mb-4">トレーニング履歴</h1>
+                <div class="bg-gray-100 p-4 rounded-lg mb-4 space-y-3">
+                    <h2 class="font-semibold">絞り込み</h2>
+                    <div class="grid grid-cols-2 gap-3">
+                         <input type="date" id="filter-start-date" class="p-2 border rounded-lg w-full">
+                         <input type="date" id="filter-end-date" class="p-2 border rounded-lg w-full">
+                         <select id="filter-part" class="p-2 border rounded-lg w-full"></select>
+                         <select id="filter-exercise" class="p-2 border rounded-lg w-full"></select>
+                    </div>
+                     <button id="apply-filter-btn" class="w-full mt-2 bg-indigo-500 text-white py-2 rounded-lg hover:bg-indigo-600">絞り込む</button>
+                </div>
+                <div class="mb-4">
+                    <canvas id="history-chart"></canvas>
+                </div>
+                <div id="history-list" class="space-y-4">
+                    </div>
             </div>
-          </label>
-          <label class="col-span-2 text-sm">
-            <span class="block mb-1 text-slate-600">メモ（任意）</span>
-            <input id="f-note" type="text" placeholder="フォーム/感覚など" class="w-full border rounded-lg px-3 py-2">
-          </label>
+
+            <div id="settings-screen" class="hidden">
+                <h1 class="text-2xl font-bold mb-6">設定</h1>
+                <div id="settings-accordion" class="space-y-4">
+                     </div>
+                 <div class="mt-8 pt-6 border-t">
+                    <h2 class="text-xl font-semibold mb-4">データ管理</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="export-csv-btn" class="bg-green-500 text-white py-3 rounded-lg hover:bg-green-600"><i class="fas fa-file-export mr-2"></i>CSVエクスポート</button>
+                        <label for="import-csv-input" class="bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 text-center cursor-pointer"><i class="fas fa-file-import mr-2"></i>CSVインポート</label>
+                        <input type="file" id="import-csv-input" class="hidden" accept=".csv">
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <nav class="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t shadow-md">
+            <div class="flex justify-around">
+                <button data-screen="home" class="nav-btn flex-1 py-3 text-center text-blue-500 border-t-4 border-blue-500">
+                    <i class="fas fa-home text-xl"></i>
+                    <span class="block text-xs">ホーム</span>
+                </button>
+                <button data-screen="history" class="nav-btn flex-1 py-3 text-center text-gray-500">
+                    <i class="fas fa-chart-line text-xl"></i>
+                    <span class="block text-xs">履歴</span>
+                </button>
+                <button data-screen="settings" class="nav-btn flex-1 py-3 text-center text-gray-500">
+                    <i class="fas fa-cog text-xl"></i>
+                    <span class="block text-xs">設定</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <template id="block-template">
+        <div class="block-card bg-gray-50 border rounded-lg p-4 shadow-sm">
+            <div class="flex justify-between items-center mb-3">
+                <div class="exercise-tabs flex items-center border-b">
+                    </div>
+                <button class="remove-block-btn text-red-500 hover:text-red-700 p-2"><i class="fas fa-trash-alt"></i></button>
+            </div>
+            <div class="sets-container space-y-3">
+                </div>
+            <button class="add-set-btn w-full mt-4 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors">
+                <i class="fas fa-plus mr-2"></i>セット追加
+            </button>
         </div>
-        <hr class="my-4">
-        <h3 class="text-sm font-semibold text-slate-700">直近の記録</h3>
-        <div id="recent" class="divide-y"></div>
-      </section>
-    `;
-  }
-  
-  // 直近の記録を描画
-  function renderRecent(){
-    const wrap=$("#recent"); if(!wrap) return;
-    const rows = getLogs().slice(0,5).map(rowToItem).join("") || `<p class="text-sm text-slate-500 py-3">まだ記録がありません。</p>`;
-    wrap.innerHTML = rows; bindItemButtons(wrap);
-  }
-  
-  // 1件の記録をHTMLに変換
-  function rowToItem(x){
-    const sub = [x.instrument, x.attachment, x.angle].filter(Boolean).join(" / ");
-    const subTxt = sub ? ` — <span class="text-slate-500">${sub}</span>` : "";
-    return `
-      <div class="py-3 grid grid-cols-[1fr_auto] gap-3 items-start" data-row-id="${x.id}">
-        <div class="min-w-0">
-          <div class="font-medium">${escapeHtml(x.part)}・${escapeHtml(x.exercise)}${subTxt}</div>
-          <div class="text-xs text-slate-500">${x.date}</div>
-          <div class="text-sm"><span class="font-semibold">${x.weight}${x.unit}</span> / 自力${x.repsSelf}・補助${x.repsAssist}</div>
-          ${x.note ? `<div class="text-sm break-words">${escapeHtml(x.note)}</div>` : ""}
-        </div>
-        <div class="shrink-0 flex gap-2">
-          <button data-edit="${x.id}" class="text-xs text-blue-600 hover:underline">編集</button>
-          <button data-del="${x.id}" class="text-xs text-red-600 hover:underline">削除</button>
-        </div>
-      </div>
-    `;
-  }
-
-  // ====== History画面のHTML生成 ======
-  function viewHistory(){
-    const today = new Date().toISOString().slice(0,10);
-    const date30 = new Date(Date.now()-29*864e5).toISOString().slice(0,10);
-
-    const partOpts = ['<option value="">全て</option>', ...partOrder().map(p=>`<option value="${p}">${p}</option>`)].join("");
-    const exAll = Array.from(new Set(getLogs().map(l=>l.exercise).filter(Boolean)));
-    const exOpts = ['<option value="">全て</option>', ...exAll.map(e=>`<option value="${e}">${e}</option>`)].join("");
-
-    return `
-      <section class="space-y-4">
-        <h2 class="text-base font-semibold accent">履歴</h2>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
-          <label class="text-sm">
-            <span class="block mb-1">期間</span>
-            <select id="flt-range" class="w-full border rounded-lg px-3 py-2">
-              <option value="7">直近7日</option>
-              <option value="30">直近30日</option>
-              <option value="custom">カスタム</option>
-              <option value="all" selected>全期間</option>
-            </select>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1">開始</span>
-            <input id="flt-from" type="date" value="${date30}" class="w-full border rounded-lg px-3 py-2">
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1">終了</span>
-            <input id="flt-to" type="date" value="${today}" class="w-full border rounded-lg px-3 py-2">
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1">部位</span>
-            <select id="flt-part" class="w-full border rounded-lg px-3 py-2">${partOpts}</select>
-          </label>
-          <label class="text-sm">
-            <span class="block mb-1">種目</span>
-            <select id="flt-ex" class="w-full border rounded-lg px-3 py-2">${exOpts}</select>
-          </label>
-        </div>
-        <div><canvas id="history-chart" height="110"></canvas></div>
-        <div id="history-list" class="mt-2"></div>
-      </section>
-    `;
-  }
-  
-  // History画面のリストとグラフを再描画
-  function renderHistory(){
-    const r    = $("#flt-range")?.value || "all";
-    const from = $("#flt-from")?.value  || "1900-01-01";
-    const to   = $("#flt-to")?.value    || "2999-12-31";
-    const part = $("#flt-part")?.value  || "";
-    const ex   = $("#flt-ex")?.value    || "";
-
-    let logs=getLogs();
-    if(r==="7")  logs=logs.filter(l=>daysDiff(l.date)<=6);
-    else if(r==="30") logs=logs.filter(l=>daysDiff(l.date)<=29);
-    else if(r==="custom") logs=logs.filter(l=>l.date>=from && l.date<=to);
-
-    if(part) logs=logs.filter(l=>l.part===part);
-    if(ex)   logs=logs.filter(l=>l.exercise===ex);
-
-    const byEx = groupBy(logs, l=>l.exercise||"(未設定)");
-    const container=$("#history-list");
-    const blocks = Object.keys(byEx).sort().map(exName=>{
-      const list=byEx[exName].slice().sort((a,b)=>b.date.localeCompare(a.date));
-      const byDate=groupBy(list, l=>l.date);
-      const rows = Object.keys(byDate).sort((a,b)=>b.localeCompare(a)).map(d=>{
-        const items = byDate[d].map(rowToItem).join("");
-        return `<div class="py-2"><h4 class="text-sm font-semibold text-slate-700">${d}</h4><div class="divide-y">${items}</div></div>`;
-      }).join("");
-      return `<section class="mb-6"><h3 class="text-base font-semibold accent">${escapeHtml(exName)}</h3>${rows || `<p class="text-sm text-slate-500">記録なし</p>`}</section>`;
-    }).join("");
-
-    if (container) {
-      container.innerHTML = blocks || `<p class="text-sm text-slate-500">条件に一致する記録がありません。</p>`;
-      bindItemButtons(container);
-    }
-    drawChart(logs);
-  }
-  
-  // グラフを描画
-  function drawChart(logs){
-    const ctx=$("#history-chart"); if(!ctx) return;
-    const byDay={};
-    logs.forEach(l=>{
-      const vol = Number(l.weight||0) * (Number(l.repsSelf||0)+Number(l.repsAssist||0));
-      byDay[l.date] = (byDay[l.date]||0) + vol;
-    });
-    const labels=Object.keys(byDay).sort();
-    const data=labels.map(d=>byDay[d]);
-    if(ctx._chart) ctx._chart.destroy();
-    ctx._chart = new Chart(ctx,{
-      type:"line",
-      data:{ labels, datasets:[{ label:"総挙上量", data, tension:.3, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true }] },
-      options:{ responsive:true, plugins:{ legend:{display:false} }, scales:{ x:{ ticks:{ maxRotation:0 } } } }
-    });
-  }
-
-  function groupBy(arr, fn){ return arr.reduce((m,x)=>{ const k=fn(x); (m[k]||(m[k]=[])).push(x); return m; },{}); }
-  function daysDiff(d){ return Math.floor((Date.now()-new Date(d).getTime())/864e5); }
-
-  // ====== Settings画面のHTML生成 ======
-  function viewSettings(){
-    const s=getSettings();
-    const jsonParts = JSON.stringify(s.parts,null,2);
-    const jsonLists = JSON.stringify({instruments:s.instruments, attachments:s.attachments, angles:s.angles}, null, 2);
-    const partOptions = partOrder().map(p=>`<option value="${p}" ${p===s.defaultPart?'selected':''}>${p}</option>`).join("");
-    return `
-      <section class="space-y-6">
-        <h2 class="text-base font-semibold accent">設定</h2>
-        
-        <div class="space-y-3">
-          <h3 class="text-sm font-semibold text-slate-700">基本</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label class="text-sm block">
-              <span class="block mb-1">単位</span>
-              <select id="set-unit" class="border rounded-lg px-3 py-2 w-full">${s.unit==="kg"?'<option value="kg" selected>kg</option><option value="lb">lb</option>':'<option value="kg">kg</option><option value="lb" selected>lb</option>'}</select>
-            </label>
-            <label class="text-sm block">
-              <span class="block mb-1">初期部位</span>
-              <select id="set-default-part" class="border rounded-lg px-3 py-2 w-full">${partOptions}</select>
-            </label>
-            <label class="text-sm block">
-              <span class="block mb-1">初期日付</span>
-              <select id="set-default-date" class="border rounded-lg px-3 py-2 w-full">${s.defaultDateMode==="today"?'<option value="today" selected>今日</option><option value="last">前回</option>':'<option value="today">今日</option><option value="last" selected>前回</option>'}</select>
-            </label>
-            <label class="text-sm flex items-center gap-2 pt-2">
-              <input id="set-autofill" type="checkbox" ${s.autofillEnabled?"checked":""} class="w-4 h-4">
-              <span>直近値のオートフィルを有効にする</span>
-            </label>
-          </div>
-          <div class="pt-2">
-            <button id="btn-save-settings" class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm">基本設定を保存</button>
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <h3 class="text-sm font-semibold text-slate-700">リスト編集（JSON）</h3>
-          <label class="text-sm block">
-            <span class="block mb-1">部位→種目</span>
-            <textarea id="set-parts-json" class="w-full border rounded-lg px-3 py-2 font-mono text-xs h-40">${escapeHtml(jsonParts)}</textarea>
-          </label>
-          <label class="text-sm block">
-            <span class="block mb-1">器具/アタッチメント/角度</span>
-            <textarea id="set-lists-json" class="w-full border rounded-lg px-3 py-2 font-mono text-xs h-40">${escapeHtml(jsonLists)}</textarea>
-          </label>
-          <div>
-            <button id="btn-apply-lists" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm">JSONをリストに反映</button>
-          </div>
-        </div>
-        
-        <div class="space-y-3">
-          <h3 class="text-sm font-semibold text-slate-700">データ管理</h3>
-          <div class="flex gap-3 flex-wrap">
-            <button id="btn-export-json" class="px-3 py-2 rounded border text-sm">JSON書き出し</button>
-            <button id="btn-export-csv" class="px-3 py-2 rounded border text-sm">CSV書き出し</button>
-            <label class="px-3 py-2 rounded border text-sm cursor-pointer">
-              JSON読み込み<input id="imp-json" type="file" accept="application/json" class="hidden">
-            </label>
-          </div>
-          <div class="pt-4">
-            <button id="btn-clear-all" class="px-4 py-2 rounded-lg border border-red-300 text-sm text-red-700">全データ削除</button>
-          </div>
-        </div>
-      </section>
-    `;
-  }
-
-  // ====== Home画面のイベント設定 ======
-  function bindHome(){
-    const s=getSettings();
-    // +/- ボタンのイベント
-    $$("button[data-inc], button[data-dec]").forEach(b=>{
-      b.addEventListener("click", ()=>{
-        const isInc = b.hasAttribute("data-inc");
-        const key = isInc ? b.getAttribute("data-inc") : b.getAttribute("data-dec");
-        const sign = isInc ? 1 : -1;
-        let el, step, toFixed=0;
-
-        if(key==="weight"){ el=$("#f-weight"); step=INCREMENTS[s.unit]||1; if(s.unit==="kg")toFixed=1; }
-        else if(key==="repsSelf"){ el=$("#f-reps-self"); step=1; }
-        else if(key==="repsAssist"){ el=$("#f-reps-assist"); step=1; }
-        else return;
-
-        const cur=Number(el.value||0);
-        el.value = Math.max(0, parseFloat((cur + sign * step).toFixed(toFixed)));
-      });
-    });
-
-    $("#f-part").addEventListener("change", updateExerciseOptionsByPart);
-
-    $("#f-ex").addEventListener("change", ()=>{
-      if (!getSettings().autofillEnabled) return;
-      const ex=$("#f-ex").value||"";
-      const last=getLastByEx()[ex]; if(!last) return;
-      if($("#f-weight").value==="" || Number($("#f-weight").value)===0) $("#f-weight").value=last.weight ?? "";
-      if($("#f-reps-self").value==="" || Number($("#f-reps-self").value)===0) $("#f-reps-self").value=last.repsSelf ?? "";
-      if($("#f-reps-assist").value==="" || Number($("#f-reps-assist").value)===0) $("#f-reps-assist").value=last.repsAssist ?? "";
-    });
-
-    $("#fab-add").addEventListener("click", onAdd);
-    $("#fab-dup").addEventListener("click", onAddDuplicate);
-  }
-  
-  // 「追加」ボタンの処理
-  function onAdd(){
-    hideError();
-    const s=getSettings();
-    const date=$("#f-date").value || new Date().toISOString().slice(0,10);
-    const part=$("#f-part").value;
-    const exercise=$("#f-ex").value || "";
-    const sets=Number($("#f-sets").value || 1);
-    const weight=Number(toHalf($("#f-weight").value)||0);
-    const repsSelf=Number(toHalf($("#f-reps-self").value)||0);
+    </template>
     
-    if(!part){ showError("部位を選択してください。"); return; }
-    if(!exercise){ showError("種目を選択してください。"); return; }
-    if(!(weight>=0)){ showError("重量は数値で入力してください。"); return; }
-    if(!(repsSelf>=0)){ showError("レップは0以上の数値で入力してください。"); return; }
-
-    const entry={ 
-      date, part, exercise, 
-      instrument:$("#f-inst").value || "",
-      attachment:$("#f-att").value || "",
-      angle:$("#f-ang").value || "",
-      weight, unit:s.unit, repsSelf, 
-      repsAssist:Number(toHalf($("#f-reps-assist").value)||0),
-      note:$("#f-note").value || "" 
-    };
-    for(let i=0;i<Math.max(1,sets);i++) addLog(entry);
-
-    pushRecent(exercise);
-    rememberLast(exercise,{ weight, repsSelf, repsAssist:entry.repsAssist, unit:s.unit });
-
-    onClearInputs(); renderRecent();
-  }
-  
-  // 「+1」ボタンの処理
-  function onAddDuplicate(){
-    hideError();
-    const s=getSettings();
-    const date=$("#f-date").value || new Date().toISOString().slice(0,10);
-    const part=$("#f-part").value;
-    const exercise=$("#f-ex").value || "";
-    if(!exercise || !part){ showError("部位と種目を選択してください。"); return; }
-
-    let weight=Number(toHalf($("#f-weight").value)||0);
-    let repsSelf=Number(toHalf($("#f-reps-self").value)||0);
-    let repsAssist=Number(toHalf($("#f-reps-assist").value)||0);
-
-    const last=getLastByEx()[exercise];
-    if(!(weight>=0)) weight=last?.weight ?? 0;
-    if(!(repsSelf>=0)) repsSelf=last?.repsSelf ?? 0;
-    if(!(repsAssist>=0)) repsAssist=last?.repsAssist ?? 0;
-
-    const entry = {
-      date, part, exercise, weight, repsSelf, repsAssist, unit:s.unit,
-      instrument:$("#f-inst").value || "",
-      attachment:$("#f-att").value || "",
-      angle:$("#f-ang").value || "",
-      note:$("#f-note").value || ""
-    };
-    addLog(entry);
-    pushRecent(exercise);
-    rememberLast(exercise, { weight, repsSelf, repsAssist, unit:s.unit });
-    renderRecent();
-  }
-
-  function onClearInputs(){
-    ["#f-weight","#f-reps-self","#f-reps-assist","#f-sets","#f-note"].forEach(sel=>{ const el=$(sel); if(el) el.value=""; });
-    $("#f-ex").focus();
-  }
-
-  // ====== 履歴画面 編集/削除 ======
-  function bindItemButtons(scope=document){
-    $$('button[data-del]', scope).forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const id=btn.getAttribute("data-del");
-        if(!confirm("この記録を削除しますか？")) return;
-        removeLog(id); render();
-      });
-    });
-    $$('button[data-edit]', scope).forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const id=btn.getAttribute("data-edit");
-        openEditModal(id);
-      });
-    });
-  }
-
-  function openEditModal(id){
-    const x=getLogs().find(l=>l.id===id); if(!x) return;
-    const s=getSettings();
-    const instOptions=["",...s.instruments].map(n=>`<option value="${n}" ${x.instrument===n?"selected":""}>${n||"指定なし"}</option>`).join("");
-    const attOptions=["",...s.attachments].map(n=>`<option value="${n}" ${x.attachment===n?"selected":""}>${n||"指定なし"}</option>`).join("");
-    const angOptions=["",...s.angles].map(n=>`<option value="${n}" ${x.angle===n?"selected":""}>${n||"指定なし"}</option>`).join("");
-    const partOptions=partOrder().map(p=>`<option value="${p}" ${x.part===p?"selected":""}>${p}</option>`).join("");
-    
-    const m=$("#modal");
-    m.innerHTML = `
-      <div class="modal-bg flex items-center justify-center p-4">
-        <div class="modal-card bg-white rounded-xl shadow-xl w-full p-4 overflow-y-auto max-h-full">
-          <h3 class="text-base font-semibold accent mb-3">編集</h3>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="text-sm"><span class="block mb-1">日付</span><input id="ed-date" type="date" value="${x.date}" class="w-full border rounded-lg px-3 py-2"></label>
-            <label class="text-sm"><span class="block mb-1">部位</span><select id="ed-part" class="w-full border rounded-lg px-3 py-2">${partOptions}</select></label>
-            <label class="col-span-2 text-sm"><span class="block mb-1">種目</span><input id="ed-ex" type="text" value="${escapeHtml(x.exercise)}" class="w-full border rounded-lg px-3 py-2"></label>
-            <label class="text-sm"><span class="block mb-1">器具</span><select id="ed-inst" class="w-full border rounded-lg px-3 py-2">${instOptions}</select></label>
-            <label class="text-sm"><span class="block mb-1">アタッチメント</span><select id="ed-att" class="w-full border rounded-lg px-3 py-2">${attOptions}</select></label>
-            <label class="text-sm"><span class="block mb-1">角度</span><select id="ed-ang" class="w-full border rounded-lg px-3 py-2">${angOptions}</select></label>
-            <label class="text-sm"><span class="block mb-1">重量 (${x.unit})</span><input id="ed-weight" type="number" inputmode="decimal" step="any" value="${x.weight}" class="w-full border rounded-lg px-3 py-2"></label>
-            <label class="text-sm"><span class="block mb-1">自力レップ</span><input id="ed-rs" type="number" inputmode="numeric" step="1" value="${x.repsSelf}" class="w-full border rounded-lg px-3 py-2"></label>
-            <label class="text-sm"><span class="block mb-1">補助レップ</span><input id="ed-ra" type="number" inputmode="numeric" step="1" value="${x.repsAssist}" class="w-full border rounded-lg px-3 py-2"></label>
-            <label class="col-span-2 text-sm"><span class="block mb-1">メモ</span><input id="ed-note" type="text" value="${escapeHtml(x.note)}" class="w-full border rounded-lg px-3 py-2"></label>
-          </div>
-          <div class="mt-4 flex justify-end gap-2">
-            <button id="ed-cancel" class="px-3 py-2 rounded border">キャンセル</button>
-            <button id="ed-save" class="px-3 py-2 rounded bg-blue-600 text-white">保存</button>
-          </div>
+    <template id="set-template">
+         <div class="set-row grid grid-cols-1 md:grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border">
+            <div class="md:col-span-1 flex items-center">
+                <input type="checkbox" class="warmup-check h-5 w-5 mr-2">
+                <span class="font-bold text-gray-600 set-number"></span>
+            </div>
+            <div class="md:col-span-3">
+                <input type="number" step="0.5" placeholder="重量(kg)" class="weight-input w-full p-2 border rounded-md">
+            </div>
+            <div class="md:col-span-2">
+                <input type="number" placeholder="回数" class="reps-input w-full p-2 border rounded-md">
+            </div>
+            <div class="md:col-span-2">
+                <input type="number" placeholder="補助" class="assisted-reps-input w-full p-2 border rounded-md">
+            </div>
+            <div class="md:col-span-3">
+                <input type="text" placeholder="メモ" class="memo-input w-full p-2 border rounded-md">
+            </div>
+            <div class="md:col-span-1 flex justify-between items-center">
+                 <span class="text-xs text-gray-500 w-12 text-right 1rm-display">0 kg</span>
+                 <button class="remove-set-btn text-gray-400 hover:text-red-500 ml-2"><i class="fas fa-times"></i></button>
+            </div>
         </div>
-      </div>
-    `;
-    m.classList.remove("hidden");
-    $("#ed-cancel").onclick = ()=>{ m.classList.add("hidden"); m.innerHTML=""; };
-    $("#ed-save").onclick = ()=>{
-      const patch = {
-        date: $("#ed-date").value, part: $("#ed-part").value, exercise: $("#ed-ex").value.trim(),
-        instrument: $("#ed-inst").value, attachment: $("#ed-att").value, angle: $("#ed-ang").value,
-        weight: Number($("#ed-weight").value||0), repsSelf: Number($("#ed-rs").value||0),
-        repsAssist: Number($("#ed-ra").value||0), note: $("#ed-note").value
-      };
-      if (!patch.exercise){ showError("種目は必須です"); return; }
-      updateLog(id, patch);
-      m.classList.add("hidden"); m.innerHTML="";
-      render();
-    };
-  }
+    </template>
 
-  // ====== Settings画面のイベント設定 ======
-  function bindSettings(){
-    $("#btn-save-settings").addEventListener("click", ()=>{
-      const s=getSettings();
-      s.unit=$("#set-unit").value;
-      s.defaultPart=$("#set-default-part").value;
-      s.defaultDateMode=$("#set-default-date").value;
-      s.autofillEnabled=$("#set-autofill").checked;
-      setSettings(s);
-      alert("保存しました。");
-    });
-    $("#btn-clear-all").addEventListener("click", ()=>{
-      if(!confirm("すべての記録を削除します。この操作は元に戻せません。よろしいですか？")) return;
-      save(KEYS.LOGS, []); render();
-    });
-    $("#btn-apply-lists").addEventListener("click", ()=>{
-      try{
-        const parts=JSON.parse($("#set-parts-json").value);
-        const lists=JSON.parse($("#set-lists-json").value);
-        const s=getSettings();
-        s.parts=parts;
-        s.instruments=lists.instruments || DEFAULT_INSTRUMENTS;
-        s.attachments=lists.attachments || DEFAULT_ATTACHMENTS;
-        s.angles=lists.angles || DEFAULT_ANGLES;
-        if(!s.parts[s.defaultPart]) s.defaultPart=Object.keys(s.parts)[0];
-        setSettings(s);
-        alert("リストを反映しました。");
-        render(); // 設定を即時反映
-      }catch(e){ showError("JSONの形式が不正です: "+e.message); }
-    });
-    $("#btn-export-json").addEventListener("click", ()=>{
-      const blob=new Blob([JSON.stringify(getLogs(),null,2)],{type:"application/json"});
-      triggerDownload(URL.createObjectURL(blob), `muscle-logs-${new Date().toISOString().slice(0,10)}.json`);
-    });
-    $("#btn-export-csv").addEventListener("click", ()=>{
-      const csv=logsToCSV(getLogs());
-      const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
-      triggerDownload(URL.createObjectURL(blob), `muscle-logs-${new Date().toISOString().slice(0,10)}.csv`);
-    });
-    $("#imp-json").addEventListener("change",(ev)=>{
-      const f=ev.target.files?.[0]; if(!f) return;
-      const reader=new FileReader();
-      reader.onload=()=>{
-        try{
-          const arr=JSON.parse(String(reader.result||"[]"));
-          if(!Array.isArray(arr)) throw new Error("配列ではありません");
-          const s=getSettings();
-          const norm=arr.map(x=>({
-            id:x.id||uid(), date:x.date||new Date().toISOString().slice(0,10),
-            part:x.part||guessPart(x.exercise), exercise:String(x.exercise||""),
-            instrument:x.instrument||"", attachment:x.attachment||"", angle:x.angle||"",
-            weight:Number(x.weight||0), unit:x.unit||s.unit,
-            repsSelf:Number(x.repsSelf ?? x.reps ?? 0), repsAssist:Number(x.repsAssist ?? 0),
-            note:String(x.note||"")
-          }));
-          setLogs(norm); render();
-          alert("読み込みました。");
-        }catch(e){ showError("JSON読み込みエラー: "+e.message); }
-        ev.target.value="";
-      };
-      reader.readAsText(f);
-    });
-  }
+    <script>
+        // アプリケーションの全ロジック
+        document.addEventListener('DOMContentLoaded', () => {
+            const app = {
+                // ===== DOM要素 =====
+                screens: {
+                    home: document.getElementById('home-screen'),
+                    record: document.getElementById('record-screen'),
+                    history: document.getElementById('history-screen'),
+                    settings: document.getElementById('settings-screen'),
+                },
+                navButtons: document.querySelectorAll('.nav-btn'),
+                
+                // ===== 状態管理 =====
+                db: null,
+                state: {
+                    currentScreen: 'home',
+                    currentWorkout: {
+                        part: null,
+                        date: null,
+                        blocks: [],
+                    },
+                },
+                chartInstance: null,
 
-  function logsToCSV(logs){
-    const header = ["id","date","part","exercise","instrument","attachment","angle","weight","unit","repsSelf","repsAssist","note"];
-    const rows = logs.map(l => header.map(h => String((l[h] === null || l[h] === undefined) ? "" : l[h])));
-    return [header, ...rows].map(r => r.map(csvCell).join(",")).join("\n");
-  }
-  function csvCell(s){ s = String(s); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; }
-  function triggerDownload(url, name){ const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
+                // ===== 初期化 =====
+                init() {
+                    this.loadDB();
+                    this.attachEventListeners();
+                    this.navigateTo('home');
+                },
 
-  // ====== 部位選択に応じて種目セレクトボックスを更新 ======
-  function updateExerciseOptionsByPart(){
-    const sel=$("#f-ex"); if(!sel) return;
-    const elPart = $("#f-part");
-    const part = elPart ? elPart.value : getSettings().defaultPart;
-    const list=exercisesOf(part);
-    const prev=sel.value || "";
-    const optionsHtml = [`<option value="" disabled ${!list.includes(prev) ? "selected" : ""}>選択してください</option>`, ...list.map(n=>`<option value="${n}" ${n===prev ? "selected" : ""}>${n}</option>`)].join("");
-    sel.innerHTML=optionsHtml;
-  }
+                // ===== DB操作 =====
+                loadDB() {
+                    try {
+                        const data = localStorage.getItem('workoutAppDB');
+                        this.db = data ? JSON.parse(data) : this.getDefaultDB();
+                    } catch (e) {
+                        console.error("DBの読み込みに失敗しました", e);
+                        this.db = this.getDefaultDB();
+                    }
+                },
+                
+                saveDB() {
+                    try {
+                        localStorage.setItem('workoutAppDB', JSON.stringify(this.db));
+                    } catch (e) {
+                        console.error("DBの保存に失敗しました", e);
+                        alert("データの保存に失敗しました。");
+                    }
+                },
 
-  // ====== タブのハイライト処理 ======
-  function highlightTab(){
-    const route=currentRoute();
-    $$(".tab").forEach(b=>{
-      const isActive=b.getAttribute("data-tab")===route;
-      b.classList.toggle("text-blue-600", isActive);
-      b.classList.toggle("border-t-2", isActive);
-      b.classList.toggle("border-blue-600", isActive);
-      b.classList.toggle("bg-blue-50/50", isActive);
-      if (!b.onclick) { // イベントリスナーを一度だけ設定
-        b.onclick = ()=> navigate(b.getAttribute("data-tab"));
-      }
-    });
-  }
+                getDefaultDB() {
+                    return {
+                        settings: {
+                            parts: ['胸', '背中', '肩', '腕', '脚', '腹筋'],
+                            exercises: {
+                                '胸': ['ベンチプレス', 'ダンベルフライ', 'インクラインプレス'],
+                                '背中': ['デッドリフト', '懸垂', 'ラットプルダウン'],
+                                '肩': ['ショルダープレス', 'サイドレイズ'],
+                                '腕': ['バーベルカール', 'スカルクラッシャー'],
+                                '脚': ['スクワット', 'レッグプレス'],
+                                '腹筋': ['クランチ', 'レッグレイズ'],
+                            },
+                            equipment: ['バーベル', 'ダンベル', 'マシン', 'ケーブル', '自重'],
+                            attachments: ['ストレートバー', 'ロープ', 'Vバー'],
+                            angles: ['フラット', 'インクライン', 'デクライン'],
+                        },
+                        logs: [],
+                    };
+                },
 
-  // ====== メインの描画関数 ======
-  function render(){
-    hideError();
-    const route = currentRoute();
-    const root  = $("#view");
-    if (!root) {
-      showError("描画エリアが見つかりません。");
-      return;
-    }
-    
-    try {
-      if (route === "home") {
-        root.innerHTML = viewHome();
-        renderRecent();
-        updateExerciseOptionsByPart();
-        bindHome();
-        setActionBarVisible(true);
-      } else if (route === "history") {
-        root.innerHTML = viewHistory();
-        setActionBarVisible(false);
-        renderHistory();
-        $("#flt-range")?.addEventListener("change", renderHistory);
-        ["#flt-from","#flt-to","#flt-part","#flt-ex"].forEach(sel => $(sel)?.addEventListener("change", renderHistory));
-      } else if (route === "settings") {
-        root.innerHTML = viewSettings();
-        setActionBarVisible(false);
-        bindSettings();
-      }
-    } catch(e){
-      showError("ページの描画中にエラーが発生しました: " + e.message);
-      console.error("Render error:", e);
-    }
+                // ===== イベントリスナー =====
+                attachEventListeners() {
+                    // ナビゲーション
+                    this.navButtons.forEach(btn => {
+                        btn.addEventListener('click', () => this.navigateTo(btn.dataset.screen));
+                    });
+                    
+                    // ホーム画面
+                    document.getElementById('part-selection').addEventListener('click', e => {
+                        if (e.target.closest('.part-btn')) {
+                            const part = e.target.closest('.part-btn').dataset.part;
+                            this.startWorkout(part);
+                        }
+                    });
 
-    highlightTab();
-  }
+                    // 記録画面
+                    document.getElementById('back-to-home-btn').addEventListener('click', () => {
+                        this.navigateTo('home');
+                    });
+                    document.getElementById('add-block-btn').addEventListener('click', () => this.addBlock());
+                    document.getElementById('finish-workout-btn').addEventListener('click', () => this.finishWorkout());
+                    
+                    document.getElementById('blocks-container').addEventListener('click', e => {
+                        if (e.target.closest('.add-set-btn')) this.addSet(e.target.closest('.block-card'));
+                        if (e.target.closest('.remove-set-btn')) this.removeSet(e.target.closest('.set-row'));
+                        if (e.target.closest('.remove-block-btn')) this.removeBlock(e.target.closest('.block-card'));
+                    });
+                    
+                    document.getElementById('blocks-container').addEventListener('change', e => {
+                        const target = e.target;
+                        if (target.matches('.weight-input, .reps-input')) {
+                            this.update1RM(target.closest('.set-row'));
+                        }
+                    });
 
-  function setActionBarVisible(v){
-    $("#actionbar")?.classList.toggle("hidden", !v);
-  }
-  
-  // ====== アプリケーションの初期化 ======
-  // URLのハッシュが不正な場合はホームにリダイレクト
-  if (!location.hash || !/^#\/(home|history|settings)$/.test(location.hash)) {
-    location.replace('#/home');
-  }
+                    // 履歴画面
+                    document.getElementById('apply-filter-btn').addEventListener('click', () => this.renderHistoryScreen());
 
-  // DOMの準備ができてから一度だけrender()を呼び出す
-  document.addEventListener('DOMContentLoaded', render);
-  </script>
+                    // 設定画面
+                    document.getElementById('settings-accordion').addEventListener('click', e => {
+                        if (e.target.closest('.toggle-accordion')) {
+                            const content = e.target.closest('.toggle-accordion').nextElementSibling;
+                            content.classList.toggle('hidden');
+                        }
+                    });
+                    
+                    // CSV
+                    document.getElementById('export-csv-btn').addEventListener('click', () => this.exportCSV());
+                    document.getElementById('import-csv-input').addEventListener('change', e => this.importCSV(e));
+                },
+
+                // ===== ナビゲーションと画面描画 =====
+                navigateTo(screenId) {
+                    this.state.currentScreen = screenId;
+                    Object.values(this.screens).forEach(screen => screen.classList.add('hidden'));
+                    
+                    let activeScreen;
+                    if (screenId === 'home') {
+                        activeScreen = this.screens.home;
+                        this.renderHomeScreen();
+                    } else if(screenId === 'record') {
+                        activeScreen = this.screens.record;
+                        this.renderRecordScreen();
+                    } else {
+                        activeScreen = this.screens[screenId];
+                        if (screenId === 'history') this.renderHistoryScreen();
+                        if (screenId === 'settings') this.renderSettingsScreen();
+                    }
+                    activeScreen.classList.remove('hidden');
+
+                    this.navButtons.forEach(btn => {
+                        if (btn.dataset.screen === screenId || (screenId === 'record' && btn.dataset.screen === 'home')) {
+                            btn.classList.add('text-blue-500', 'border-t-4', 'border-blue-500');
+                            btn.classList.remove('text-gray-500');
+                        } else {
+                            btn.classList.remove('text-blue-500', 'border-t-4', 'border-blue-500');
+                            btn.classList.add('text-gray-500');
+                        }
+                    });
+                },
+
+                // --- ホーム画面関連 ---
+                renderHomeScreen() {
+                    const today = new Date();
+                    const sevenDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
+                    const thirtyDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
+
+                    const uniqueDates7 = new Set(this.db.logs.filter(log => new Date(log.date) >= sevenDaysAgo).map(log => log.date.split('T')[0]));
+                    const uniqueDates30 = new Set(this.db.logs.filter(log => new Date(log.date) >= thirtyDaysAgo).map(log => log.date.split('T')[0]));
+
+                    document.getElementById('summary-7-days').textContent = `${uniqueDates7.size}日`;
+                    document.getElementById('summary-30-days').textContent = `${uniqueDates30.size}日`;
+
+                    const partContainer = document.getElementById('part-selection');
+                    partContainer.innerHTML = this.db.settings.parts.map(part => `
+                        <button class="part-btn bg-white p-6 rounded-lg shadow hover:shadow-lg transition-shadow text-left" data-part="${part}">
+                            <span class="text-xl font-bold">${part}</span>
+                        </button>
+                    `).join('');
+                },
+                
+                // --- 記録画面関連 ---
+                startWorkout(part) {
+                    this.state.currentWorkout.part = part;
+                    this.state.currentWorkout.date = new Date().toISOString();
+                    this.state.currentWorkout.blocks = [];
+                    this.navigateTo('record');
+                },
+                
+                renderRecordScreen() {
+                    document.getElementById('record-title').textContent = `${this.state.currentWorkout.part} の記録`;
+                    document.getElementById('blocks-container').innerHTML = '';
+                    if (this.state.currentWorkout.blocks.length === 0) {
+                        this.addBlock();
+                    }
+                },
+                
+                addBlock() {
+                    const template = document.getElementById('block-template');
+                    const clone = template.content.cloneNode(true);
+                    const blockCard = clone.querySelector('.block-card');
+                    blockCard.dataset.id = `block_${Date.now()}`;
+                    document.getElementById('blocks-container').appendChild(clone);
+                    this.addExerciseTab(blockCard);
+                    this.addSet(blockCard);
+                },
+
+                removeBlock(blockElement) {
+                    if (confirm('この種目ブロックを削除しますか？')) {
+                        blockElement.remove();
+                    }
+                },
+                
+                addExerciseTab(blockCard) {
+                    // 機能簡略化のため、1ブロック1種目として実装
+                    const exerciseOptions = (this.db.settings.exercises[this.state.currentWorkout.part] || []).map(ex => `<option value="${ex}">${ex}</option>`).join('');
+                    const selectHTML = `<select class="exercise-select p-2 border rounded-md">${exerciseOptions}</select>`;
+                    blockCard.querySelector('.exercise-tabs').innerHTML = selectHTML;
+                },
+
+                addSet(blockCard) {
+                    const template = document.getElementById('set-template');
+                    const clone = template.content.cloneNode(true);
+                    const setsContainer = blockCard.querySelector('.sets-container');
+                    const setNumber = setsContainer.children.length + 1;
+                    clone.querySelector('.set-number').textContent = `Set ${setNumber}`;
+                    clone.querySelector('.set-row').dataset.id = `set_${Date.now()}`;
+                    setsContainer.appendChild(clone);
+                },
+
+                removeSet(setElement) {
+                    const setsContainer = setElement.parentElement;
+                    setElement.remove();
+                    // セット番号を再採番
+                    Array.from(setsContainer.children).forEach((set, index) => {
+                        set.querySelector('.set-number').textContent = `Set ${index + 1}`;
+                    });
+                },
+
+                update1RM(setElement) {
+                    const weight = parseFloat(setElement.querySelector('.weight-input').value) || 0;
+                    const reps = parseInt(setElement.querySelector('.reps-input').value) || 0;
+                    let rm = 0;
+                    if (weight > 0 && reps > 0) {
+                        rm = weight * (1 + reps / 40); // Epley formula
+                    }
+                    setElement.querySelector('.1rm-display').textContent = `${rm.toFixed(1)} kg`;
+                },
+                
+                finishWorkout() {
+                    const blocksData = [];
+                    const blockElements = document.querySelectorAll('.block-card');
+                    
+                    blockElements.forEach(blockEl => {
+                        const exercise = blockEl.querySelector('.exercise-select').value;
+                        if (!exercise) return;
+
+                        const setsData = [];
+                        blockEl.querySelectorAll('.set-row').forEach(setEl => {
+                            const weight = parseFloat(setEl.querySelector('.weight-input').value) || 0;
+                            const reps = parseInt(setEl.querySelector('.reps-input').value) || 0;
+                            
+                            if (weight > 0 || reps > 0) {
+                                setsData.push({
+                                    warmup: setEl.querySelector('.warmup-check').checked,
+                                    weight: weight,
+                                    reps: reps,
+                                    assistedReps: parseInt(setEl.querySelector('.assisted-reps-input').value) || 0,
+                                    memo: setEl.querySelector('.memo-input').value,
+                                });
+                            }
+                        });
+
+                        if (setsData.length > 0) {
+                             blocksData.push({
+                                exercise: exercise,
+                                sets: setsData
+                            });
+                        }
+                    });
+
+                    if (blocksData.length === 0) {
+                        alert("記録するデータがありません。");
+                        return;
+                    }
+
+                    this.db.logs.push({
+                        id: `log_${Date.now()}`,
+                        date: this.state.currentWorkout.date,
+                        part: this.state.currentWorkout.part,
+                        blocks: blocksData,
+                    });
+                    
+                    this.saveDB();
+                    alert('トレーニングを保存しました！');
+                    this.navigateTo('home');
+                },
+
+                // --- 履歴画面関連 ---
+                renderHistoryScreen() {
+                    const listEl = document.getElementById('history-list');
+                    listEl.innerHTML = '<p class="text-gray-500">履歴を読み込んでいます...</p>';
+
+                    // フィルターの準備
+                    const filterPartEl = document.getElementById('filter-part');
+                    filterPartEl.innerHTML = '<option value="">全部位</option>' + this.db.settings.parts.map(p => `<option value="${p}">${p}</option>`).join('');
+                    
+                    const allExercises = [...new Set(Object.values(this.db.settings.exercises).flat())];
+                    const filterExerciseEl = document.getElementById('filter-exercise');
+                    filterExerciseEl.innerHTML = '<option value="">全種目</option>' + allExercises.map(ex => `<option value="${ex}">${ex}</option>`).join('');
+
+                    // フィルタリングロジック
+                    const startDate = document.getElementById('filter-start-date').value;
+                    const endDate = document.getElementById('filter-end-date').value;
+                    const part = filterPartEl.value;
+                    const exercise = filterExerciseEl.value;
+                    
+                    let filteredLogs = this.db.logs.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                    if (startDate) filteredLogs = filteredLogs.filter(log => log.date.split('T')[0] >= startDate);
+                    if (endDate) filteredLogs = filteredLogs.filter(log => log.date.split('T')[0] <= endDate);
+                    if (part) filteredLogs = filteredLogs.filter(log => log.part === part);
+                    if (exercise) {
+                        filteredLogs = filteredLogs.map(log => {
+                            const filteredBlocks = log.blocks.filter(block => block.exercise === exercise);
+                            return filteredBlocks.length > 0 ? { ...log, blocks: filteredBlocks } : null;
+                        }).filter(Boolean);
+                    }
+
+                    if(filteredLogs.length === 0) {
+                        listEl.innerHTML = '<p class="text-gray-500">表示できる履歴がありません。</p>';
+                        this.updateChart([], []);
+                        return;
+                    }
+
+                    listEl.innerHTML = filteredLogs.map(log => {
+                        const logDate = new Date(log.date);
+                        const dateString = `${logDate.getFullYear()}/${logDate.getMonth()+1}/${logDate.getDate()}`;
+                        return `
+                            <div class="bg-white p-4 rounded-lg shadow">
+                                <div class="flex justify-between items-center mb-2">
+                                    <h3 class="font-bold text-lg">${log.part}</h3>
+                                    <span class="text-sm text-gray-500">${dateString}</span>
+                                </div>
+                                ${log.blocks.map(block => `
+                                    <div class="mt-2 border-t pt-2">
+                                        <h4 class="font-semibold">${block.exercise}</h4>
+                                        <div class="text-sm text-gray-700 mt-1">
+                                            ${block.sets.map((set, i) => `
+                                                <div class="flex justify-between items-center ${set.warmup ? 'text-gray-400' : ''}">
+                                                    <span>Set ${i+1}: ${set.weight}kg x ${set.reps}回 ${set.assistedReps > 0 ? `(+${set.assistedReps})` : ''}</span>
+                                                    <span class="text-xs">${set.memo || ''}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    // グラフデータ作成
+                    if (exercise) {
+                        const chartLabels = [];
+                        const chartData = [];
+                        filteredLogs.reverse().forEach(log => {
+                            log.blocks.forEach(block => {
+                                if (block.exercise === exercise) {
+                                    const logDate = new Date(log.date);
+                                    const dateString = `${logDate.getMonth()+1}/${logDate.getDate()}`;
+                                    block.sets.forEach(set => {
+                                        if (!set.warmup && set.weight > 0 && set.reps > 0) {
+                                            chartLabels.push(dateString);
+                                            chartData.push(parseFloat((set.weight * (1 + set.reps / 40)).toFixed(1)));
+                                        }
+                                    });
+                                }
+                            });
+                        });
+                        this.updateChart(chartLabels, chartData);
+                    } else {
+                         this.updateChart([], []);
+                    }
+                },
+                
+                updateChart(labels, data) {
+                    const ctx = document.getElementById('history-chart').getContext('2d');
+                    if (this.chartInstance) {
+                        this.chartInstance.destroy();
+                    }
+                    if(labels.length === 0 || data.length === 0) {
+                        return;
+                    }
+                    this.chartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: '1RM (kg)',
+                                data: data,
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true }
+                    });
+                },
+
+                // --- 設定画面関連 ---
+                renderSettingsScreen() {
+                    const accordion = document.getElementById('settings-accordion');
+                    accordion.innerHTML = `
+                        ${this.createSettingSection('部位', 'parts', this.db.settings.parts)}
+                        ${this.createSettingSection('器具', 'equipment', this.db.settings.equipment)}
+                        ${this.createSettingSection('アタッチメント', 'attachments', this.db.settings.attachments)}
+                        ${this.createSettingSection('角度', 'angles', this.db.settings.angles)}
+                    `;
+
+                    // 種目設定は特別扱い
+                    // (UIが複雑になるため、この実装では簡略化)
+                },
+                
+                createSettingSection(title, key, items) {
+                    return `
+                        <div class="bg-white rounded-lg shadow overflow-hidden">
+                            <button class="toggle-accordion w-full text-left p-4 font-semibold text-lg flex justify-between items-center bg-gray-50 hover:bg-gray-100">
+                                <span>${title}の編集</span>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <div class="p-4 hidden">
+                                <ul class="list-disc pl-5 mb-4 space-y-2">
+                                    ${items.map(item => `<li>${item} <button class="text-red-500 ml-2" onclick="app.removeItemFromSettings('${key}', '${item}')"><i class="fas fa-times"></i></button></li>`).join('')}
+                                </ul>
+                                <div class="flex gap-2">
+                                    <input type="text" id="new-${key}-input" class="w-full p-2 border rounded-md" placeholder="新しい${title}を追加">
+                                    <button class="bg-blue-500 text-white px-4 rounded-md" onclick="app.addItemToSettings('${key}')">追加</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                },
+                
+                addItemToSettings(key) {
+                    const input = document.getElementById(`new-${key}-input`);
+                    const value = input.value.trim();
+                    if (value && !this.db.settings[key].includes(value)) {
+                        this.db.settings[key].push(value);
+                        this.saveDB();
+                        this.renderSettingsScreen();
+                    }
+                    input.value = '';
+                },
+
+                removeItemFromSettings(key, item) {
+                    if (confirm(`「${item}」を削除しますか？`)) {
+                        this.db.settings[key] = this.db.settings[key].filter(i => i !== item);
+                        this.saveDB();
+                        this.renderSettingsScreen();
+                    }
+                },
+
+                // --- データ管理 ---
+                exportCSV() {
+                    let csvContent = "data:text/csv;charset=utf-8,";
+                    csvContent += "日付,部位,種目,セット,ウォームアップ,重量,レップ,補助レップ,メモ\n";
+
+                    this.db.logs.forEach(log => {
+                        log.blocks.forEach(block => {
+                            block.sets.forEach((set, index) => {
+                                const row = [
+                                    log.date,
+                                    log.part,
+                                    block.exercise,
+                                    index + 1,
+                                    set.warmup,
+                                    set.weight,
+                                    set.reps,
+                                    set.assistedReps,
+                                    `"${set.memo || ''}"`
+                                ].join(',');
+                                csvContent += row + "\n";
+                            });
+                        });
+                    });
+
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "workout_log.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                },
+
+                importCSV(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        // ここにCSVをパースしてDBにマージするロジックを記述
+                        // 複雑なため、この実装ではアラートのみ表示
+                        alert("CSVインポート機能は現在開発中です。");
+                    };
+                    reader.readAsText(file);
+                }
+            };
+
+            // グローバルスコープにappを公開してonclick属性からアクセス可能にする
+            window.app = app;
+            app.init();
+        });
+    </script>
 </body>
 </html>
