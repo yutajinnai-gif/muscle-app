@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>筋トレ記録アプリ</title>
+    <title>筋トレ記録アプリ v2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -12,12 +12,18 @@
         input, select, textarea {
             font-size: 16px;
         }
-        /* スクロールバーのスタイル（任意） */
-        ::-webkit-scrollbar { width: 8px; }
+        /* スクロールバーのスタイル */
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #555; }
         .hidden { display: none !important; }
+        /* アクティブなタブのスタイル */
+        .tab-active {
+            border-color: #3b82f6; /* blue-500 */
+            background-color: #eff6ff; /* blue-50 */
+            color: #3b82f6;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans antialiased">
@@ -95,7 +101,7 @@
 
         <nav class="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t shadow-md">
             <div class="flex justify-around">
-                <button data-screen="home" class="nav-btn flex-1 py-3 text-center text-blue-500 border-t-4 border-blue-500">
+                <button data-screen="home" class="nav-btn flex-1 py-3 text-center text-gray-500">
                     <i class="fas fa-home text-xl"></i>
                     <span class="block text-xs">ホーム</span>
                 </button>
@@ -112,42 +118,52 @@
     </div>
 
     <template id="block-template">
-        <div class="block-card bg-gray-50 border rounded-lg p-4 shadow-sm">
-            <div class="flex justify-between items-center mb-3">
-                <div class="exercise-tabs flex items-center border-b">
+        <div class="block-card bg-gray-50 border rounded-lg p-3 shadow-sm">
+            <div class="flex justify-between items-start mb-2">
+                <div class="exercise-tabs-container overflow-x-auto whitespace-nowrap flex-grow pb-1">
                     </div>
-                <button class="remove-block-btn text-red-500 hover:text-red-700 p-2"><i class="fas fa-trash-alt"></i></button>
+                <button class="remove-block-btn text-red-500 hover:text-red-700 p-2 ml-2 flex-shrink-0"><i class="fas fa-trash-alt"></i></button>
             </div>
-            <div class="sets-container space-y-3">
-                </div>
-            <button class="add-set-btn w-full mt-4 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors">
-                <i class="fas fa-plus mr-2"></i>セット追加
-            </button>
+            <div class="exercise-content-container">
+                 </div>
         </div>
     </template>
     
+    <template id="exercise-content-template">
+        <div class="exercise-content">
+            <div class="grid grid-cols-3 gap-2 mb-3 bg-gray-100 p-2 rounded-md">
+                <select class="exercise-detail-select equipment-select p-1.5 border rounded-md text-sm"></select>
+                <select class="exercise-detail-select attachment-select p-1.5 border rounded-md text-sm"></select>
+                <select class="exercise-detail-select angle-select p-1.5 border rounded-md text-sm"></select>
+            </div>
+            <div class="sets-container space-y-2">
+                </div>
+            <button class="add-set-btn w-full mt-3 bg-gray-200 text-gray-700 py-1.5 rounded-lg text-sm hover:bg-gray-300 transition-colors">
+                <i class="fas fa-plus mr-1"></i>セット追加
+            </button>
+        </div>
+    </template>
+
     <template id="set-template">
-         <div class="set-row grid grid-cols-1 md:grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border">
-            <div class="md:col-span-1 flex items-center">
-                <input type="checkbox" class="warmup-check h-5 w-5 mr-2">
-                <span class="font-bold text-gray-600 set-number"></span>
+         <div class="set-row grid grid-cols-12 gap-x-2 items-center bg-white p-1 rounded-lg border">
+            <div class="col-span-2 flex items-center justify-center">
+                <input type="checkbox" class="warmup-check h-4 w-4 mr-1.5">
+                <span class="font-bold text-gray-600 text-sm set-number"></span>
             </div>
-            <div class="md:col-span-3">
-                <input type="number" step="0.5" placeholder="重量(kg)" class="weight-input w-full p-2 border rounded-md">
+            <div class="col-span-3">
+                <input type="number" step="0.5" inputmode="decimal" placeholder="重量" class="weight-input w-full p-1.5 border rounded-md">
             </div>
-            <div class="md:col-span-2">
-                <input type="number" placeholder="回数" class="reps-input w-full p-2 border rounded-md">
+            <div class="col-span-2">
+                <input type="number" inputmode="numeric" pattern="[0-9]*" placeholder="回" class="reps-input w-full p-1.5 border rounded-md">
             </div>
-            <div class="md:col-span-2">
-                <input type="number" placeholder="補助" class="assisted-reps-input w-full p-2 border rounded-md">
+            <div class="col-span-3">
+                <input type="text" placeholder="メモ" class="memo-input w-full p-1.5 border rounded-md">
             </div>
-            <div class="md:col-span-3">
-                <input type="text" placeholder="メモ" class="memo-input w-full p-2 border rounded-md">
+            <div class="col-span-2 flex items-center justify-end">
+                 <span class="text-xs text-gray-500 w-10 text-center 1rm-display">0</span>
+                 <button class="remove-set-btn text-gray-400 hover:text-red-500 text-lg ml-1"><i class="fas fa-times-circle"></i></button>
             </div>
-            <div class="md:col-span-1 flex justify-between items-center">
-                 <span class="text-xs text-gray-500 w-12 text-right 1rm-display">0 kg</span>
-                 <button class="remove-set-btn text-gray-400 hover:text-red-500 ml-2"><i class="fas fa-times"></i></button>
-            </div>
+             <input type="number" inputmode="numeric" pattern="[0-9]*" placeholder="補助" class="assisted-reps-input hidden">
         </div>
     </template>
 
@@ -155,6 +171,7 @@
         // アプリケーションの全ロジック
         document.addEventListener('DOMContentLoaded', () => {
             const app = {
+                // ... (中略: DOM要素, 状態管理, チャートインスタンス) ...
                 // ===== DOM要素 =====
                 screens: {
                     home: document.getElementById('home-screen'),
@@ -168,13 +185,11 @@
                 db: null,
                 state: {
                     currentScreen: 'home',
-                    currentWorkout: {
-                        part: null,
-                        date: null,
-                        blocks: [],
-                    },
+                    // currentWorkoutはlocalStorageから読み込む
                 },
                 chartInstance: null,
+                debounceTimer: null,
+
 
                 // ===== 初期化 =====
                 init() {
@@ -208,68 +223,88 @@
                         settings: {
                             parts: ['胸', '背中', '肩', '腕', '脚', '腹筋'],
                             exercises: {
-                                '胸': ['ベンチプレス', 'ダンベルフライ', 'インクラインプレス'],
-                                '背中': ['デッドリフト', '懸垂', 'ラットプルダウン'],
-                                '肩': ['ショルダープレス', 'サイドレイズ'],
-                                '腕': ['バーベルカール', 'スカルクラッシャー'],
-                                '脚': ['スクワット', 'レッグプレス'],
-                                '腹筋': ['クランチ', 'レッグレイズ'],
+                                '胸': ['ベンチプレス', 'ダンベルフライ', 'インクラインプレス', 'ケーブルクロスオーバー'],
+                                '背中': ['デッドリフト', '懸垂', 'ラットプルダウン', 'ベントオーバーロウ'],
+                                '肩': ['ショルダープレス', 'サイドレイズ', 'リアレイズ'],
+                                '腕': ['バーベルカール', 'スカルクラッシャー', 'ハンマーカール'],
+                                '脚': ['スクワット', 'レッグプレス', 'レッグエクステンション'],
+                                '腹筋': ['クランチ', 'レッグレイズ', 'アブローラー'],
                             },
                             equipment: ['バーベル', 'ダンベル', 'マシン', 'ケーブル', '自重'],
-                            attachments: ['ストレートバー', 'ロープ', 'Vバー'],
+                            attachments: ['ストレートバー', 'ロープ', 'Vバー', 'MAGグリップ'],
                             angles: ['フラット', 'インクライン', 'デクライン'],
                         },
                         logs: [],
                     };
                 },
 
+                // ★改善: 入力中データの保存・読み込み
+                saveInProgressWorkout() {
+                    const currentWorkout = this.captureWorkoutState();
+                    if (currentWorkout.part) {
+                        localStorage.setItem('workoutAppInProgress', JSON.stringify(currentWorkout));
+                    }
+                },
+                
+                loadInProgressWorkout(part) {
+                    const saved = localStorage.getItem('workoutAppInProgress');
+                    if (saved) {
+                        const workout = JSON.parse(saved);
+                        // 同じ部位の作業を再開する場合のみ読み込む
+                        if (workout.part === part) {
+                            return workout;
+                        }
+                    }
+                    return null;
+                },
+
+                clearInProgressWorkout() {
+                    localStorage.removeItem('workoutAppInProgress');
+                },
+
+                // ★改善: debounce関数
+                debounce(func, delay) {
+                    clearTimeout(this.debounceTimer);
+                    this.debounceTimer = setTimeout(func, delay);
+                },
+
                 // ===== イベントリスナー =====
                 attachEventListeners() {
-                    // ナビゲーション
-                    this.navButtons.forEach(btn => {
-                        btn.addEventListener('click', () => this.navigateTo(btn.dataset.screen));
-                    });
-                    
-                    // ホーム画面
+                    this.navButtons.forEach(btn => btn.addEventListener('click', () => this.navigateTo(btn.dataset.screen)));
                     document.getElementById('part-selection').addEventListener('click', e => {
-                        if (e.target.closest('.part-btn')) {
-                            const part = e.target.closest('.part-btn').dataset.part;
-                            this.startWorkout(part);
-                        }
+                        const partBtn = e.target.closest('.part-btn');
+                        if (partBtn) this.startWorkout(partBtn.dataset.part);
                     });
-
-                    // 記録画面
-                    document.getElementById('back-to-home-btn').addEventListener('click', () => {
-                        this.navigateTo('home');
-                    });
+                    document.getElementById('back-to-home-btn').addEventListener('click', () => this.navigateTo('home'));
                     document.getElementById('add-block-btn').addEventListener('click', () => this.addBlock());
                     document.getElementById('finish-workout-btn').addEventListener('click', () => this.finishWorkout());
                     
-                    document.getElementById('blocks-container').addEventListener('click', e => {
-                        if (e.target.closest('.add-set-btn')) this.addSet(e.target.closest('.block-card'));
-                        if (e.target.closest('.remove-set-btn')) this.removeSet(e.target.closest('.set-row'));
-                        if (e.target.closest('.remove-block-btn')) this.removeBlock(e.target.closest('.block-card'));
+                    const blocksContainer = document.getElementById('blocks-container');
+                    blocksContainer.addEventListener('click', e => {
+                        const target = e.target;
+                        if (target.closest('.add-set-btn')) this.addSet(target.closest('.exercise-content'));
+                        if (target.closest('.remove-set-btn')) this.removeSet(target.closest('.set-row'));
+                        if (target.closest('.remove-block-btn')) this.removeBlock(target.closest('.block-card'));
+                        if (target.closest('.exercise-tab')) this.switchExerciseTab(target.closest('.exercise-tab'));
+                        if (target.closest('.add-exercise-btn')) this.addExercise(target.closest('.block-card'));
                     });
                     
-                    document.getElementById('blocks-container').addEventListener('change', e => {
-                        const target = e.target;
-                        if (target.matches('.weight-input, .reps-input')) {
-                            this.update1RM(target.closest('.set-row'));
+                    blocksContainer.addEventListener('input', e => {
+                        if (e.target.matches('.weight-input, .reps-input')) {
+                            this.update1RM(e.target.closest('.set-row'));
                         }
+                        this.debounce(() => this.saveInProgressWorkout(), 500);
+                    });
+                    blocksContainer.addEventListener('change', () => { // select要素の変更も保存
+                        this.debounce(() => this.saveInProgressWorkout(), 500);
                     });
 
-                    // 履歴画面
                     document.getElementById('apply-filter-btn').addEventListener('click', () => this.renderHistoryScreen());
-
-                    // 設定画面
                     document.getElementById('settings-accordion').addEventListener('click', e => {
                         if (e.target.closest('.toggle-accordion')) {
-                            const content = e.target.closest('.toggle-accordion').nextElementSibling;
-                            content.classList.toggle('hidden');
+                             e.target.closest('.toggle-accordion').nextElementSibling.classList.toggle('hidden');
                         }
                     });
-                    
-                    // CSV
                     document.getElementById('export-csv-btn').addEventListener('click', () => this.exportCSV());
                     document.getElementById('import-csv-input').addEventListener('change', e => this.importCSV(e));
                 },
@@ -279,42 +314,35 @@
                     this.state.currentScreen = screenId;
                     Object.values(this.screens).forEach(screen => screen.classList.add('hidden'));
                     
-                    let activeScreen;
-                    if (screenId === 'home') {
-                        activeScreen = this.screens.home;
-                        this.renderHomeScreen();
-                    } else if(screenId === 'record') {
-                        activeScreen = this.screens.record;
-                        this.renderRecordScreen();
-                    } else {
-                        activeScreen = this.screens[screenId];
-                        if (screenId === 'history') this.renderHistoryScreen();
-                        if (screenId === 'settings') this.renderSettingsScreen();
-                    }
+                    const activeScreen = this.screens[screenId] || this.screens.home;
                     activeScreen.classList.remove('hidden');
+                    
+                    if (screenId === 'home') this.renderHomeScreen();
+                    if (screenId === 'history') this.renderHistoryScreen();
+                    if (screenId === 'settings') this.renderSettingsScreen();
+                    if (screenId === 'record') this.renderRecordScreen();
 
                     this.navButtons.forEach(btn => {
-                        if (btn.dataset.screen === screenId || (screenId === 'record' && btn.dataset.screen === 'home')) {
-                            btn.classList.add('text-blue-500', 'border-t-4', 'border-blue-500');
-                            btn.classList.remove('text-gray-500');
-                        } else {
-                            btn.classList.remove('text-blue-500', 'border-t-4', 'border-blue-500');
-                            btn.classList.add('text-gray-500');
-                        }
+                        const isRecordScreen = screenId === 'record' && btn.dataset.screen === 'home';
+                        btn.classList.toggle('text-blue-500', btn.dataset.screen === screenId || isRecordScreen);
+                        btn.classList.toggle('border-t-4', btn.dataset.screen === screenId || isRecordScreen);
+                        btn.classList.toggle('border-blue-500', btn.dataset.screen === screenId || isRecordScreen);
+                        btn.classList.toggle('text-gray-500', !(btn.dataset.screen === screenId || isRecordScreen));
                     });
                 },
 
-                // --- ホーム画面関連 ---
                 renderHomeScreen() {
                     const today = new Date();
-                    const sevenDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
-                    const thirtyDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
-
-                    const uniqueDates7 = new Set(this.db.logs.filter(log => new Date(log.date) >= sevenDaysAgo).map(log => log.date.split('T')[0]));
-                    const uniqueDates30 = new Set(this.db.logs.filter(log => new Date(log.date) >= thirtyDaysAgo).map(log => log.date.split('T')[0]));
-
-                    document.getElementById('summary-7-days').textContent = `${uniqueDates7.size}日`;
-                    document.getElementById('summary-30-days').textContent = `${uniqueDates30.size}日`;
+                    const datesInRange = (days) => {
+                      const pastDate = new Date();
+                      pastDate.setDate(today.getDate() - days);
+                      return new Set(this.db.logs
+                          .filter(log => new Date(log.date) >= pastDate)
+                          .map(log => log.date.split('T')[0])
+                      );
+                    };
+                    document.getElementById('summary-7-days').textContent = `${datesInRange(7).size}日`;
+                    document.getElementById('summary-30-days').textContent = `${datesInRange(30).size}日`;
 
                     const partContainer = document.getElementById('part-selection');
                     partContainer.innerHTML = this.db.settings.parts.map(part => `
@@ -324,132 +352,222 @@
                     `).join('');
                 },
                 
-                // --- 記録画面関連 ---
                 startWorkout(part) {
-                    this.state.currentWorkout.part = part;
-                    this.state.currentWorkout.date = new Date().toISOString();
-                    this.state.currentWorkout.blocks = [];
-                    this.navigateTo('record');
-                },
-                
-                renderRecordScreen() {
-                    document.getElementById('record-title').textContent = `${this.state.currentWorkout.part} の記録`;
-                    document.getElementById('blocks-container').innerHTML = '';
-                    if (this.state.currentWorkout.blocks.length === 0) {
-                        this.addBlock();
+                    const inProgress = this.loadInProgressWorkout(part);
+                    if (inProgress) {
+                        this.navigateTo('record');
+                        this.renderRecordScreen(inProgress);
+                    } else {
+                        const newWorkout = {
+                            part: part,
+                            date: new Date().toISOString(),
+                            blocks: [],
+                        };
+                        this.navigateTo('record');
+                        this.renderRecordScreen(newWorkout);
+                        this.addBlock(true); // 新規ワークアウト時に最初のブロックを追加
                     }
                 },
                 
-                addBlock() {
+                renderRecordScreen(workoutData) {
+                    document.getElementById('record-title').textContent = `${workoutData.part} の記録`;
+                    const container = document.getElementById('blocks-container');
+                    container.innerHTML = '';
+                    
+                    workoutData.blocks.forEach(blockData => {
+                        const blockEl = this.addBlock(false);
+                        blockEl.dataset.id = blockData.id;
+                        
+                        blockData.exercises.forEach((exData, index) => {
+                            if (index > 0) this.addExercise(blockEl, false); // 2つ目以降のエクササイズを追加
+                            const exerciseContent = blockEl.querySelector(`[data-exercise-id="${exData.id}"]`);
+                            const tabsContainer = blockEl.querySelector('.exercise-tabs-container');
+                            const tab = tabsContainer.querySelector(`[data-exercise-id="${exData.id}"]`);
+                            
+                            // データをUIに反映
+                            tab.querySelector('.exercise-select').value = exData.name;
+                            exerciseContent.querySelector('.equipment-select').value = exData.equipment;
+                            exerciseContent.querySelector('.attachment-select').value = exData.attachment;
+                            exerciseContent.querySelector('.angle-select').value = exData.angle;
+                            
+                            exData.sets.forEach(setData => {
+                                const setEl = this.addSet(exerciseContent, false);
+                                setEl.querySelector('.warmup-check').checked = setData.warmup;
+                                setEl.querySelector('.weight-input').value = setData.weight;
+                                setEl.querySelector('.reps-input').value = setData.reps;
+                                setEl.querySelector('.assisted-reps-input').value = setData.assistedReps;
+                                setEl.querySelector('.memo-input').value = setData.memo;
+                                this.update1RM(setEl);
+                            });
+                        });
+                    });
+                },
+
+                // ★改善: UIから現在のワークアウト状態を取得する
+                captureWorkoutState() {
+                    const part = document.getElementById('record-title').textContent.replace(' の記録', '');
+                    const blocks = [];
+                    document.querySelectorAll('.block-card').forEach(blockEl => {
+                        const exercises = [];
+                        blockEl.querySelectorAll('.exercise-content').forEach(exContentEl => {
+                            const tab = blockEl.querySelector(`.exercise-tab[data-exercise-id="${exContentEl.dataset.exerciseId}"]`);
+                            const sets = [];
+                            exContentEl.querySelectorAll('.set-row').forEach(setEl => {
+                                sets.push({
+                                    id: setEl.dataset.id,
+                                    warmup: setEl.querySelector('.warmup-check').checked,
+                                    weight: parseFloat(setEl.querySelector('.weight-input').value) || 0,
+                                    reps: parseInt(setEl.querySelector('.reps-input').value) || 0,
+                                    assistedReps: parseInt(setEl.querySelector('.assisted-reps-input').value) || 0,
+                                    memo: setEl.querySelector('.memo-input').value,
+                                });
+                            });
+                            exercises.push({
+                                id: exContentEl.dataset.exerciseId,
+                                name: tab.querySelector('.exercise-select').value,
+                                equipment: exContentEl.querySelector('.equipment-select').value,
+                                attachment: exContentEl.querySelector('.attachment-select').value,
+                                angle: exContentEl.querySelector('.angle-select').value,
+                                sets: sets
+                            });
+                        });
+                        if (exercises.length > 0) {
+                            blocks.push({ id: blockEl.dataset.id, exercises: exercises });
+                        }
+                    });
+                    return { part: part, date: new Date().toISOString(), blocks: blocks };
+                },
+                
+                // ★改善: ブロック追加ロジック
+                addBlock(isNew = true) {
                     const template = document.getElementById('block-template');
                     const clone = template.content.cloneNode(true);
                     const blockCard = clone.querySelector('.block-card');
                     blockCard.dataset.id = `block_${Date.now()}`;
                     document.getElementById('blocks-container').appendChild(clone);
-                    this.addExerciseTab(blockCard);
-                    this.addSet(blockCard);
+                    this.addExercise(blockCard, isNew);
+                    return blockCard;
                 },
 
-                removeBlock(blockElement) {
+                removeBlock(blockEl) {
                     if (confirm('この種目ブロックを削除しますか？')) {
-                        blockElement.remove();
+                        blockEl.remove();
+                        this.saveInProgressWorkout();
                     }
                 },
                 
-                addExerciseTab(blockCard) {
-                    // 機能簡略化のため、1ブロック1種目として実装
-                    const exerciseOptions = (this.db.settings.exercises[this.state.currentWorkout.part] || []).map(ex => `<option value="${ex}">${ex}</option>`).join('');
-                    const selectHTML = `<select class="exercise-select p-2 border rounded-md">${exerciseOptions}</select>`;
-                    blockCard.querySelector('.exercise-tabs').innerHTML = selectHTML;
+                // ★改善: 種目追加ロジック (スーパーセット用)
+                addExercise(blockCard, addDefaultSet = true) {
+                    const part = document.getElementById('record-title').textContent.replace(' の記録', '');
+                    const exerciseOptions = (this.db.settings.exercises[part] || []).map(ex => `<option value="${ex}">${ex}</option>`).join('');
+
+                    const tabsContainer = blockCard.querySelector('.exercise-tabs-container');
+                    const contentContainer = blockCard.querySelector('.exercise-content-container');
+                    const exerciseId = `ex_${Date.now()}`;
+
+                    // 新しいタブを作成
+                    const tab = document.createElement('div');
+                    tab.className = 'exercise-tab inline-block border-b-2 border-transparent px-3 py-1.5 text-sm font-medium cursor-pointer';
+                    tab.dataset.exerciseId = exerciseId;
+                    tab.innerHTML = `<select class="exercise-select bg-transparent focus:outline-none">${exerciseOptions}</select><button class="remove-exercise-btn text-gray-400 ml-1.5 hover:text-red-500 text-xs"><i class="fas fa-times"></i></button>`;
+                    
+                    // 「種目追加」ボタンの前にタブを挿入
+                    let addBtn = tabsContainer.querySelector('.add-exercise-btn');
+                    if (!addBtn) {
+                        addBtn = document.createElement('button');
+                        addBtn.className = 'add-exercise-btn text-blue-500 ml-2 text-xl';
+                        addBtn.innerHTML = '<i class="fas fa-plus-circle"></i>';
+                        tabsContainer.appendChild(addBtn);
+                    }
+                    tabsContainer.insertBefore(tab, addBtn);
+                    
+                    // 新しいコンテンツエリアを作成
+                    const contentTemplate = document.getElementById('exercise-content-template');
+                    const contentClone = contentTemplate.content.cloneNode(true);
+                    const exerciseContent = contentClone.querySelector('.exercise-content');
+                    exerciseContent.dataset.exerciseId = exerciseId;
+
+                    // 詳細項目のプルダウンを生成
+                    const populateSelect = (selector, key) => {
+                        const select = exerciseContent.querySelector(selector);
+                        select.innerHTML = this.db.settings[key].map(opt => `<option value="${opt}">${opt}</option>`).join('');
+                    };
+                    populateSelect('.equipment-select', 'equipment');
+                    populateSelect('.attachment-select', 'attachments');
+                    populateSelect('.angle-select', 'angles');
+                    
+                    contentContainer.appendChild(contentClone);
+                    
+                    if(addDefaultSet) this.addSet(exerciseContent);
+                    
+                    this.switchExerciseTab(tab);
+                },
+                
+                switchExerciseTab(targetTab) {
+                    const blockCard = targetTab.closest('.block-card');
+                    const exerciseId = targetTab.dataset.exerciseId;
+                    
+                    blockCard.querySelectorAll('.exercise-tab').forEach(t => t.classList.remove('tab-active'));
+                    targetTab.classList.add('tab-active');
+                    
+                    blockCard.querySelectorAll('.exercise-content').forEach(c => c.classList.add('hidden'));
+                    blockCard.querySelector(`.exercise-content[data-exercise-id="${exerciseId}"]`).classList.remove('hidden');
                 },
 
-                addSet(blockCard) {
+                // ★改善: セット追加ロジック
+                addSet(exerciseContent, save = true) {
                     const template = document.getElementById('set-template');
                     const clone = template.content.cloneNode(true);
-                    const setsContainer = blockCard.querySelector('.sets-container');
+                    const setsContainer = exerciseContent.querySelector('.sets-container');
                     const setNumber = setsContainer.children.length + 1;
-                    clone.querySelector('.set-number').textContent = `Set ${setNumber}`;
+                    clone.querySelector('.set-number').textContent = `S${setNumber}`;
                     clone.querySelector('.set-row').dataset.id = `set_${Date.now()}`;
                     setsContainer.appendChild(clone);
+                    if (save) this.saveInProgressWorkout();
+                    return setsContainer.lastElementChild;
                 },
 
                 removeSet(setElement) {
                     const setsContainer = setElement.parentElement;
                     setElement.remove();
-                    // セット番号を再採番
                     Array.from(setsContainer.children).forEach((set, index) => {
-                        set.querySelector('.set-number').textContent = `Set ${index + 1}`;
+                        set.querySelector('.set-number').textContent = `S${index + 1}`;
                     });
+                    this.saveInProgressWorkout();
                 },
-
+                
                 update1RM(setElement) {
                     const weight = parseFloat(setElement.querySelector('.weight-input').value) || 0;
                     const reps = parseInt(setElement.querySelector('.reps-input').value) || 0;
-                    let rm = 0;
-                    if (weight > 0 && reps > 0) {
-                        rm = weight * (1 + reps / 40); // Epley formula
-                    }
-                    setElement.querySelector('.1rm-display').textContent = `${rm.toFixed(1)} kg`;
+                    const rm = (weight > 0 && reps > 0) ? weight * (1 + reps / 40) : 0;
+                    setElement.querySelector('.1rm-display').textContent = `${rm.toFixed(0)}`;
                 },
                 
                 finishWorkout() {
-                    const blocksData = [];
-                    const blockElements = document.querySelectorAll('.block-card');
-                    
-                    blockElements.forEach(blockEl => {
-                        const exercise = blockEl.querySelector('.exercise-select').value;
-                        if (!exercise) return;
+                    const workoutData = this.captureWorkoutState();
 
-                        const setsData = [];
-                        blockEl.querySelectorAll('.set-row').forEach(setEl => {
-                            const weight = parseFloat(setEl.querySelector('.weight-input').value) || 0;
-                            const reps = parseInt(setEl.querySelector('.reps-input').value) || 0;
-                            
-                            if (weight > 0 || reps > 0) {
-                                setsData.push({
-                                    warmup: setEl.querySelector('.warmup-check').checked,
-                                    weight: weight,
-                                    reps: reps,
-                                    assistedReps: parseInt(setEl.querySelector('.assisted-reps-input').value) || 0,
-                                    memo: setEl.querySelector('.memo-input').value,
-                                });
-                            }
-                        });
+                    // データが空でないかチェック
+                    const hasData = workoutData.blocks.some(block => 
+                        block.exercises.some(ex => ex.sets.length > 0 && ex.sets.some(set => set.weight > 0 || set.reps > 0))
+                    );
 
-                        if (setsData.length > 0) {
-                             blocksData.push({
-                                exercise: exercise,
-                                sets: setsData
-                            });
-                        }
-                    });
-
-                    if (blocksData.length === 0) {
+                    if (!hasData) {
                         alert("記録するデータがありません。");
                         return;
                     }
 
-                    this.db.logs.push({
-                        id: `log_${Date.now()}`,
-                        date: this.state.currentWorkout.date,
-                        part: this.state.currentWorkout.part,
-                        blocks: blocksData,
-                    });
-                    
+                    this.db.logs.push({ ...workoutData, id: `log_${Date.now()}` });
                     this.saveDB();
+                    this.clearInProgressWorkout();
                     alert('トレーニングを保存しました！');
                     this.navigateTo('home');
                 },
-
-                // --- 履歴画面関連 ---
+                
+                // ... (以下、履歴画面と設定画面、データ管理のロジックはほぼ同じ) ...
                 renderHistoryScreen() {
-                    const listEl = document.getElementById('history-list');
-                    listEl.innerHTML = '<p class="text-gray-500">履歴を読み込んでいます...</p>';
-
                     // フィルターの準備
                     const filterPartEl = document.getElementById('filter-part');
                     filterPartEl.innerHTML = '<option value="">全部位</option>' + this.db.settings.parts.map(p => `<option value="${p}">${p}</option>`).join('');
-                    
                     const allExercises = [...new Set(Object.values(this.db.settings.exercises).flat())];
                     const filterExerciseEl = document.getElementById('filter-exercise');
                     filterExerciseEl.innerHTML = '<option value="">全種目</option>' + allExercises.map(ex => `<option value="${ex}">${ex}</option>`).join('');
@@ -467,13 +585,17 @@
                     if (part) filteredLogs = filteredLogs.filter(log => log.part === part);
                     if (exercise) {
                         filteredLogs = filteredLogs.map(log => {
-                            const filteredBlocks = log.blocks.filter(block => block.exercise === exercise);
+                            const filteredBlocks = log.blocks.map(block => {
+                                const filteredExercises = block.exercises.filter(ex => ex.name === exercise);
+                                return filteredExercises.length > 0 ? { ...block, exercises: filteredExercises } : null;
+                            }).filter(Boolean);
                             return filteredBlocks.length > 0 ? { ...log, blocks: filteredBlocks } : null;
                         }).filter(Boolean);
                     }
 
+                    const listEl = document.getElementById('history-list');
                     if(filteredLogs.length === 0) {
-                        listEl.innerHTML = '<p class="text-gray-500">表示できる履歴がありません。</p>';
+                        listEl.innerHTML = '<p class="text-gray-500 text-center py-8">表示できる履歴がありません。</p>';
                         this.updateChart([], []);
                         return;
                     }
@@ -483,44 +605,44 @@
                         const dateString = `${logDate.getFullYear()}/${logDate.getMonth()+1}/${logDate.getDate()}`;
                         return `
                             <div class="bg-white p-4 rounded-lg shadow">
-                                <div class="flex justify-between items-center mb-2">
+                                <div class="flex justify-between items-center mb-2 pb-2 border-b">
                                     <h3 class="font-bold text-lg">${log.part}</h3>
                                     <span class="text-sm text-gray-500">${dateString}</span>
                                 </div>
-                                ${log.blocks.map(block => `
-                                    <div class="mt-2 border-t pt-2">
-                                        <h4 class="font-semibold">${block.exercise}</h4>
-                                        <div class="text-sm text-gray-700 mt-1">
-                                            ${block.sets.map((set, i) => `
+                                ${log.blocks.map(block => block.exercises.map(ex => `
+                                    <div class="mt-2">
+                                        <h4 class="font-semibold">${ex.name}</h4>
+                                        <div class="text-xs text-gray-500">${ex.equipment}/${ex.attachment}/${ex.angle}</div>
+                                        <div class="text-sm text-gray-700 mt-1 space-y-0.5">
+                                            ${ex.sets.map((set, i) => `
                                                 <div class="flex justify-between items-center ${set.warmup ? 'text-gray-400' : ''}">
-                                                    <span>Set ${i+1}: ${set.weight}kg x ${set.reps}回 ${set.assistedReps > 0 ? `(+${set.assistedReps})` : ''}</span>
+                                                    <span>Set ${i+1}: ${set.weight}kg x ${set.reps}回</span>
                                                     <span class="text-xs">${set.memo || ''}</span>
                                                 </div>
                                             `).join('')}
                                         </div>
                                     </div>
-                                `).join('')}
+                                `).join('')).join('')}
                             </div>
                         `;
                     }).join('');
                     
-                    // グラフデータ作成
                     if (exercise) {
                         const chartLabels = [];
                         const chartData = [];
                         filteredLogs.reverse().forEach(log => {
-                            log.blocks.forEach(block => {
-                                if (block.exercise === exercise) {
-                                    const logDate = new Date(log.date);
-                                    const dateString = `${logDate.getMonth()+1}/${logDate.getDate()}`;
-                                    block.sets.forEach(set => {
+                            const logDate = new Date(log.date);
+                            const dateString = `${logDate.getMonth()+1}/${logDate.getDate()}`;
+                            log.blocks.forEach(block => block.exercises.forEach(ex => {
+                                if (ex.name === exercise) {
+                                    ex.sets.forEach(set => {
                                         if (!set.warmup && set.weight > 0 && set.reps > 0) {
                                             chartLabels.push(dateString);
                                             chartData.push(parseFloat((set.weight * (1 + set.reps / 40)).toFixed(1)));
                                         }
                                     });
                                 }
-                            });
+                            }));
                         });
                         this.updateChart(chartLabels, chartData);
                     } else {
@@ -530,12 +652,8 @@
                 
                 updateChart(labels, data) {
                     const ctx = document.getElementById('history-chart').getContext('2d');
-                    if (this.chartInstance) {
-                        this.chartInstance.destroy();
-                    }
-                    if(labels.length === 0 || data.length === 0) {
-                        return;
-                    }
+                    if (this.chartInstance) this.chartInstance.destroy();
+                    if(labels.length === 0 || data.length === 0) return;
                     this.chartInstance = new Chart(ctx, {
                         type: 'line',
                         data: {
@@ -544,14 +662,15 @@
                                 label: '1RM (kg)',
                                 data: data,
                                 borderColor: 'rgb(75, 192, 192)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                                fill: true,
                                 tension: 0.1
                             }]
                         },
-                        options: { responsive: true, maintainAspectRatio: true }
+                        options: { responsive: true, maintainAspectRatio: false }
                     });
                 },
 
-                // --- 設定画面関連 ---
                 renderSettingsScreen() {
                     const accordion = document.getElementById('settings-accordion');
                     accordion.innerHTML = `
@@ -560,17 +679,13 @@
                         ${this.createSettingSection('アタッチメント', 'attachments', this.db.settings.attachments)}
                         ${this.createSettingSection('角度', 'angles', this.db.settings.angles)}
                     `;
-
-                    // 種目設定は特別扱い
-                    // (UIが複雑になるため、この実装では簡略化)
                 },
                 
                 createSettingSection(title, key, items) {
-                    return `
+                     return `
                         <div class="bg-white rounded-lg shadow overflow-hidden">
                             <button class="toggle-accordion w-full text-left p-4 font-semibold text-lg flex justify-between items-center bg-gray-50 hover:bg-gray-100">
-                                <span>${title}の編集</span>
-                                <i class="fas fa-chevron-down"></i>
+                                <span>${title}の編集</span><i class="fas fa-chevron-down"></i>
                             </button>
                             <div class="p-4 hidden">
                                 <ul class="list-disc pl-5 mb-4 space-y-2">
@@ -603,56 +718,30 @@
                         this.renderSettingsScreen();
                     }
                 },
-
-                // --- データ管理 ---
+                
                 exportCSV() {
                     let csvContent = "data:text/csv;charset=utf-8,";
-                    csvContent += "日付,部位,種目,セット,ウォームアップ,重量,レップ,補助レップ,メモ\n";
-
+                    csvContent += "日付,部位,種目,器具,アタッチメント,角度,セット,ウォームアップ,重量,レップ,メモ\n";
                     this.db.logs.forEach(log => {
-                        log.blocks.forEach(block => {
-                            block.sets.forEach((set, index) => {
-                                const row = [
-                                    log.date,
-                                    log.part,
-                                    block.exercise,
-                                    index + 1,
-                                    set.warmup,
-                                    set.weight,
-                                    set.reps,
-                                    set.assistedReps,
-                                    `"${set.memo || ''}"`
-                                ].join(',');
+                        log.blocks.forEach(block => block.exercises.forEach(ex => {
+                            ex.sets.forEach((set, index) => {
+                                const row = [log.date,log.part,ex.name,ex.equipment,ex.attachment,ex.angle,index + 1,set.warmup,set.weight,set.reps,`"${set.memo || ''}"`].join(',');
                                 csvContent += row + "\n";
                             });
-                        });
+                        }));
                     });
-
-                    const encodedUri = encodeURI(csvContent);
                     const link = document.createElement("a");
-                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("href", encodeURI(csvContent));
                     link.setAttribute("download", "workout_log.csv");
-                    document.body.appendChild(link);
                     link.click();
-                    document.body.removeChild(link);
                 },
 
                 importCSV(event) {
-                    const file = event.target.files[0];
-                    if (!file) return;
-
-                    const reader = new FileReader();
-                    reader.onload = e => {
-                        // ここにCSVをパースしてDBにマージするロジックを記述
-                        // 複雑なため、この実装ではアラートのみ表示
-                        alert("CSVインポート機能は現在開発中です。");
-                    };
-                    reader.readAsText(file);
+                    alert("CSVインポート機能は現在開発中です。");
                 }
             };
 
-            // グローバルスコープにappを公開してonclick属性からアクセス可能にする
-            window.app = app;
+            window.app = app; // Make it globally accessible for inline event handlers
             app.init();
         });
     </script>
