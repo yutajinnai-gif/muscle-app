@@ -5,20 +5,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>筋トレ記録アプリ | BUILD_TAG=FULL-20250928</title>
-  <meta name="color-scheme" content="light dark">
+  <title>筋トレ記録アプリ | BUILD_TAG=FULL-20250928-SUPERSET</title>
+  <meta name="color-scheme" content="light">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     input, select, textarea, button { font-size: 16px; }
-    .scroll-y { overflow-y: auto; -webkit-overflow-scrolling: touch; }
-    .tab-active { color: rgb(31 41 55); }
-    .tab-inactive { color: rgb(156 163 175); }
-    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(2px); }
-    .modal-card { max-width: 560px; }
-    .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    main { padding-bottom: 108px; }
     .shadow-soft { box-shadow: 0 10px 25px rgba(0,0,0,.08); }
-    main { padding-bottom: 96px; }
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(2px); }
+    .modal-card { max-width: 680px; }
+    .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
@@ -40,7 +37,7 @@
 
 
   <main id="app" class="max-w-3xl mx-auto px-4 py-4 space-y-4">
-    <!-- Router views -->
+    <!-- HOME -->
     <section id="view-home" class="hidden">
       <div class="grid grid-cols-3 gap-2">
         <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="胸">胸</button>
@@ -71,9 +68,10 @@
     </div>
   </div>
 
-  <div id="blocks" class="space-y-3"></div>
+  <div id="blocks" class="space-y-4"></div>
 </section>
 
+<!-- HISTORY -->
 <section id="view-history" class="hidden">
   <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
     <div class="grid grid-cols-2 gap-2">
@@ -123,6 +121,7 @@
   <div id="history-list" class="mt-3 space-y-3"></div>
 </section>
 
+<!-- SETTINGS -->
 <section id="view-settings" class="hidden">
   <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-4">
     <div>
@@ -133,22 +132,24 @@
           <textarea id="list-parts" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
         <div>
-          <label class="text-xs text-gray-500">種目名（1行1項目）</label>
-          <textarea id="list-exercises" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-        </div>
-        <div>
           <label class="text-xs text-gray-500">器具（1行1項目）</label>
-          <textarea id="list-equip" rows="4" class="w-full border rounded-lg px-3 py-2"></textarea>
+          <textarea id="list-equip" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
         <div>
-          <label class="text-xs text-gray-500">アタッチメント（1行1項目）</label>
-          <textarea id="list-attach" rows="4" class="w-full border rounded-lg px-3 py-2"></textarea>
+          <label class="text-xs text-gray-500">アタッチメント（1行1項目 / 先頭は「なし」を推奨）</label>
+          <textarea id="list-attach" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
         <div>
-          <label class="text-xs text-gray-500">角度（1行1項目）</label>
-          <textarea id="list-angle" rows="4" class="w-full border rounded-lg px-3 py-2"></textarea>
+          <label class="text-xs text-gray-500">角度（1行1項目 / 先頭は「なし」を推奨）</label>
+          <textarea id="list-angle" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
       </div>
+    </div>
+
+    <div class="border-t pt-3">
+      <div class="text-sm font-semibold mb-1">種目マスタ（部位ひも付け）</div>
+      <p class="text-xs text-gray-500 mb-2">各行「種目名 : 部位1,部位2,…」形式。例）ベンチプレス : 胸</p>
+      <textarea id="list-exercise-map" rows="8" class="w-full border rounded-lg px-3 py-2"></textarea>
       <div class="flex gap-2 mt-2">
         <button id="btn-save-lists" class="px-3 py-2 rounded-xl bg-gray-900 text-white">保存</button>
         <button id="btn-reset-defaults" class="px-3 py-2 rounded-xl bg-white border">デフォルト復元</button>
@@ -167,11 +168,6 @@
       </div>
       <p class="text-xs text-gray-500 mt-2">CSV列: date,part,exercise,equipment,attachment,angle,setIndex,warmup,weight,repsSelf,repsAssist,note,oneRM</p>
     </div>
-  </div>
-  <div class="rounded-2xl border bg-white p-3 shadow-soft">
-    <div class="text-sm font-semibold mb-2">PWA（オフライン対応）</div>
-    <button id="btn-install" class="px-3 py-2 rounded-xl bg-white border">ホーム画面に追加</button>
-    <span id="pwa-status" class="ml-2 text-xs text-gray-500"></span>
   </div>
 </section>
 
@@ -198,119 +194,179 @@
   </nav>
 
 
+  <!-- Templates -->
+
+
   <template id="tpl-block">
     <div class="block-card rounded-2xl border bg-white p-3 shadow-soft space-y-3">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
           <span class="text-xs text-gray-500">ブロック</span>
           <span class="block-index text-sm font-semibold">#1</span>
+          <span class="text-[11px] text-gray-500 block-part"></span>
         </div>
         <div class="flex gap-2">
-          <button class="btn-add-ex px-2 py-1.5 rounded-lg border text-sm">連続種目を追加</button>
-          <button class="btn-del-block px-2 py-1.5 rounded-lg border border-red-200 text-red-700 text-sm">削除</button>
+          <button class="btn-choose-ex px-2 py-1.5 rounded-lg border text-sm">種目選択/追加</button>
+          <button class="btn-del-block px-2 py-1.5 rounded-lg border border-red-200 text-red-700 text-sm">ブロック削除</button>
         </div>
       </div>
-      <div class="ex-list space-y-2"></div>
-    </div>
-  </template>
 
 
-  <template id="tpl-exercise">
-    <div class="ex-card rounded-xl border p-2 bg-gray-50">
-      <div class="flex items-start justify-between gap-2">
-        <div class="flex-1">
-          <div class="flex flex-wrap items-center gap-1 text-sm">
-            <select class="ex-name border rounded-md px-2 py-1"></select>
-            <select class="ex-eq border rounded-md px-2 py-1"></select>
-            <select class="ex-att border rounded-md px-2 py-1"></select>
-            <select class="ex-ang border rounded-md px-2 py-1"></select>
-          </div>
-          <div class="mt-1 text-[11px] text-gray-500 ex-meta">最高重量: - / 最高1RM: - / 前回: -</div>
-        </div>
-        <div class="flex items-center gap-2">
-          <button class="btn-ex-history px-2 py-1.5 rounded-md border text-xs">履歴</button>
-          <button class="btn-del-ex px-2 py-1.5 rounded-md border border-red-200 text-red-700 text-xs">削除</button>
-        </div>
-      </div>
-      <div class="mt-2 space-y-1 set-list"></div>
-      <div class="mt-2">
+  <!-- Selected exercises meta + per-ex options -->
+  <div class="ex-config space-y-2"></div>
+
+  <!-- Sets area -->
+  <div class="set-area space-y-2">
+    <div class="flex items-center justify-between">
+      <div class="text-sm text-gray-600">セット</div>
+      <div class="flex gap-2">
         <button class="btn-add-set px-2 py-1.5 rounded-md bg-white border text-sm">セット追加</button>
+        <button class="btn-clear-sets px-2 py-1.5 rounded-md border text-sm">全セット削除</button>
       </div>
+    </div>
+    <div class="set-list space-y-2"></div>
+  </div>
+</div>
+
+  </template>
+
+
+  <template id="tpl-ex-config-row">
+    <div class="ex-config-row grid grid-cols-12 gap-1 items-center">
+      <div class="col-span-4 text-sm font-medium ex-name">種目名</div>
+      <select class="ex-eq col-span-3 border rounded-md px-2 py-1"></select>
+      <select class="ex-att col-span-3 border rounded-md px-2 py-1"></select>
+      <select class="ex-ang col-span-2 border rounded-md px-2 py-1"></select>
+      <div class="col-span-12 text-[11px] text-gray-500 ex-meta">最高重量: - / 最高1RM: - / 前回: -</div>
     </div>
   </template>
 
 
-  <template id="tpl-set-row">
-    <div class="set-row grid grid-cols-12 gap-1 items-center">
-      <label class="col-span-2 inline-flex items-center gap-1 text-xs">
-        <input type="checkbox" class="set-warm border rounded">
-        <span>W-Up</span>
-      </label>
-      <input type="number" inputmode="decimal" placeholder="重量" class="set-weight col-span-2 border rounded px-2 py-1" />
-      <input type="number" inputmode="numeric" placeholder="自力" class="set-reps col-span-2 border rounded px-2 py-1" />
-      <input type="number" inputmode="numeric" placeholder="補助" class="set-assist col-span-2 border rounded px-2 py-1" />
-      <input type="text" placeholder="メモ" class="set-note col-span-3 border rounded px-2 py-1" />
-      <button class="btn-del-set col-span-1 px-2 py-1 rounded border text-xs">×</button>
-      <div class="col-span-12 text-[11px] text-gray-500">推定1RM: <span class="set-1rm">-</span> kg</div>
+  <template id="tpl-set-card">
+    <div class="set-card rounded-xl border p-2 bg-gray-50 space-y-2">
+      <div class="flex items-center justify-between">
+        <div class="text-sm font-semibold">Set <span class="set-no">#1</span></div>
+        <div class="flex items-center gap-2">
+          <label class="inline-flex items-center gap-1 text-xs"><input type="checkbox" class="set-warm border rounded"> W-Up</label>
+          <button class="btn-dup-set px-2 py-1.5 rounded-md border text-xs">複製</button>
+          <button class="btn-del-set px-2 py-1.5 rounded-md border text-xs">削除</button>
+        </div>
+      </div>
+      <div class="ex-items space-y-1"></div>
+    </div>
+  </template>
+
+
+  <template id="tpl-ex-item-row">
+    <div class="ex-item grid grid-cols-12 gap-1 items-center">
+      <div class="col-span-3 text-xs ex-title">種目1</div>
+      <input type="number" inputmode="decimal" placeholder="重量" class="ex-weight col-span-3 border rounded px-2 py-1" />
+      <input type="number" inputmode="numeric" placeholder="自力" class="ex-reps col-span-2 border rounded px-2 py-1" />
+      <input type="number" inputmode="numeric" placeholder="補助" class="ex-assist col-span-2 border rounded px-2 py-1" />
+      <input type="text" placeholder="メモ" class="ex-note col-span-2 border rounded px-2 py-1" />
+      <div class="col-span-12 text-[11px] text-gray-500">推定1RM: <span class="ex-1rm">-</span> kg</div>
     </div>
   </template>
 
 
   <script>
-    // --- Error Bar ---
-    (function setupErrorBar(){
+    // ===== Error Bar =====
+    (()=> {
       const bar = document.getElementById('error-bar');
       const text = document.getElementById('error-text');
       const close = document.getElementById('error-close');
-      function showError(message){ text.textContent = String(message || 'Unknown error'); bar.classList.remove('hidden'); }
-      window.addEventListener('error', (e)=>{ showError(e.message); });
-      window.addEventListener('unhandledrejection', (e)=>{ showError(e.reason && e.reason.message ? e.reason.message : e.reason); });
+      function show(msg){ text.textContent = String(msg||'Unknown error'); bar.classList.remove('hidden'); }
+      window.addEventListener('error', e=> show(e.message));
+      window.addEventListener('unhandledrejection', e=> show((e.reason&&e.reason.message)||e.reason));
       close.addEventListener('click', ()=> bar.classList.add('hidden'));
-      window.__forceError = () => { throw new Error('Forced error for testing'); };
+      window.__forceError = ()=> { throw new Error('Forced error'); };
     })();
 
-    // --- Utilities ---
-    const $ = (sel, root=document) => root.querySelector(sel);
-    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-    const debounce = (fn, ms=300) => {
-      let t; return (...args)=> { clearTimeout(t); t=setTimeout(()=>fn(...args), ms); };
-    };
+    // ===== Utils =====
+    const $ = (sel, root=document)=> root.querySelector(sel);
+    const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
+    const debounce = (fn, ms=300)=> { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
     const todayISO = ()=> new Date().toISOString().slice(0,10);
-    const toCSV = (rows)=> rows.map(r => r.map(v => {
-      const s = v == null ? '' : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+    const toCSV = rows => rows.map(r=> r.map(v=>{
+      const s = v==null?'':String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
     }).join(',')).join('\n');
+    const escapeHtml = s => String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-    // --- Storage (namespaced + schema) ---
-    const SCHEMA_VERSION = 1;
+    // ===== Storage with Schema =====
+    const SCHEMA_VERSION = 2; // bumped for superset + exercise map
     const NS = 'workout-app';
     const store = {
-      get(key, d=null){ try { const raw = localStorage.getItem(NS+':'+key); if(!raw) return d; const obj = JSON.parse(raw); return obj && obj.v===SCHEMA_VERSION ? obj.data : d; } catch { return d; } },
+      get(key, d=null){ try{ const raw = localStorage.getItem(NS+':'+key); if(!raw) return d; const obj = JSON.parse(raw); return obj&&obj.v===SCHEMA_VERSION ? obj.data : d; }catch{ return d; } },
       set(key, data){ localStorage.setItem(NS+':'+key, JSON.stringify({v:SCHEMA_VERSION, data})); },
       clearAll(){ Object.keys(localStorage).filter(k=>k.startsWith(NS+':')).forEach(k=>localStorage.removeItem(k)); }
     };
 
-    // --- Defaults ---
+    // ===== Defaults =====
     const DEFAULTS = {
       parts: ['胸','背中','肩','腕','脚','腹筋'],
-      exercises: ['ベンチプレス','インクラインダンベルプレス','ラットプルダウン','スクワット','デッドリフト','ショルダープレス','バイセプカール','トライセプスプレスダウン','レッグプレス','クランチ'],
       equip: ['バーベル','ダンベル','マシン','ケーブル','自重'],
-      attach: ['ストレートバー','Vバー','ロープ','Dハンドル','なし'],
-      angle: ['フラット','インクライン','デクライン','ナチュラル']
+      attach: ['なし','ストレートバー','Vバー','ロープ','Dハンドル'],
+      angle: ['なし','フラット','インクライン','デクライン','ナチュラル'],
+      // exercise map: {name, parts:[]}
+      exerciseMap: [
+        { name:'ベンチプレス', parts:['胸'] },
+        { name:'インクラインダンベルプレス', parts:['胸','肩'] },
+        { name:'ラットプルダウン', parts:['背中'] },
+        { name:'スクワット', parts:['脚'] },
+        { name:'デッドリフト', parts:['背中','脚'] },
+        { name:'ショルダープレス', parts:['肩'] },
+        { name:'バイセプカール', parts:['腕'] },
+        { name:'トライセプスプレスダウン', parts:['腕'] },
+        { name:'レッグプレス', parts:['脚'] },
+        { name:'クランチ', parts:['腹筋'] }
+      ]
     };
 
-    // --- App State ---
+    // ===== App State =====
     const state = {
-      lists: null,
-      workouts: null,  // [{id, date, part, blocks:[{exs:[{name, eq, att, ang, sets:[{warm, w, reps, assist, note, oneRM}], meta: {}}]}]}]
-      inProgress: null, // current editing session
-      chart: null,
-      pwaPrompt: null
+      lists: null,           // {parts:[], equip:[], attach:[], angle:[], exerciseMap:[{name,parts:[]}]}
+      workouts: null,        // [{id,date,part,blocks:[{exs:[{name,eq,att,ang}], sets:[{warm, items:[{w,reps,assist,note,oneRM}]}]}]}]
+      inProgress: null,      // {date, part, blocks:[...]}
+      chart: null
     };
+
+    // ===== Init / Migration =====
+    function migrateOldStorage(){
+      // If old schema exists, try to read and upgrade roughly
+      try{
+        const oldListsRaw = localStorage.getItem(NS+':lists');
+        const oldWorkoutsRaw = localStorage.getItem(NS+':workouts');
+        if(oldListsRaw && !JSON.parse(oldListsRaw).v){
+          const oldLists = JSON.parse(oldListsRaw);
+          const exerciseMap = (oldLists.exercises||[]).map(n=>({name:n, parts:[]}));
+          const lists = { parts: oldLists.parts||DEFAULTS.parts, equip: oldLists.equip||DEFAULTS.equip, attach: oldLists.attach||DEFAULTS.attach, angle: oldLists.angle||DEFAULTS.angle, exerciseMap };
+          store.set('lists', lists);
+        }
+        if(oldWorkoutsRaw && !JSON.parse(oldWorkoutsRaw).v){
+          const oldWorkouts = JSON.parse(oldWorkoutsRaw)||[];
+          // flatten to new superset model (each old exercise becomes its own block with single exercise and per-set items)
+          const newWorkouts = oldWorkouts.map(w=>{
+            const blocks = [];
+            (w.blocks||[]).forEach(b=>{
+              (b.exs||[]).forEach(ex=>{
+                const items = (ex.sets||[]).map(s=>({ w:s.w||0, reps:s.reps||0, assist:s.assist||0, note:s.note||'', oneRM:s.oneRM||calc1RM(s.w,s.reps) }));
+                blocks.push({ exs:[{name:ex.name, eq:ex.eq||'', att:ex.att||'なし', ang:ex.ang||'なし'}], sets: items.length? [{warm:false, items}] : [] });
+              });
+            });
+            return { id:'w_'+Date.now()+Math.random(), date:w.date, part:w.part, blocks };
+          });
+          store.set('workouts', newWorkouts);
+        }
+      }catch{}
+    }
 
     function initData(){
+      migrateOldStorage();
       let lists = store.get('lists');
       if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); store.set('lists', lists); }
+      // Ensure "なし" is default(1st) for attach/angle
+      if(lists.attach[0] !== 'なし'){ lists.attach = ['なし', ...lists.attach.filter(x=>x!=='なし')]; }
+      if(lists.angle[0] !== 'なし'){ lists.angle = ['なし', ...lists.angle.filter(x=>x!=='なし')]; }
       state.lists = lists;
 
       let workouts = store.get('workouts', []);
@@ -318,22 +374,16 @@
 
       let inProgress = store.get('inProgress', { date: todayISO(), part: '胸', blocks: [] });
       if(!inProgress.date) inProgress.date = todayISO();
+      if(!inProgress.blocks) inProgress.blocks = [];
       state.inProgress = inProgress;
     }
+    function persist(){ store.set('lists', state.lists); store.set('workouts', state.workouts); store.set('inProgress', state.inProgress); }
 
-    function persist(){
-      store.set('lists', state.lists);
-      store.set('workouts', state.workouts);
-      store.set('inProgress', state.inProgress);
-    }
-
-    // --- Router ---
-    const routes = ['#/home','#/history','#/settings'];
+    // ===== Router =====
     function setActiveTab(hash){
       $$('.tab-btn').forEach(btn=>{
         const active = btn.getAttribute('data-route') === hash;
-        btn.classList.toggle('tab-active', active);
-        btn.classList.toggle('tab-inactive', !active);
+        btn.classList.toggle('font-bold', active);
       });
     }
     function renderRoute(){
@@ -348,179 +398,309 @@
     }
     window.addEventListener('hashchange', renderRoute);
 
-    // --- 1RM (Epley) ---
+    // ===== 1RM =====
     function calc1RM(weight, reps){
       const w = Number(weight||0), r = Number(reps||0);
       if(w<=0 || r<=0) return 0;
       return Math.round(w * (1 + r/30) * 10) / 10;
     }
 
-    // --- Stats ---
+    // ===== Stats =====
     function computeTrainingDays(rangeDays){
       const cutoff = Date.now() - rangeDays*24*3600*1000;
       const days = new Set(state.workouts.filter(w => new Date(w.date).getTime() >= cutoff).map(w => w.date));
       return days.size;
     }
 
-    // --- Home Rendering ---
+    // ===== Home =====
     function renderHome(){
-      // Stats
       $('#stat-week').textContent = computeTrainingDays(7);
       $('#stat-month').textContent = computeTrainingDays(30);
 
-      // Part buttons
       $$('.part-btn').forEach(b=>{
-        b.classList.toggle('bg-gray-900', state.inProgress.part===b.dataset.part);
-        b.classList.toggle('text-white', state.inProgress.part===b.dataset.part);
-        b.classList.toggle('bg-white', state.inProgress.part!==b.dataset.part);
-        b.classList.toggle('text-gray-900', state.inProgress.part!==b.dataset.part);
+        const active = state.inProgress.part === b.dataset.part;
+        b.classList.toggle('bg-gray-900', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('bg-white', !active);
+        b.classList.toggle('text-gray-900', !active);
         b.onclick = ()=>{ state.inProgress.part = b.dataset.part; persist(); renderHome(); };
       });
 
-      // Blocks
       const wrap = $('#blocks');
       wrap.innerHTML = '';
       state.inProgress.blocks.forEach((block, idx)=>{
-        const node = document.importNode($('#tpl-block').content, true);
-        const card = node.querySelector('.block-card');
-        card.dataset.index = idx;
-        node.querySelector('.block-index').textContent = '#'+(idx+1);
-        node.querySelector('.btn-del-block').onclick = async ()=>{
-          if(await confirmAction('ブロックを削除しますか？')) {
-            state.inProgress.blocks.splice(idx,1);
-            persist(); renderHome();
-          }
-        };
-        node.querySelector('.btn-add-ex').onclick = ()=> addExercise(idx);
-        const exList = node.querySelector('.ex-list');
-        block.exs.forEach((ex, exIdx)=>{
-          exList.appendChild(renderExercise(block, idx, ex, exIdx));
-        });
-        wrap.appendChild(node);
+        wrap.appendChild(renderBlock(block, idx));
       });
     }
 
-    function addBlock(){
-      state.inProgress.blocks.push({ exs: [] });
-      persist(); renderHome();
-      scrollToBottom();
-    }
+    function renderBlock(block, idx){
+      const frag = document.importNode($('#tpl-block').content, true);
+      const card = frag.querySelector('.block-card');
+      card.dataset.index = idx;
+      frag.querySelector('.block-index').textContent = '#'+(idx+1);
+      frag.querySelector('.block-part').textContent = `（${state.inProgress.part}）`;
 
-    function addExercise(blockIdx){
-      const block = state.inProgress.blocks[blockIdx];
-      const ex = { name: state.lists.exercises[0] || '', eq: state.lists.equip[0] || '', att: state.lists.attach[0] || '', ang: state.lists.angle[0] || '', sets: [] };
-      block.exs.push(ex);
-      persist(); renderHome();
-    }
+      // choose exercises (multiselect) restricted by part
+      frag.querySelector('.btn-choose-ex').onclick = ()=> openExerciseChooser(idx);
 
-    function renderExercise(block, blockIdx, ex, exIdx){
-      const node = document.importNode($('#tpl-exercise').content, true);
-      const root = node.querySelector('.ex-card');
-      root.dataset.block = blockIdx;
-      root.dataset.ex = exIdx;
-
-      fillSelect(node.querySelector('.ex-name'), state.lists.exercises, ex.name, (v)=>{ ex.name=v; persist(); updateExMeta(root, ex); });
-      fillSelect(node.querySelector('.ex-eq'), state.lists.equip, ex.eq, (v)=>{ ex.eq=v; persist(); });
-      fillSelect(node.querySelector('.ex-att'), state.lists.attach, ex.att, (v)=>{ ex.att=v; persist(); });
-      fillSelect(node.querySelector('.ex-ang'), state.lists.angle, ex.ang, (v)=>{ ex.ang=v; persist(); });
-
-      node.querySelector('.btn-del-ex').onclick = async ()=>{
-        if(await confirmAction('この種目を削除しますか？')) {
-          block.exs.splice(exIdx,1);
+      // delete block
+      frag.querySelector('.btn-del-block').onclick = async ()=>{
+        if(await confirmAction('ブロックを削除しますか？')){
+          state.inProgress.blocks.splice(idx,1);
           persist(); renderHome();
         }
       };
-      node.querySelector('.btn-ex-history').onclick = ()=> openExerciseHistoryModal(ex.name);
 
-      const setList = node.querySelector('.set-list');
-      ex.sets.forEach((s, idx)=> setList.appendChild(renderSetRow(ex, s, idx)));
-      const btnAddSet = node.querySelector('.btn-add-set');
-      btnAddSet.onclick = ()=> {
-        ex.sets.push({ warm:false, w:'', reps:'', assist:'', note:'', oneRM:0 });
-        persist(); renderHome();
-        setTimeout(scrollToBottom, 0);
-      };
-
-      updateExMeta(root, ex);
-      return node;
-    }
-
-    function fillSelect(sel, items, value, onChange){
-      sel.innerHTML = '';
-      items.forEach(v=>{
-        const opt = document.createElement('option'); opt.value = v; opt.textContent = v; sel.appendChild(opt);
+      // ex config rows
+      const cfgWrap = frag.querySelector('.ex-config');
+      block.exs.forEach((ex, exIdx)=>{
+        cfgWrap.appendChild(renderExConfigRow(block, ex, exIdx));
       });
-      sel.value = value || '';
-      sel.onchange = (e)=> onChange(e.target.value);
+
+      // sets area
+      const setWrap = frag.querySelector('.set-list');
+      frag.querySelector('.btn-add-set').onclick = ()=> addSet(block, true); // copy last set
+      frag.querySelector('.btn-clear-sets').onclick = async ()=>{
+        if(await confirmAction('このブロックの全セットを削除しますか？')){
+          block.sets = [];
+          persist(); renderHome();
+        }
+      };
+      (block.sets||[]).forEach((set, sIdx)=>{
+        setWrap.appendChild(renderSetCard(block, set, sIdx));
+      });
+
+      return frag;
     }
 
-    function renderSetRow(ex, s, setIdx){
-      const node = document.importNode($('#tpl-set-row').content, true);
-      const warm = node.querySelector('.set-warm');
-      const weight = node.querySelector('.set-weight');
-      const reps = node.querySelector('.set-reps');
-      const assist = node.querySelector('.set-assist');
-      const note = node.querySelector('.set-note');
-      const oneElm = node.querySelector('.set-1rm');
+    function addBlock(){
+      state.inProgress.blocks.push({ exs: [], sets: [] });
+      persist(); renderHome();
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      // open chooser immediately
+      const idx = state.inProgress.blocks.length - 1;
+      setTimeout(()=> openExerciseChooser(idx), 50);
+    }
 
-      warm.checked = !!s.warm;
-      weight.value = s.w ?? s.w;
-      reps.value = s.reps ?? s.reps;
-      assist.value = s.assist ?? s.assist;
-      note.value = s.note ?? s.note;
-      oneElm.textContent = s.oneRM ? s.oneRM : '-';
+    function openExerciseChooser(blockIdx){
+      const part = state.inProgress.part;
+      const allowed = state.lists.exerciseMap.filter(e=> e.parts.includes(part)).map(e=> e.name);
+      const current = new Set((state.inProgress.blocks[blockIdx].exs||[]).map(e=> e.name));
+      const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
+      const card = document.createElement('div'); card.className='modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw]';
+      card.innerHTML = `<div class="text-sm font-semibold mb-2">種目選択（${escapeHtml(part)}）</div>`;
+      const list = document.createElement('div'); list.className='max-h-[60vh] overflow-auto space-y-1';
+      allowed.forEach(name=>{
+        const id = 'ex_'+Math.random().toString(36).slice(2);
+        const row = document.createElement('label'); row.className='flex items-center gap-2 text-sm';
+        row.innerHTML = `<input type="checkbox" id="${id}" ${current.has(name)?'checked':''}> <span>${escapeHtml(name)}</span>`;
+        row.querySelector('input').dataset.name = name;
+        list.appendChild(row);
+      });
+      const actions = document.createElement('div'); actions.className='flex justify-end gap-2 mt-3';
+      const btnCancel = document.createElement('button'); btnCancel.className='px-3 py-2 rounded-xl bg-white border'; btnCancel.textContent='キャンセル';
+      const btnOk = document.createElement('button'); btnOk.className='px-3 py-2 rounded-xl bg-gray-900 text-white'; btnOk.textContent='OK';
+      actions.appendChild(btnCancel); actions.appendChild(btnOk);
 
-      const recalc = debounce(()=>{
-        const one = calc1RM(weight.value, reps.value);
-        oneElm.textContent = one ? one : '-';
-        s.warm = warm.checked;
-        s.w = weight.value;
-        s.reps = reps.value;
-        s.assist = assist.value;
-        s.note = note.value;
-        s.oneRM = one;
-        persist();
-      }, 250);
+      card.appendChild(list); card.appendChild(actions); bg.appendChild(card); document.body.appendChild(bg);
 
-      [warm, weight, reps, assist, note].forEach(el=> el.addEventListener('input', recalc));
-      node.querySelector('.btn-del-set').onclick = ()=> {
-        const idx = ex.sets.indexOf(s);
-        if(idx>=0){ ex.sets.splice(idx,1); persist(); renderHome(); }
+      btnCancel.onclick = ()=> bg.remove();
+      btnOk.onclick = ()=>{
+        const checked = Array.from(list.querySelectorAll('input[type=checkbox]:checked')).map(i=> i.dataset.name);
+        applySelectedExercises(blockIdx, checked);
+        bg.remove();
       };
+      bg.addEventListener('click', e=> { if(e.target===bg) bg.remove(); });
+    }
+
+    function applySelectedExercises(blockIdx, names){
+      const block = state.inProgress.blocks[blockIdx];
+      const before = block.exs || [];
+      // new exs in chosen order; default eq blank, att/ang "なし"
+      block.exs = names.map(name=>{
+        const found = before.find(e=> e.name===name);
+        return found || { name, eq: state.lists.equip[0]||'', att: 'なし', ang: 'なし' };
+      });
+      // align sets' items length with exs
+      (block.sets||[]).forEach(set=>{
+        const items = set.items||[];
+        const next = names.map((name, i)=>{
+          const prevIdx = before.findIndex(e=> e.name===name);
+          if(prevIdx>=0 && items[prevIdx]) return items[prevIdx];
+          return { w:0, reps:0, assist:0, note:'', oneRM:0 };
+        });
+        set.items = next;
+      });
+      persist(); renderHome();
+    }
+
+    function renderExConfigRow(block, ex, exIdx){
+      const node = document.importNode($('#tpl-ex-config-row').content, true);
+      node.querySelector('.ex-name').textContent = ex.name;
+      fillSelect(node.querySelector('.ex-eq'), state.lists.equip, ex.eq || state.lists.equip[0] || '', v=>{ ex.eq=v; persist(); });
+      fillSelect(node.querySelector('.ex-att'), state.lists.attach, ex.att || 'なし', v=>{ ex.att=v; persist(); });
+      fillSelect(node.querySelector('.ex-ang'), state.lists.angle, ex.ang || 'なし', v=>{ ex.ang=v; persist(); });
+      updateExMetaLine(node, ex);
       return node;
     }
 
-    function updateExMeta(root, ex){
-      const meta = root.querySelector('.ex-meta');
-      const all = flattenSets().filter(r => r.exercise === ex.name);
-      if(all.length===0){ meta.textContent = '最高重量: - / 最高1RM: - / 前回: -'; return; }
+    function updateExMetaLine(rowNode, ex){
+      const meta = rowNode.querySelector('.ex-meta');
+      const all = flattenSets().filter(r=> r.exercise===ex.name);
+      if(all.length===0){ meta.textContent='最高重量: - / 最高1RM: - / 前回: -'; return; }
       const maxW = Math.max(...all.map(r=> Number(r.weight||0)));
       const max1 = Math.max(...all.map(r=> Number(r.oneRM||0)));
       const last = all.sort((a,b)=> a.date<b.date ? 1 : -1)[0];
       meta.textContent = `最高重量: ${maxW||'-'} / 最高1RM: ${max1||'-'} / 前回: ${last ? last.date : '-'}`;
     }
 
-    function scrollToBottom(){ window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }
+    function renderSetCard(block, set, sIdx){
+      const node = document.importNode($('#tpl-set-card').content, true);
+      node.querySelector('.set-no').textContent = '#'+(sIdx+1);
+      const warm = node.querySelector('.set-warm');
+      warm.checked = !!set.warm;
+      warm.addEventListener('input', ()=> { set.warm = warm.checked; persist(); });
 
-    // --- Save workout ---
-    function saveWorkout(){
-      // prune empty sets/exercises/blocks
-      const copy = JSON.parse(JSON.stringify(state.inProgress));
-      copy.blocks.forEach(b => { b.exs.forEach(ex => { ex.sets = ex.sets.filter(s=> (Number(s.w)>0 && Number(s.reps)>0) || s.note); }); b.exs = b.exs.filter(ex=> ex.sets.length>0); });
-      copy.blocks = copy.blocks.filter(b=> b.exs.length>0);
-      if(copy.blocks.length===0){ alert('記録が空です。セットを入力してください。'); return; }
-      copy.id = 'w_'+Date.now();
-      state.workouts.push(copy);
-      // reset inProgress to fresh day
-      state.inProgress = { date: todayISO(), part: state.inProgress.part, blocks: [] };
-      persist();
-      alert('保存しました');
-      renderHome();
+      // ex items for each exercise
+      const itemsWrap = node.querySelector('.ex-items');
+      ensureSetItems(block, set);
+      block.exs.forEach((ex, i)=>{
+        itemsWrap.appendChild(renderExItemRow(block, set, i, ex));
+      });
+
+      node.querySelector('.btn-dup-set').onclick = ()=> {
+        // deep copy of last or current
+        const source = block.sets[sIdx];
+        const cloned = JSON.parse(JSON.stringify(source));
+        block.sets.splice(sIdx+1, 0, cloned);
+        persist(); renderHome();
+      };
+      node.querySelector('.btn-del-set').onclick = ()=> {
+        block.sets.splice(sIdx,1);
+        persist(); renderHome();
+      };
+      return node;
     }
 
-    // --- History ---
+    function ensureSetItems(block, set){
+      if(!set.items) set.items = [];
+      // grow or shrink items to exs length
+      if(set.items.length < block.exs.length){
+        const last = set.items[set.items.length-1] || { w:0, reps:0, assist:0, note:'', oneRM:0 };
+        for(let i=set.items.length; i<block.exs.length; i++){
+          set.items[i] = { ...last };
+        }
+      } else if(set.items.length > block.exs.length){
+        set.items = set.items.slice(0, block.exs.length);
+      }
+    }
+
+    function addSet(block, copyLast){
+      if(!block.sets) block.sets = [];
+      if(copyLast && block.sets.length){
+        const last = block.sets[block.sets.length-1];
+        const cloned = JSON.parse(JSON.stringify(last));
+        block.sets.push(cloned);
+      } else {
+        const items = (block.exs||[]).map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0 }));
+        block.sets.push({ warm:false, items });
+      }
+      persist(); renderHome();
+      setTimeout(()=> window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }), 0);
+    }
+
+    function renderExItemRow(block, set, idx, ex){
+      const node = document.importNode($('#tpl-ex-item-row').content, true);
+      const item = set.items[idx];
+      node.querySelector('.ex-title').textContent = ex.name;
+      const elW = node.querySelector('.ex-weight');
+      const elR = node.querySelector('.ex-reps');
+      const elA = node.querySelector('.ex-assist');
+      const elN = node.querySelector('.ex-note');
+      const elOne = node.querySelector('.ex-1rm');
+
+      elW.value = item.w || '';
+      elR.value = item.reps || '';
+      elA.value = item.assist || '';
+      elN.value = item.note || '';
+      elOne.textContent = item.oneRM || '-';
+
+      const recalc = debounce(()=>{
+        const one = calc1RM(elW.value, elR.value);
+        item.w = Number(elW.value||0);
+        item.reps = Number(elR.value||0);
+        item.assist = Number(elA.value||0);
+        item.note = elN.value || '';
+        item.oneRM = one||0;
+        elOne.textContent = item.oneRM || '-';
+        persist();
+      }, 200);
+
+      [elW, elR, elA, elN].forEach(el=> el.addEventListener('input', recalc));
+      return node;
+    }
+
+    function fillSelect(sel, items, value, onChange){
+      sel.innerHTML = '';
+      items.forEach(v=>{
+        const opt = document.createElement('option'); opt.value=v; opt.textContent=v; sel.appendChild(opt);
+      });
+      sel.value = value || items[0] || '';
+      sel.onchange = e=> onChange(e.target.value);
+    }
+
+    // ===== Save Workout =====
+    function saveWorkout(){
+      const copy = JSON.parse(JSON.stringify(state.inProgress));
+      // prune empties
+      copy.blocks.forEach(b=>{
+        b.sets = (b.sets||[]).map(s=>{
+          s.items = (s.items||[]).filter(it=> (Number(it.w)>0 && Number(it.reps)>0) || it.note);
+          return s;
+        }).filter(s=> s.items.length>0);
+      });
+      copy.blocks = copy.blocks.filter(b=> (b.exs||[]).length>0 && (b.sets||[]).length>0);
+      if(copy.blocks.length===0){ alert('記録が空です。セットを入力してください。'); return; }
+      copy.id = 'w_'+Date.now();
+      copy.part = state.inProgress.part;
+      state.workouts.push(copy);
+      state.inProgress = { date: todayISO(), part: copy.part, blocks: [] };
+      persist(); alert('保存しました'); renderHome();
+    }
+
+    // ===== Flatten for history/CSV =====
+    function flattenSets(){
+      const rows = [];
+      state.workouts.forEach(w=>{
+        (w.blocks||[]).forEach(b=>{
+          (b.sets||[]).forEach((s, sIdx)=>{
+            (b.exs||[]).forEach((ex, exIdx)=>{
+              const it = (s.items||[])[exIdx] || {};
+              rows.push({
+                id: w.id,
+                date: w.date,
+                part: w.part,
+                exercise: ex.name,
+                equipment: ex.eq||'',
+                attachment: ex.att||'なし',
+                angle: ex.ang||'なし',
+                setIndex: sIdx+1,
+                warmup: !!s.warm,
+                weight: Number(it.w||0),
+                repsSelf: Number(it.reps||0),
+                repsAssist: Number(it.assist||0),
+                note: it.note||'',
+                oneRM: Number(it.oneRM||0)
+              });
+            });
+          });
+        });
+      });
+      return rows.sort((a,b)=> a.date<b.date ? -1 : 1);
+    }
+
+    // ===== History =====
     function renderHistory(){
-      // fill filters
       const parts = ['(指定なし)', ...state.lists.parts];
       const exs = ['(指定なし)', ...unique(flattenSets().map(r=>r.exercise)).sort()];
       const eqs = ['(指定なし)', ...state.lists.equip];
@@ -535,44 +715,12 @@
       $('#btn-apply-filter').onclick = ()=> applyFilter();
       $('#btn-clear-filter').onclick = ()=> { $('#filter-start').value=''; $('#filter-end').value=''; ['part','ex','eq','att','ang'].forEach(id=> $('#filter-'+id).value='(指定なし)'); applyFilter(); };
 
-      // route param ?exercise=Name triggers simple mode
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       const exParam = params.get('exercise');
       if(exParam){ $('#filter-ex').value = exParam; }
-
       applyFilter();
     }
-
     function unique(arr){ return Array.from(new Set(arr)); }
-
-    function flattenSets(){
-      const rows = [];
-      state.workouts.forEach(w=>{
-        w.blocks.forEach((b, bi)=>{
-          b.exs.forEach(ex=>{
-            ex.sets.forEach((s, si)=>{
-              rows.push({
-                id: w.id,
-                date: w.date,
-                part: w.part,
-                exercise: ex.name,
-                equipment: ex.eq,
-                attachment: ex.att,
-                angle: ex.ang,
-                setIndex: si+1,
-                warmup: !!s.warm,
-                weight: Number(s.w||0),
-                repsSelf: Number(s.reps||0),
-                repsAssist: Number(s.assist||0),
-                note: s.note || '',
-                oneRM: Number(s.oneRM||0)
-              });
-            });
-          });
-        });
-      });
-      return rows.sort((a,b)=> a.date<b.date ? -1 : 1);
-    }
 
     function applyFilter(){
       const start = $('#filter-start').value;
@@ -593,8 +741,6 @@
       if(ang && ang!=='(指定なし)') rows = rows.filter(r => r.angle===ang);
 
       renderHistoryList(rows);
-
-      // Chart: only when a single exercise is specified
       if(ex && ex!=='(指定なし)'){
         const dailyMax = aggregateDailyMax1RM(rows);
         renderChart(dailyMax.labels, dailyMax.values, true);
@@ -618,15 +764,9 @@
     function renderHistoryList(rows){
       const list = $('#history-list');
       list.innerHTML = '';
-      if(rows.length===0){
-        list.innerHTML = '<div class="text-sm text-gray-500">データがありません。</div>';
-        return;
-      }
+      if(rows.length===0){ list.innerHTML = '<div class="text-sm text-gray-500">データがありません。</div>'; return; }
 
-      const byWorkout = rows.reduce((acc, r)=>{
-        (acc[r.id] ||= []).push(r);
-        return acc;
-      }, {});
+      const byWorkout = rows.reduce((acc, r)=> { (acc[r.id] ||= []).push(r); return acc; }, {});
       Object.values(byWorkout).forEach(items=>{
         const w = items[0];
         const card = document.createElement('div');
@@ -650,7 +790,6 @@
         list.appendChild(card);
       });
 
-      // If route had ?exercise, show back button
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       const exParam = params.get('exercise');
       const backBtn = $('#btn-back-to-home-from-simple');
@@ -658,14 +797,10 @@
       backBtn.onclick = ()=> { location.hash = '#/home'; };
     }
 
-    // --- Chart ---
     function renderChart(labels, values, show){
       const wrap = $('#history-chart-wrap');
       wrap.classList.toggle('hidden', !show);
-      if(!show){
-        if(state.chart){ state.chart.destroy(); state.chart=null; }
-        return;
-      }
+      if(!show){ if(state.chart){ state.chart.destroy(); state.chart=null; } return; }
       const ctx = $('#history-chart').getContext('2d');
       if(state.chart) state.chart.destroy();
       state.chart = new Chart(ctx, {
@@ -675,34 +810,45 @@
       });
     }
 
-    // --- Settings ---
+    // ===== Settings =====
     function renderSettings(){
       $('#list-parts').value = state.lists.parts.join('\n');
-      $('#list-exercises').value = state.lists.exercises.join('\n');
       $('#list-equip').value = state.lists.equip.join('\n');
       $('#list-attach').value = state.lists.attach.join('\n');
       $('#list-angle').value = state.lists.angle.join('\n');
+      $('#list-exercise-map').value = state.lists.exerciseMap.map(e=> `${e.name} : ${e.parts.join(',')}`).join('\n');
     }
 
     function saveLists(){
-      const parseLines = (v)=> v.split('\n').map(s=>s.trim()).filter(Boolean);
+      const parseLines = v => v.split('\n').map(s=>s.trim()).filter(Boolean);
       state.lists.parts = parseLines($('#list-parts').value);
-      state.lists.exercises = parseLines($('#list-exercises').value);
       state.lists.equip = parseLines($('#list-equip').value);
       state.lists.attach = parseLines($('#list-attach').value);
+      if(state.lists.attach[0] !== 'なし'){ state.lists.attach = ['なし', ...state.lists.attach.filter(x=>x!=='なし')]; }
       state.lists.angle = parseLines($('#list-angle').value);
+      if(state.lists.angle[0] !== 'なし'){ state.lists.angle = ['なし', ...state.lists.angle.filter(x=>x!=='なし')]; }
+
+      const mapText = $('#list-exercise-map').value;
+      const exMap = [];
+      mapText.split('\n').forEach(line=>{
+        const m = line.split(':');
+        if(m.length>=1){
+          const name = m[0].trim();
+          const partsStr = (m[1]||'').split(',').map(x=>x.trim()).filter(Boolean);
+          if(name) exMap.push({ name, parts: partsStr });
+        }
+      });
+      state.lists.exerciseMap = exMap;
       persist();
       alert('保存しました');
     }
 
     function resetDefaults(){
       state.lists = JSON.parse(JSON.stringify(DEFAULTS));
-      persist();
-      renderSettings();
-      alert('デフォルトに復元しました');
+      persist(); renderSettings(); alert('デフォルトに復元しました');
     }
 
-    // --- CSV Export/Import ---
+    // ===== CSV Export/Import =====
     function exportCSV(){
       const rows = flattenSets().map(r=>[
         r.date, r.part, r.exercise, r.equipment, r.attachment, r.angle, r.setIndex,
@@ -713,9 +859,7 @@
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `workouts_${todayISO()}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      document.body.appendChild(a); a.click(); a.remove();
     }
 
     function importCSV(file){
@@ -724,11 +868,12 @@
         const text = reader.result;
         const rows = parseCSV(text);
         const header = rows.shift() || [];
-        const idx = (name)=> header.indexOf(name);
-        const dateI = idx('date'), partI=idx('part'), exI=idx('exercise'), eqI=idx('equipment'), attI=idx('attachment'), angI=idx('angle'),
-              warmI=idx('warmup'), wI=idx('weight'), rsI=idx('repsSelf'), raI=idx('repsAssist'), noteI=idx('note'), oneI=idx('oneRM');
+        const idx = name => header.indexOf(name);
+        const dateI=idx('date'), partI=idx('part'), exI=idx('exercise'), eqI=idx('equipment'), attI=idx('attachment'), angI=idx('angle'),
+              sI=idx('setIndex'), warmI=idx('warmup'), wI=idx('weight'), rsI=idx('repsSelf'), raI=idx('repsAssist'), noteI=idx('note'), oneI=idx('oneRM');
         if(dateI<0 || partI<0 || exI<0){ alert('CSVヘッダが不正です'); return; }
-        // Group by date+part -> one workout per day/part
+
+        // group by workout (date+part) -> block per exercise group
         const groups = {};
         rows.forEach(r=>{
           const date = r[dateI]; if(!date) return;
@@ -737,8 +882,9 @@
           (groups[key] ||= []).push({
             exercise: r[exI]||'',
             equipment: r[eqI]||'',
-            attachment: r[attI]||'',
-            angle: r[angI]||'',
+            attachment: r[attI]||'なし',
+            angle: r[angI]||'なし',
+            setIndex: Number(r[sI]||1),
             warmup: Number(r[warmI]||0)>0,
             weight: Number(r[wI]||0),
             repsSelf: Number(r[rsI]||0),
@@ -747,195 +893,91 @@
             oneRM: Number(r[oneI]||0)
           });
         });
+
         Object.entries(groups).forEach(([key, items])=>{
           const [date, part] = key.split('|');
-          // group items by exercise/equipment/attachment/angle as a single exercise entry
-          const m = new Map();
-          items.forEach(it=>{
-            const k = [it.exercise,it.equipment,it.attachment,it.angle].join('|');
-            (m.get(k) || m.set(k, []).get(k)).push(it);
+          // regroup by exercise identity
+          const exNames = Array.from(new Set(items.map(it=> it.exercise)));
+          // build sets count as max setIndex
+          const maxSet = Math.max(0, ...items.map(it=> it.setIndex||0));
+          const exs = exNames.map(name=>{
+            const any = items.find(it=> it.exercise===name) || {};
+            return { name, eq:any.equipment||'', att:any.attachment||'なし', ang:any.angle||'なし' };
           });
-          const blocks = [{ exs: Array.from(m.entries()).map(([k, arr])=>{
-            const [name, eq, att, ang] = k.split('|');
-            return { name, eq, att, ang, sets: arr.map((s,i)=>({ warm:s.warmup, w:s.weight, reps:s.repsSelf, assist:s.repsAssist, note:s.note, oneRM: s.oneRM || calc1RM(s.weight, s.repsSelf) })) };
-          }) }];
-          state.workouts.push({ id:'w_'+Date.now()+Math.random(), date, part, blocks });
+          const sets = [];
+          for(let s=1; s<=Math.max(1, maxSet); s++){
+            const set = { warm:false, items: exNames.map(()=> ({ w:0,reps:0,assist:0,note:'',oneRM:0 })) };
+            exNames.forEach((name, i)=>{
+              const it = items.find(it=> it.exercise===name && it.setIndex===s);
+              if(it){
+                set.warm = set.warm || !!it.warmup;
+                set.items[i] = { w:it.weight, reps:it.repsSelf, assist:it.repsAssist, note:it.note, oneRM: it.oneRM||calc1RM(it.weight,it.repsSelf) };
+              }
+            });
+            sets.push(set);
+          }
+          state.workouts.push({ id:'w_'+Date.now()+Math.random(), date, part, blocks:[{ exs, sets }] });
         });
-        persist();
-        alert('インポート完了');
-        if(location.hash.startsWith('#/history')) renderHistory();
+
+        persist(); alert('インポート完了'); if(location.hash.startsWith('#/history')) renderHistory();
       };
       reader.readAsText(file);
     }
 
     function parseCSV(text){
-      const rows = [];
-      let i=0, field='', row=[], inQuotes=false;
+      const rows = []; let i=0, field='', row=[], inQ=false;
       while(i<text.length){
-        const c = text[i++];
-        if(inQuotes){
-          if(c === '"'){
-            if(text[i] === '"'){ field+='"'; i++; }
-            else { inQuotes=false; }
-          } else { field += c; }
-        } else {
-          if(c === '"'){ inQuotes=true; }
-          else if(c === ','){ row.push(field); field=''; }
-          else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
-          else if(c === '\r'){ /* ignore */ }
-          else { field += c; }
-        }
+        const c=text[i++];
+        if(inQ){ if(c=== '"'){ if(text[i]==='"'){ field+='"'; i++; } else { inQ=false; } } else { field+=c; } }
+        else { if(c===','){ row.push(field); field=''; } else if(c==='"'){ inQ=true; } else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; } else if(c!=='\r'){ field+=c; } }
       }
-      if(field.length>0 || row.length>0){ row.push(field); rows.push(row); }
+      if(field.length || row.length){ row.push(field); rows.push(row); }
       return rows;
     }
 
-    // --- Simple confirm modal ---
+    // ===== Modals =====
     async function confirmAction(message){
-      const bg = document.createElement('div');
-      bg.className = 'modal-bg flex items-center justify-center';
-      const card = document.createElement('div');
-      card.className = 'modal-card bg-white rounded-2xl p-4 shadow-soft border';
+      const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
+      const card = document.createElement('div'); card.className='modal-card bg-white rounded-2xl p-4 shadow-soft border';
       card.innerHTML = `
         <div class="text-sm text-gray-700 mb-3">${escapeHtml(message)}</div>
         <div class="flex justify-end gap-2">
           <button class="px-3 py-2 rounded-xl bg-white border">キャンセル</button>
           <button class="px-3 py-2 rounded-xl bg-gray-900 text-white">OK</button>
-        </div>
-      `;
-      bg.appendChild(card);
-      document.body.appendChild(bg);
+        </div>`;
+      bg.appendChild(card); document.body.appendChild(bg);
       return new Promise(resolve=>{
         const [btnCancel, btnOk] = card.querySelectorAll('button');
         const cleanup = ()=> bg.remove();
         btnCancel.onclick = ()=> { cleanup(); resolve(false); };
         btnOk.onclick = ()=> { cleanup(); resolve(true); };
-        bg.addEventListener('click', (e)=> { if(e.target===bg){ cleanup(); resolve(false); } });
+        bg.addEventListener('click', e=> { if(e.target===bg){ cleanup(); resolve(false); } });
       });
     }
 
-    // --- Exercise simple history modal ---
-    function openExerciseHistoryModal(exName){
-      const rows = flattenSets().filter(r=> r.exercise===exName);
-      const bg = document.createElement('div');
-      bg.className = 'modal-bg flex items-center justify-center';
-      const card = document.createElement('div');
-      card.className = 'modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw] max-w-2xl';
-      const inner = document.createElement('div');
-      inner.innerHTML = `<div class="text-sm font-semibold mb-2">${escapeHtml(exName)} の履歴</div>`;
-      const table = document.createElement('div');
-      table.className = 'max-h-[60vh] overflow-auto';
-      if(rows.length===0){
-        table.innerHTML = '<div class="text-sm text-gray-500">データがありません。</div>';
-      } else {
-        const header = `<div class="grid grid-cols-6 text-xs text-gray-500 border-b pb-1">
-          <div>日付</div><div>セット</div><div>重量</div><div>自力</div><div>補助</div><div>1RM</div>
-        </div>`;
-        const body = rows.map(r=> `<div class="grid grid-cols-6 text-sm py-1 border-b">
-          <div>${r.date}</div><div>S${r.setIndex}</div><div>${r.weight}</div><div>${r.repsSelf}</div><div>${r.repsAssist}</div><div>${r.oneRM||'-'}</div>
-        </div>`).join('');
-        table.innerHTML = header + body;
-      }
-      const actions = document.createElement('div');
-      actions.className = 'flex justify-between items-center mt-3';
-      const btnGraph = document.createElement('button');
-      btnGraph.className = 'px-3 py-2 rounded-xl bg-white border text-sm';
-      btnGraph.textContent = '1RMグラフ表示';
-      btnGraph.onclick = ()=> {
-        location.hash = '#/history?exercise=' + encodeURIComponent(exName);
-        bg.remove();
-      };
-      const btnClose = document.createElement('button');
-      btnClose.className = 'px-3 py-2 rounded-xl bg-gray-900 text-white text-sm';
-      btnClose.textContent = '閉じる';
-      btnClose.onclick = ()=> bg.remove();
-      actions.appendChild(btnGraph);
-      actions.appendChild(btnClose);
-
-      card.appendChild(inner);
-      card.appendChild(table);
-      card.appendChild(actions);
-      bg.appendChild(card);
-      document.body.appendChild(bg);
-    }
-
-    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-
-    // --- PWA minimal (register SW via Blob) ---
-    function setupPWA(){
-      if('serviceWorker' in navigator){
-        const swCode = `
-          self.addEventListener('install', (e)=> { self.skipWaiting(); });
-          self.addEventListener('activate', (e)=> { e.waitUntil(self.clients.claim()); });
-          self.addEventListener('fetch', (event)=> {
-            event.respondWith((async ()=>{
-              try { return await fetch(event.request); }
-              catch { return new Response('<h1>オフライン</h1>', { headers: {'Content-Type':'text/html'} }); }
-            })());
-          });
-        `;
-        const blob = new Blob([swCode], {type:'text/javascript'});
-        const url = URL.createObjectURL(blob);
-        navigator.serviceWorker.register(url).then(()=> {
-          $('#pwa-status').textContent = '登録済み';
-        }).catch(()=> {
-          $('#pwa-status').textContent = '登録失敗';
-        });
-      } else {
-        $('#pwa-status').textContent = '非対応';
-      }
-
-      let deferredPrompt = null;
-      window.addEventListener('beforeinstallprompt', (e)=>{
-        e.preventDefault();
-        deferredPrompt = e;
-        state.pwaPrompt = e;
-        $('#pwa-status').textContent = 'インストール可能';
-      });
-      $('#btn-install').onclick = async ()=>{
-        if(state.pwaPrompt){
-          state.pwaPrompt.prompt();
-          const { outcome } = await state.pwaPrompt.userChoice;
-          $('#pwa-status').textContent = outcome==='accepted' ? 'インストール開始' : 'キャンセル';
-          state.pwaPrompt = null;
-        } else {
-          alert('ブラウザの共有/追加メニューからホーム画面に追加してください。');
-        }
-      };
-    }
-
-    // --- Init ---
+    // ===== Bindings =====
     function bindGlobalUI(){
-      // Tabs
       $$('.tab-btn').forEach(btn=> btn.onclick = ()=> { location.hash = btn.getAttribute('data-route'); });
-
-      // Home actions
       $('#btn-add-block').onclick = addBlock;
       $('#btn-save-workout').onclick = saveWorkout;
 
-      // Settings actions
+      // settings
       $('#btn-save-lists').onclick = saveLists;
       $('#btn-reset-defaults').onclick = resetDefaults;
       $('#btn-export-csv').onclick = exportCSV;
-      $('#input-import-csv').addEventListener('change', (e)=> {
-        const f = e.target.files && e.target.files[0];
-        if(f) importCSV(f);
-        e.target.value = '';
+      $('#input-import-csv').addEventListener('change', e=> {
+        const f = e.target.files && e.target.files[0]; if(f) importCSV(f); e.target.value='';
       });
       $('#btn-clear-data').onclick = async ()=>{
         if(await confirmAction('本当に全データを削除しますか？（元に戻せません）')){
-          store.clearAll();
-          initData();
-          persist();
-          renderRoute();
+          store.clearAll(); initData(); persist(); renderRoute();
         }
       };
     }
 
-    // Boot
+    // ===== Boot =====
     initData();
     bindGlobalUI();
-    setupPWA();
     if(!location.hash) location.hash = '#/home';
     renderRoute();
   </script>
