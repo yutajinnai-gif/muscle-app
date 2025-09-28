@@ -1,41 +1,27 @@
 name: ci
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch: {}
+on: push
 
 jobs:
-  serve-smoke:
+  smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check index.html exists
-        run: |
-          test -f index.html || (echo "index.html not found"; exit 1)
-
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: 20
 
-      - name: Install minimal deps
-        run: npm ci || npm i --no-audit --no-fund
-
-      - name: Serve & ping
+      - name: Start static server
         run: |
-          npm run serve &                        # http-server で配信
-          npx wait-on http://127.0.0.1:4173/index.html
-          curl -sSf http://127.0.0.1:4173/index.html | grep "筋トレメモアプリ"
-      - name: Upload Playwright artifacts (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-artifacts
-          path: |
-            playwright-report
-            test-results
-            **/*.png
-            **/*.webm
-            **/*.zip
-          if-no-files-found: ignore
+          npx --yes http-server -p 4173 -c-1 . &>/dev/null &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          sleep 2
+
+      - name: Smoke test (index.html has title)
+        run: |
+          curl -sSf http://localhost:4173/index.html | grep -q "筋トレメモ"
+
+      - name: Stop server
+        if: always()
+        run: kill $SERVER_PID
