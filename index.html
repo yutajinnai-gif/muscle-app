@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -104,7 +103,6 @@
         const prevSettings = load(KEYS.SETTINGS, {});
         let logs = load(KEYS.LOGS, []);
         
-        // ★修正点: logsが配列でない場合にエラーになるのを防ぐ
         if (!Array.isArray(logs)) {
           console.warn("Corrupted log data detected. Resetting logs.", logs);
           logs = [];
@@ -140,29 +138,26 @@
         save(KEYS.SETTINGS, initSettings);
         save(KEYS.SCHEMA, SCHEMA_VERSION);
       } else {
-        // データ形式が最新の場合、設定項目が欠けていないか確認
+        // データ形式が最新の場合でも、念のため設定を最新の状態に保つ
         const s = getSettings();
-        let updated = false;
-        if (s.parts == null) { s.parts = PARTS_DEFAULT; updated = true; }
-        if (s.instruments == null) { s.instruments = DEFAULT_INSTRUMENTS; updated = true; }
-        if (s.attachments == null) { s.attachments = DEFAULT_ATTACHMENTS; updated = true; }
-        if (s.angles == null) { s.angles = DEFAULT_ANGLES; updated = true; }
-        if (s.defaultPart == null) { s.defaultPart = Object.keys(s.parts)[0]; updated = true; }
-        if (s.defaultDateMode == null) { s.defaultDateMode = "today"; updated = true; }
-        if (s.autofillEnabled === undefined) { s.autofillEnabled = true; updated = true; }
-        if (updated) save(KEYS.SETTINGS, s);
+        save(KEYS.SETTINGS, s);
       }
     } catch(e) {
-      // ★追加点: 起動処理中にエラーが起きてもアプリが停止しないようにする
       showError("アプリの起動処理でエラーが発生しました。");
       console.error("Bootstrap failed:", e);
     }
   })();
 
   // ====== データアクセス関数群 ======
+  
+  // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+  // ★ 修正点: この関数を修正しました
+  // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+  // 常にデフォルト値と結合することで、設定項目が欠けている状態を防ぎます。
   function getSettings(){
-    return load(KEYS.SETTINGS, {
-      unit: "kg", theme:"light",
+    const defaultSettings = {
+      unit: "kg",
+      theme: "light",
       parts: PARTS_DEFAULT,
       instruments: DEFAULT_INSTRUMENTS,
       attachments: DEFAULT_ATTACHMENTS,
@@ -170,8 +165,12 @@
       defaultPart: Object.keys(PARTS_DEFAULT)[0],
       defaultDateMode: "today",
       autofillEnabled: true
-    });
+    };
+    const savedSettings = load(KEYS.SETTINGS, {});
+    // 保存された設定をデフォルト設定に上書きマージする
+    return { ...defaultSettings, ...savedSettings };
   }
+
   function setSettings(s){ save(KEYS.SETTINGS, s); }
 
   function getRecents(){ return load(KEYS.RECENTS, []); }
@@ -789,9 +788,8 @@
     location.replace('#/home');
   }
 
-  // ★修正点: DOMの準備ができてから一度だけrender()を呼び出す
+  // DOMの準備ができてから一度だけrender()を呼び出す
   document.addEventListener('DOMContentLoaded', render);
   </script>
 </body>
 </html>
-```
