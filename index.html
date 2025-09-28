@@ -786,24 +786,29 @@ b.onclick = ()=> navigate(b.getAttribute("data-tab"));
 
 function render(){
   hideError();
-  let route, root;                // ← ここでスコープを外に
+  let route, root;
   try {
     route = currentRoute();
     root  = $("#view");
-    root.innerHTML = route==="home" ? viewHome()
+    root.innerHTML = route==="home"    ? viewHome()
                  : route==="history" ? viewHistory()
-                 : viewSettings();
+                 :                     viewSettings();
   } catch(e){
     showError("描画エラー: " + (e?.message || e));
-    return;                       // ← ここで打ち切る（throwしない）
+    return;
   }
 
-  if (route==="home"){
-    renderRecent();
-    updateExerciseOptionsByPart();
-    bindHome();
-    setActionBarVisible(true);
-  } else if (route==="history"){
+  if (route === "home") {
+    try {
+      renderRecent();
+      updateExerciseOptionsByPart();
+      bindHome();
+      setActionBarVisible(true);
+    } catch(e) {
+      showError("Home初期化エラー: " + (e?.message || e));
+      return;
+    }
+  } else if (route === "history") {
     setActionBarVisible(false);
     renderHistory();
     $("#flt-range")?.addEventListener("change", ()=>{
@@ -816,7 +821,7 @@ function render(){
       renderHistory();
     });
     ["#flt-from","#flt-to","#flt-part","#flt-ex"].forEach(sel=> $(sel)?.addEventListener("change", renderHistory));
-  } else if (route==="settings"){
+  } else if (route === "settings") {
     setActionBarVisible(false);
     bindSettings();
   }
@@ -846,15 +851,30 @@ const manUrl = URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:"ap
 const link=document.createElement("link"); link.rel="manifest"; link.href=manUrl; document.head.appendChild(link);
 
 const swCode = `
-  const CACHE='muscle-app-v1';
-  self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./']))); self.skipWaiting(); });
-  self.addEventListener('activate',e=>{ e.waitUntil(self.clients.claim()); });
-  self.addEventListener('fetch',e=>{
-    if (e.request.method!=='GET') return;
+  const CACHE='muscle-app-v2'; // ← v2 にバンプ
+  self.addEventListener('install', e => {
+    e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./'])));
+    self.skipWaiting();
+  });
+  self.addEventListener('activate', e => {
+    e.waitUntil(
+      (async () => {
+        const keys = await caches.keys();
+        await Promise.all(keys
+          .filter(k => k.startsWith('muscle-app-') && k !== CACHE)
+          .map(k => caches.delete(k)));
+        await self.clients.claim();
+      })()
+    );
+  });
+  self.addEventListener('fetch', e => {
+    if (e.request.method !== 'GET') return;
     e.respondWith(
-      caches.match(e.request).then(r=> r || fetch(e.request).then(res=>{
-        const copy=res.clone(); caches.open(CACHE).then(c=>c.put(e.request, copy)); return res;
-      }).catch(()=> r || new Response('',{status:200})))
+      caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+        return res;
+      }).catch(() => r || new Response('', { status:200 })))
     );
   });
 `;
