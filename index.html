@@ -5,17 +5,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>筋トレ記録アプリ | BUILD_TAG=FULL-20250928-SUPERSET-PATCH-IPHONE</title>
+  <title>筋トレ記録アプリ | BUILD_TAG=FULL-20250928-SUPERSET-IPHONE-TUNE</title>
   <meta name="color-scheme" content="light">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
+    /* iPhone向けチューニング：余白・幅・フォントの最小確保 */
     input, select, textarea, button { font-size: 16px; }
     main { padding-bottom: 108px; }
     .shadow-soft { box-shadow: 0 10px 25px rgba(0,0,0,.08); }
     .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); backdrop-filter: blur(2px); }
     .modal-card { max-width: 680px; }
     .truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .min-w-0 { min-width: 0; }
+    @media (max-width: 430px) {
+      .wrap-pad { padding-left: 12px; padding-right: 12px; }
+      .narrow-input { max-width: 240px; }
+      .narrow-date { max-width: 220px; }
+    }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
@@ -30,85 +37,89 @@
 
 
   <header class="sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-gray-200">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="max-w-3xl mx-auto wrap-pad px-4 py-3 flex items-center justify-between">
       <h1 class="text-lg font-bold">筋トレ記録</h1>
       <div class="text-xs text-gray-500">PWA / Local-only</div>
     </div>
   </header>
 
 
-  <main id="app" class="max-w-3xl mx-auto px-4 py-4 space-y-4">
+  <main id="app" class="max-w-3xl mx-auto wrap-pad px-4 py-4 space-y-4">
     <!-- HOME -->
     <section id="view-home" class="hidden">
-      <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="text-xs text-gray-500">日付</label>
-            <input id="inp-date" type="date" class="w-full border rounded-lg px-3 py-2">
-          </div>
-          <div>
-            <label class="text-xs text-gray-500">部位（新規ブロックの初期値）</label>
-            <div class="grid grid-cols-3 gap-2">
-              <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="胸">胸</button>
-              <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="背中">背中</button>
-              <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="肩">肩</button>
-              <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="腕">腕</button>
-              <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="脚">脚</button>
-              <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="腹筋">腹筋</button>
-            </div>
-          </div>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="rounded-xl border bg-white p-3">
-            <div class="text-xs text-gray-500">直近1週間のトレ日数</div>
-            <div id="stat-week" class="text-2xl font-bold">0</div>
-          </div>
-          <div class="rounded-xl border bg-white p-3">
-            <div class="text-xs text-gray-500">直近1ヶ月のトレ日数</div>
-            <div id="stat-month" class="text-2xl font-bold">0</div>
-          </div>
-        </div>
-        <div class="flex items-center justify-between">
-          <div class="text-sm text-gray-600">本日の記録</div>
-          <div class="flex gap-2">
-            <button id="btn-add-block" class="px-3 py-2 rounded-xl bg-gray-900 text-white">ブロック追加</button>
-            <button id="btn-save-workout" class="px-3 py-2 rounded-xl bg-white border">保存</button>
-          </div>
+      <!-- 日付は単独バーとして最上段に配置（重なり防止） -->
+      <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-2">
+        <div>
+          <label class="text-xs text-gray-500 block">日付</label>
+          <input id="inp-date" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
         </div>
       </div>
-      <div id="blocks" class="space-y-4"></div>
-    </section>
 
+
+  <!-- 部位・統計・アクション -->
+  <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
+    <div>
+      <label class="text-xs text-gray-500 block mb-1">部位（新規ブロックの初期値）</label>
+      <div class="grid grid-cols-3 gap-2">
+        <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="胸">胸</button>
+        <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="背中">背中</button>
+        <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="肩">肩</button>
+        <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="腕">腕</button>
+        <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="脚">脚</button>
+        <button class="part-btn px-3 py-2 rounded-xl bg-white border shadow-soft" data-part="腹筋">腹筋</button>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="rounded-xl border bg-white p-3">
+        <div class="text-xs text-gray-500">直近1週間のトレ日数</div>
+        <div id="stat-week" class="text-2xl font-bold">0</div>
+      </div>
+      <div class="rounded-xl border bg-white p-3">
+        <div class="text-xs text-gray-500">直近1ヶ月のトレ日数</div>
+        <div id="stat-month" class="text-2xl font-bold">0</div>
+      </div>
+    </div>
+    <div class="flex items-center justify-between">
+      <div class="text-sm text-gray-600">本日の記録</div>
+      <div class="flex gap-2">
+        <button id="btn-add-block" class="px-3 py-2 rounded-xl bg-gray-900 text-white">ブロック追加</button>
+        <button id="btn-save-workout" class="px-3 py-2 rounded-xl bg-white border">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="blocks" class="space-y-4"></div>
+</section>
 
 <!-- HISTORY -->
 <section id="view-history" class="hidden">
   <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
     <div class="grid grid-cols-2 gap-2">
-      <div>
-        <label class="text-xs text-gray-500">開始日</label>
-        <input id="filter-start" type="date" class="w-full border rounded-lg px-3 py-2">
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500 block">開始日</label>
+        <input id="filter-start" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
       </div>
-      <div>
-        <label class="text-xs text-gray-500">終了日</label>
-        <input id="filter-end" type="date" class="w-full border rounded-lg px-3 py-2">
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500 block">終了日</label>
+        <input id="filter-end" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
       </div>
-      <div>
+      <div class="min-w-0">
         <label class="text-xs text-gray-500">部位</label>
         <select id="filter-part" class="w-full border rounded-lg px-3 py-2"></select>
       </div>
-      <div>
+      <div class="min-w-0">
         <label class="text-xs text-gray-500">種目名</label>
         <select id="filter-ex" class="w-full border rounded-lg px-3 py-2"></select>
       </div>
-      <div>
+      <div class="min-w-0">
         <label class="text-xs text-gray-500">器具</label>
         <select id="filter-eq" class="w-full border rounded-lg px-3 py-2"></select>
       </div>
-      <div>
+      <div class="min-w-0">
         <label class="text-xs text-gray-500">アタッチメント</label>
         <select id="filter-att" class="w-full border rounded-lg px-3 py-2"></select>
       </div>
-      <div>
+      <div class="min-w-0">
         <label class="text-xs text-gray-500">角度</label>
         <select id="filter-ang" class="w-full border rounded-lg px-3 py-2"></select>
       </div>
@@ -157,7 +168,7 @@
 
     <div class="border-t pt-3">
       <div class="text-sm font-semibold mb-1">種目マスタ（部位ひも付け）</div>
-      <div class="text-xs text-gray-500 mb-2">行追加→種目名入力→対象部位にチェック。保存で反映。</div>
+      <div class="text-xs text-gray-500 mb-2">行追加→種目名入力→対象部位にチェック。保存で反映。表示は常に「あいうえお順」。</div>
       <div class="overflow-auto">
         <table class="w-full text-sm border">
           <thead>
@@ -196,7 +207,7 @@
 
 
   <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200">
-    <div class="max-w-3xl mx-auto px-6">
+    <div class="max-w-3xl mx-auto wrap-pad px-6">
       <div class="grid grid-cols-3">
         <button data-route="#/home" class="tab-btn flex flex-col items-center py-2 gap-0.5">
           <span class="text-base">🏠</span>
@@ -221,7 +232,7 @@
   <template id="tpl-block">
     <div class="block-card rounded-2xl border bg-white p-3 shadow-soft space-y-3">
       <div class="flex items-center justify-between gap-2">
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 min-w-0">
           <span class="text-xs text-gray-500">ブロック</span>
           <span class="block-index text-sm font-semibold">#1</span>
           <span class="text-[11px] text-gray-500 block-part"></span>
@@ -233,7 +244,7 @@
       </div>
 
 
-  <!-- Selected exercises meta + per-ex options -->
+  <!-- 選択済み種目（iPhone最適化：種目名は1行、器具/アタッチ/角度は改行） -->
   <div class="ex-config space-y-3"></div>
 
   <!-- Sets area -->
@@ -250,9 +261,6 @@
 </div>
 
   </template>
-
-
-  <!-- iPhone対応：種目名は1行、器具/アタッチ/角度は改行して別行 -->
 
 
   <template id="tpl-ex-config-row">
@@ -281,9 +289,6 @@
       <div class="ex-items space-y-2"></div>
     </div>
   </template>
-
-
-  <!-- iPhone対応：種目名行→改行→入力行 -->
 
 
   <template id="tpl-ex-item-row">
@@ -322,9 +327,11 @@
       const s = v==null?'':String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
     }).join(',')).join('\n');
     const escapeHtml = s => String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    const sortJa = (arr)=> arr.slice().sort((a,b)=> String(a).localeCompare(String(b),'ja',{usage:'sort',sensitivity:'base'}));
+    const sortExerciseMapJa = (map)=> map.slice().sort((a,b)=> (a.name||'').localeCompare(b.name||'','ja',{usage:'sort',sensitivity:'base'}));
 
     // ===== Storage with Schema =====
-    const SCHEMA_VERSION = 3; // iPhone layout + expanded exercises + block.part + date input
+    const SCHEMA_VERSION = 4; // iPhone tune + ja sort + date bar & filters width
     const NS = 'workout-app';
     const store = {
       get(key, d=null){ try{ const raw = localStorage.getItem(NS+':'+key); if(!raw) return d; const obj = JSON.parse(raw); return obj&&obj.v===SCHEMA_VERSION ? obj.data : d; }catch{ return d; } },
@@ -338,74 +345,74 @@
       equip: ['バーベル','ダンベル','マシン','ケーブル','自重'],
       attach: ['なし','ストレートバー','Vバー','ロープ','Dハンドル','EZバー'],
       angle: ['なし','フラット','インクライン','デクライン','ナチュラル'],
-      // メジャー種目を網羅（必要に応じて削除可）
+      // メジャー種目（必要に応じて削除可）
       exerciseMap: [
         // 胸
-        { name:'ベンチプレス', parts:['胸'] },
-        { name:'インクラインベンチプレス', parts:['胸','肩'] },
-        { name:'デクラインベンチプレス', parts:['胸'] },
-        { name:'ダンベルベンチプレス', parts:['胸'] },
         { name:'インクラインダンベルプレス', parts:['胸','肩'] },
-        { name:'ダンベルフライ', parts:['胸'] },
+        { name:'インクラインベンチプレス', parts:['胸','肩'] },
         { name:'ケーブルクロスオーバー', parts:['胸'] },
-        { name:'ペックデックフライ', parts:['胸'] },
-        { name:'プッシュアップ', parts:['胸'] },
+        { name:'ダンベルベンチプレス', parts:['胸'] },
+        { name:'ダンベルフライ', parts:['胸'] },
+        { name:'デクラインベンチプレス', parts:['胸'] },
         { name:'ディップス(胸)', parts:['胸'] },
+        { name:'プッシュアップ', parts:['胸'] },
+        { name:'ペックデックフライ', parts:['胸'] },
+        { name:'ベンチプレス', parts:['胸'] },
         // 背中
+        { name:'Tバーロー', parts:['背中'] },
+        { name:'シーテッドロー', parts:['背中'] },
+        { name:'ストレートアームプルダウン', parts:['背中'] },
+        { name:'チンアップ', parts:['背中','腕'] },
         { name:'デッドリフト', parts:['背中','脚'] },
         { name:'バーベルローイング', parts:['背中'] },
         { name:'ペンドレイロー', parts:['背中'] },
-        { name:'ワンハンドダンベルロー', parts:['背中'] },
-        { name:'Tバーロー', parts:['背中'] },
-        { name:'シーテッドロー', parts:['背中'] },
-        { name:'ラットプルダウン(ワイド)', parts:['背中'] },
-        { name:'ラットプルダウン(クローズ)', parts:['背中'] },
         { name:'プルアップ', parts:['背中'] },
-        { name:'チンアップ', parts:['背中','腕'] },
-        { name:'ストレートアームプルダウン', parts:['背中'] },
         { name:'フェイスプル', parts:['背中','肩'] },
+        { name:'ラットプルダウン(クローズ)', parts:['背中'] },
+        { name:'ラットプルダウン(ワイド)', parts:['背中'] },
+        { name:'ワンハンドダンベルロー', parts:['背中'] },
         // 肩
-        { name:'ショルダープレス(バーベル)', parts:['肩'] },
-        { name:'ショルダープレス(ダンベル)', parts:['肩'] },
+        { name:'アップライトロー', parts:['肩'] },
         { name:'アーノルドプレス', parts:['肩'] },
+        { name:'ショルダープレス(ダンベル)', parts:['肩'] },
+        { name:'ショルダープレス(バーベル)', parts:['肩'] },
         { name:'サイドレイズ', parts:['肩'] },
         { name:'フロントレイズ', parts:['肩'] },
         { name:'リアレイズ(リバースペックデック)', parts:['肩','背中'] },
-        { name:'アップライトロー', parts:['肩'] },
-        // 腕（上腕二頭筋・三頭筋）
-        { name:'バイセプスカール(バーベル)', parts:['腕'] },
-        { name:'バイセプスカール(ダンベル)', parts:['腕'] },
-        { name:'ハンマーカール', parts:['腕'] },
-        { name:'プリーチャーカール', parts:['腕'] },
-        { name:'ケーブルカール', parts:['腕'] },
-        { name:'トライセプスプレスダウン', parts:['腕'] },
-        { name:'オーバーヘッドトライセプスエクステンション(ダンベル)', parts:['腕'] },
+        // 腕
         { name:'オーバーヘッドトライセプスエクステンション(ケーブル)', parts:['腕'] },
-        { name:'ライイングトライセプスエクステンション(スカルクラッシャー)', parts:['腕'] },
+        { name:'オーバーヘッドトライセプスエクステンション(ダンベル)', parts:['腕'] },
         { name:'クローズグリップベンチプレス', parts:['腕','胸'] },
+        { name:'ケーブルカール', parts:['腕'] },
+        { name:'スカルクラッシャー(ライイングトライセプスエクステンション)', parts:['腕'] },
+        { name:'ハンマーカール', parts:['腕'] },
+        { name:'バイセプスカール(ダンベル)', parts:['腕'] },
+        { name:'バイセプスカール(バーベル)', parts:['腕'] },
+        { name:'トライセプスプレスダウン', parts:['腕'] },
         { name:'ディップス(上腕三頭筋)', parts:['腕'] },
-        // 脚・臀部
-        { name:'バックスクワット', parts:['脚'] },
-        { name:'フロントスクワット', parts:['脚'] },
-        { name:'レッグプレス', parts:['脚'] },
+        { name:'プリーチャーカール', parts:['腕'] },
+        // 脚
+        { name:'カーフレイズ(シーテッド)', parts:['脚'] },
+        { name:'カーフレイズ(スタンディング)', parts:['脚'] },
+        { name:'スクワット(フロント)', parts:['脚'] },
+        { name:'スクワット(バック)', parts:['脚'] },
         { name:'ハックスクワット', parts:['脚'] },
         { name:'ブルガリアンスクワット', parts:['脚'] },
-        { name:'ランジ', parts:['脚'] },
-        { name:'レッグエクステンション', parts:['脚'] },
-        { name:'レッグカール(ライイング)', parts:['脚'] },
-        { name:'レッグカール(シーテッド)', parts:['脚'] },
-        { name:'ルーマニアンデッドリフト', parts:['脚','背中'] },
         { name:'ヒップスラスト', parts:['脚'] },
-        { name:'カーフレイズ(スタンディング)', parts:['脚'] },
-        { name:'カーフレイズ(シーテッド)', parts:['脚'] },
+        { name:'ランジ', parts:['脚'] },
+        { name:'ルーマニアンデッドリフト', parts:['脚','背中'] },
+        { name:'レッグエクステンション', parts:['脚'] },
+        { name:'レッグカール(シーテッド)', parts:['脚'] },
+        { name:'レッグカール(ライイング)', parts:['脚'] },
+        { name:'レッグプレス', parts:['脚'] },
         // 腹筋
-        { name:'クランチ', parts:['腹筋'] },
-        { name:'ハンギングレッグレイズ', parts:['腹筋'] },
-        { name:'ケーブルクランチ', parts:['腹筋'] },
-        { name:'プランク', parts:['腹筋'] },
         { name:'アブローラー', parts:['腹筋'] },
-        { name:'ロシアンツイスト', parts:['腹筋'] },
-        { name:'リバースクランチ', parts:['腹筋'] }
+        { name:'クランチ', parts:['腹筋'] },
+        { name:'ケーブルクランチ', parts:['腹筋'] },
+        { name:'ハンギングレッグレイズ', parts:['腹筋'] },
+        { name:'プランク', parts:['腹筋'] },
+        { name:'リバースクランチ', parts:['腹筋'] },
+        { name:'ロシアンツイスト', parts:['腹筋'] }
       ]
     };
 
@@ -417,13 +424,21 @@
       chart: null
     };
 
-    // ===== Init / Migration (best-effort) =====
+    // ===== Init =====
     function initData(){
       let lists = store.get('lists');
-      if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); store.set('lists', lists); }
+      if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); }
+      // ensure defaults + sort bases
       if(lists.attach[0] !== 'なし'){ lists.attach = ['なし', ...lists.attach.filter(x=>x!=='なし')]; }
       if(lists.angle[0] !== 'なし'){ lists.angle = ['なし', ...lists.angle.filter(x=>x!=='なし')]; }
+      // 常に表示はあいうえお順で並べる（保存順は保持）
+      lists.parts = sortJa(lists.parts);
+      lists.equip = sortJa(lists.equip);
+      lists.attach = sortJa(lists.attach);
+      lists.angle = sortJa(lists.angle);
+      lists.exerciseMap = sortExerciseMapJa(lists.exerciseMap);
       state.lists = lists;
+      store.set('lists', lists);
 
       let workouts = store.get('workouts', []);
       state.workouts = workouts;
@@ -464,7 +479,7 @@
     // ===== Stats =====
     function computeTrainingDays(rangeDays){
       const cutoff = Date.now() - rangeDays*24*3600*1000;
-      const days = new Set(state.workouts.filter(w => new Date(w.date).getTime() >= cutoff).map(w => w.date));
+      const days = new Set(state.workouts.filter(w => new Date(w.date||todayISO()).getTime() >= cutoff).map(w => w.date||todayISO()));
       return days.size;
     }
 
@@ -518,8 +533,8 @@
 
       // ex config rows
       const cfgWrap = frag.querySelector('.ex-config');
-      block.exs.forEach((ex, exIdx)=>{
-        cfgWrap.appendChild(renderExConfigRow(block, ex, exIdx));
+      block.exs.forEach((ex)=>{
+        cfgWrap.appendChild(renderExConfigRow(block, ex));
       });
 
       // sets area
@@ -549,7 +564,10 @@
 
     function openExerciseChooser(blockIdx){
       const part = state.inProgress.blocks[blockIdx].part || state.inProgress.part;
-      const allowed = state.lists.exerciseMap.filter(e=> e.parts.includes(part)).map(e=> e.name);
+      // 部位紐付けされた種目をあいうえお順で
+      const allowed = sortJa(
+        state.lists.exerciseMap.filter(e=> Array.isArray(e.parts) && e.parts.includes(part)).map(e=> e.name)
+      );
       const current = new Set((state.inProgress.blocks[blockIdx].exs||[]).map(e=> e.name));
 
       const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
@@ -588,6 +606,7 @@
     function applySelectedExercises(blockIdx, names){
       const block = state.inProgress.blocks[blockIdx];
       const before = block.exs || [];
+      // exs自体の表示順は選択順を維持（管理上はそれでOK）
       block.exs = names.map(name=>{
         const found = before.find(e=> e.name===name);
         return found || { name, eq: state.lists.equip[0]||'', att: 'なし', ang: 'なし' };
@@ -613,7 +632,7 @@
       persist(); renderHome();
     }
 
-    function renderExConfigRow(block, ex, exIdx){
+    function renderExConfigRow(block, ex){
       const node = document.importNode($('#tpl-ex-config-row').content, true);
       node.querySelector('.ex-name').textContent = ex.name;
       fillSelect(node.querySelector('.ex-eq'), state.lists.equip, ex.eq || state.lists.equip[0] || '', v=>{ ex.eq=v; persist(); });
@@ -717,11 +736,13 @@
     }
 
     function fillSelect(sel, items, value, onChange){
+      // 表示は常にあいうえお順
+      const ordered = sortJa(items);
       sel.innerHTML = '';
-      items.forEach(v=>{
+      ordered.forEach(v=>{
         const opt = document.createElement('option'); opt.value=v; opt.textContent=v; sel.appendChild(opt);
       });
-      sel.value = value || items[0] || '';
+      sel.value = value || ordered[0] || '';
       sel.onchange = e=> onChange(e.target.value);
     }
 
@@ -738,7 +759,6 @@
       copy.blocks = copy.blocks.filter(b=> (b.exs||[]).length>0 && (b.sets||[]).length>0);
       if(copy.blocks.length===0){ alert('記録が空です。セットを入力してください。'); return; }
       copy.id = 'w_'+Date.now();
-      // dateはinProgressのものを使用
       state.workouts.push(copy);
       state.inProgress = { date: state.inProgress.date || todayISO(), part: state.inProgress.part, blocks: [] };
       persist(); alert('保存しました'); renderHome();
@@ -777,11 +797,11 @@
 
     // ===== History =====
     function renderHistory(){
-      const parts = ['(指定なし)', ...state.lists.parts];
-      const exs = ['(指定なし)', ...unique(flattenSets().map(r=>r.exercise)).sort()];
-      const eqs = ['(指定なし)', ...state.lists.equip];
-      const atts = ['(指定なし)', ...state.lists.attach];
-      const angs = ['(指定なし)', ...state.lists.angle];
+      const parts = ['(指定なし)', ...sortJa(state.lists.parts)];
+      const exs = ['(指定なし)', ...sortJa(unique(flattenSets().map(r=>r.exercise)))];
+      const eqs = ['(指定なし)', ...sortJa(state.lists.equip)];
+      const atts = ['(指定なし)', ...sortJa(state.lists.attach)];
+      const angs = ['(指定なし)', ...sortJa(state.lists.angle)];
       fillSelect($('#filter-part'), parts, '(指定なし)', ()=>{});
       fillSelect($('#filter-ex'), exs, '(指定なし)', ()=>{});
       fillSelect($('#filter-eq'), eqs, '(指定なし)', ()=>{});
@@ -889,16 +909,17 @@
 
     // ===== Settings (checkbox matrix) =====
     function renderSettings(){
-      $('#list-parts').value = state.lists.parts.join('\n');
-      $('#list-equip').value = state.lists.equip.join('\n');
-      $('#list-attach').value = state.lists.attach.join('\n');
-      $('#list-angle').value = state.lists.angle.join('\n');
+      $('#list-parts').value = sortJa(state.lists.parts).join('\n');
+      $('#list-equip').value = sortJa(state.lists.equip).join('\n');
+      $('#list-attach').value = sortJa(state.lists.attach).join('\n');
+      $('#list-angle').value = sortJa(state.lists.angle).join('\n');
 
       const tbody = $('#exercise-table-body');
       tbody.innerHTML = '';
-      const parts = state.lists.parts.slice();
+      const parts = sortJa(state.lists.parts);
 
-      state.lists.exerciseMap.forEach((row)=> {
+      // 表示は常に種目名あいうえお順
+      sortExerciseMapJa(state.lists.exerciseMap).forEach((row)=> {
         tbody.appendChild(renderExerciseRow(row, parts));
       });
 
@@ -908,7 +929,7 @@
         tbody.appendChild(renderExerciseRow(newRow, parts));
       };
 
-      // save/reset/export/import/clear are bound in bindGlobalUI
+      // actions are bound globally
     }
 
     function renderExerciseRow(row, parts){
@@ -967,15 +988,17 @@
 
     function saveLists(){
       const parseLines = v => v.split('\n').map(s=>s.trim()).filter(Boolean);
-      state.lists.parts = parseLines($('#list-parts').value);
-      state.lists.equip = parseLines($('#list-equip').value);
-      state.lists.attach = parseLines($('#list-attach').value);
+      state.lists.parts = sortJa(parseLines($('#list-parts').value));
+      state.lists.equip = sortJa(parseLines($('#list-equip').value));
+      state.lists.attach = sortJa(parseLines($('#list-attach').value));
       if(state.lists.attach[0] !== 'なし'){ state.lists.attach = ['なし', ...state.lists.attach.filter(x=>x!=='なし')]; }
-      state.lists.angle = parseLines($('#list-angle').value);
+      state.lists.angle = sortJa(parseLines($('#list-angle').value));
       if(state.lists.angle[0] !== 'なし'){ state.lists.angle = ['なし', ...state.lists.angle.filter(x=>x!=='なし')]; }
 
-      // exerciseMap は row 参照が生きているためそのまま保存。空行は掃除。
-      state.lists.exerciseMap = state.lists.exerciseMap.filter(r=> (r.name && r.name.trim().length>0));
+      // 種目マップ：空行は掃除。内部順は保存時にもjaソートしておく
+      state.lists.exerciseMap = sortExerciseMapJa(
+        state.lists.exerciseMap.filter(r=> (r.name && r.name.trim().length>0))
+      );
 
       persist();
       alert('保存しました');
@@ -986,6 +1009,12 @@
       state.lists = JSON.parse(JSON.stringify(DEFAULTS));
       if(state.lists.attach[0] !== 'なし'){ state.lists.attach = ['なし', ...state.lists.attach.filter(x=>x!=='なし')]; }
       if(state.lists.angle[0] !== 'なし'){ state.lists.angle = ['なし', ...state.lists.angle.filter(x=>x!=='なし')]; }
+      // 初期表示も並び替え
+      state.lists.parts = sortJa(state.lists.parts);
+      state.lists.equip = sortJa(state.lists.equip);
+      state.lists.attach = sortJa(state.lists.attach);
+      state.lists.angle = sortJa(state.lists.angle);
+      state.lists.exerciseMap = sortExerciseMapJa(state.lists.exerciseMap);
       persist(); renderSettings(); alert('デフォルトに復元しました');
     }
 
