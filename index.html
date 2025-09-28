@@ -184,12 +184,9 @@
 
     const partOptions = partOrder().map(p=>`<option value="${p}" ${p===selectedPart?'selected':''}>${p}</option>`).join("");
     const exOptions = ['<option value="" disabled selected>選択してください</option>', ...exList.map(n=>`<option value="${n}">${n}</option>`)].join("");
-    const instOptions = ["", ...s.instruments]
-      .map(n => `<option value="${n}" ${x.instrument===n?"selected":""}>${n||"指定なし"}</option>`).join("");
-    const attOptions = ["", ...s.attachments]
-      .map(n => `<option value="${n}" ${x.attachment===n?"selected":""}>${n||"指定なし"}</option>`).join("");
-    const angOptions = ["", ...s.angles]
-      .map(n => `<option value="${n}" ${x.angle===n?"selected":""}>${n||"指定なし"}</option>`).join("");
+    const instOptions = s.instruments.map(n => `<option value="${n}">${n}</option>`).join("");
+    const attOptions  = s.attachments.map(n => `<option value="${n}">${n}</option>`).join("");
+    const angOptions  = s.angles.map(n => `<option value="${n}">${n}</option>`).join("");
 
     return `
       <section class="space-y-4">
@@ -596,9 +593,12 @@ openEditModal(id);
 function openEditModal(id){
 const x=getLogs().find(l=>l.id===id); if(!x) return;
 const s=getSettings();
-const instOptions=["",...s.instruments].map(n=><option value="${n}" ${x.instrument===n?"selected":""}>${n||"指定なし"}</option>).join("");
-const attOptions=["",...s.attachments].map(n=><option value="${n}" ${x.attachment===n?"selected":""}>${n||"指定なし"}</option>).join("");
-const angOptions=["",...s.angles].map(n=><option value="${n}" ${x.angle===n?"selected":""}>${n||"指定なし"}</option>).join("");
+const instOptions = ["", ...s.instruments]
+  .map(n => `<option value="${n}" ${x.instrument===n?"selected":""}>${n||"指定なし"}</option>`).join("");
+const attOptions = ["", ...s.attachments]
+  .map(n => `<option value="${n}" ${x.attachment===n?"selected":""}>${n||"指定なし"}</option>`).join("");
+const angOptions = ["", ...s.angles]
+  .map(n => `<option value="${n}" ${x.angle===n?"selected":""}>${n||"指定なし"}</option>`).join("");
 
 const m=$("#modal");
 m.innerHTML = `
