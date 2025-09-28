@@ -79,7 +79,9 @@
   const safeParse = (j, fb)=>{ try { return JSON.parse(j); } catch { return fb; } };
   const load = (k, fb)=>{ const r=localStorage.getItem(k); return r==null?fb:safeParse(r,fb); };
   const save = (k, v)=> localStorage.setItem(k, JSON.stringify(v));
-  const uid  = ()=> crypto.randomUUID();
+  const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : ("id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,8));
 
   const PARTS_DEFAULT = {
     "胸":   ["ベンチプレス","インクラインベンチプレス","ダンベルプレス","ダンベルフライ","ケーブルクロス"],
@@ -128,12 +130,12 @@
       save(KEYS.SCHEMA, SCHEMA_VERSION);
     } else {
       const s = getSettings();
-      s.parts ||= PARTS_DEFAULT;
-      s.instruments ||= DEFAULT_INSTRUMENTS;
-      s.attachments ||= DEFAULT_ATTACHMENTS;
-      s.angles ||= DEFAULT_ANGLES;
-      s.defaultPart ||= Object.keys(s.parts)[0];
-      s.defaultDateMode ||= "today";
+      if (s.parts == null) s.parts = PARTS_DEFAULT;
+      if (s.instruments == null) s.instruments = DEFAULT_INSTRUMENTS;
+      if (s.attachments == null) s.attachments = DEFAULT_ATTACHMENTS;
+      if (s.angles == null) s.angles = DEFAULT_ANGLES;
+      if (s.defaultPart == null) s.defaultPart = Object.keys(s.parts)[0];
+      if (s.defaultDateMode == null) s.defaultDateMode = "today";
       if (s.autofillEnabled === undefined) s.autofillEnabled = true;
       save(KEYS.SETTINGS, s);
     }
@@ -343,11 +345,11 @@
   }
 
   function renderHistory(){
-    const r=$("#flt-range")?.value||"all";
-    const from=$("#flt-from")?.value||"1900-01-01";
-    const to=$("#flt-to")?.value||"2999-12-31";
-    const part=$("#flt-part")?.value||"";
-    const ex=$("#flt-ex")?.value||"";
+    const elR = $("#flt-range"); const r = elR ? elR.value : "all";
+    const elF = $("#flt-from");  const from = elF ? elF.value : "1900-01-01";
+    const elT = $("#flt-to");    const to   = elT ? elT.value : "2999-12-31";
+    const elP = $("#flt-part");  const part = elP ? elP.value : "";
+    const elE = $("#flt-ex");    const ex   = elE ? elE.value : "";
 
     let logs=getLogs().filter(l=>l.date>=from && l.date<=to);
     if(r==="7")  logs=logs.filter(l=>daysDiff(l.date)<=6);
@@ -746,7 +748,7 @@ $("#imp-json").addEventListener("change",(ev)=>{
 
 function logsToCSV(logs){
   const header = ["id","date","part","exercise","instrument","attachment","angle","weight","unit","repsSelf","repsAssist","note"];
-  const rows = logs.map(l => header.map(h => String(l[h] ?? "")));
+  const rows = logs.map(l => header.map(h => String((l[h] === null || l[h] === undefined) ? "" : l[h])));
   return [header, ...rows].map(r => r.map(csvCell).join(",")).join("\n");
 }
 function csvCell(s){
@@ -761,7 +763,8 @@ const sel=$("#f-ex"); if(!sel) return;
 const wasFocused=(document.activeElement===sel);
 if(wasFocused) sel.blur();
 
-const part=$("#f-part")?.value || getSettings().defaultPart;
+var elPart = $("#f-part");
+const part = elPart ? elPart.value : getSettings().defaultPart;
 const list=exercisesOf(part);
 const prev=sel.value || "";
 const optionsHtml = `<option value="" disabled ${prev && list.includes(prev) ? "" : "selected"}>選択してください</option>`
@@ -811,7 +814,8 @@ function render(){
   } else if (route === "history") {
     setActionBarVisible(false);
     renderHistory();
-    $("#flt-range")?.addEventListener("change", ()=>{
+    var elRange = $("#flt-range");
+    if (elRange) elRange.addEventListener("change", ()=>{
       const v=$("#flt-range").value;
       const today=new Date().toISOString().slice(0,10);
       const setFrom=d=>$("#flt-from").value=d;
@@ -820,7 +824,10 @@ function render(){
       else if(v==="30"){ setFrom(new Date(Date.now()-29*864e5).toISOString().slice(0,10)); setTo(today); }
       renderHistory();
     });
-    ["#flt-from","#flt-to","#flt-part","#flt-ex"].forEach(sel=> $(sel)?.addEventListener("change", renderHistory));
+    ["#flt-from","#flt-to","#flt-part","#flt-ex"].forEach(sel=>{
+      var el = $(sel);
+      if (el) el.addEventListener("change", renderHistory);
+    });
   } else if (route === "settings") {
     setActionBarVisible(false);
     bindSettings();
@@ -841,6 +848,15 @@ function escapeHtml(s){
 }
 
 // ====== PWA ======
+// 一時的に旧SWを解除（確認後に削除OK）
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then(rs => {
+    rs.forEach(r => r.unregister());
+    if (window.caches && caches.keys) {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+    }
+  });
+}
 (function registerPWA(){
 if(!("serviceWorker" in navigator)) return;
 const manifest = {
