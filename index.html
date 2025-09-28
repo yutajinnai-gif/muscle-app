@@ -789,6 +789,10 @@ b.onclick = ()=> navigate(b.getAttribute("data-tab"));
 
 function render(){
   hideError();
+  const root = document.querySelector("#view");
+  root.innerHTML = "<div style='padding:16px'>SELFTEST</div>";
+  return; // ← テスト後は削除
+}
   let route, root;
   try {
     route = currentRoute();
