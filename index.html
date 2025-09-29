@@ -325,16 +325,19 @@
   </template>
 
   <script>
-    (()=> {
-      const bar = document.getElementById('error-bar');
-      const text = document.getElementById('error-text');
-      const close = document.getElementById('error-close');
-      function show(msg){ text.textContent = String(msg||'Unknown error'); bar.classList.remove('hidden'); }
-      window.addEventListener('error', e=> show(e.message));
-      window.addEventListener('unhandledrejection', e=> show((e.reason&&e.reason.message)||e.reason));
-      close.addEventListener('click', ()=> bar.classList.add('hidden'));
-      window.__forceError = ()=> { throw new Error('Forced error'); };
-    })();
+    (()=> {
+      const bar = document.getElementById('error-bar');
+      const text = document.getElementById('error-text');
+      const close = document.getElementById('error-close');
+      if(!bar || !text || !close){
+        return;
+      }
+      function show(msg){ text.textContent = String(msg||'Unknown error'); bar.classList.remove('hidden'); }
+      window.addEventListener('error', e=> show(e.message));
+      window.addEventListener('unhandledrejection', e=> show((e.reason&&e.reason.message)||e.reason));
+      close.addEventListener('click', ()=> bar.classList.add('hidden'));
+      window.__forceError = ()=> { throw new Error('Forced error'); };
+    })();
 
     const $ = (sel, root=document)=> root.querySelector(sel);
     const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
