@@ -51,28 +51,9 @@
     .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(2px)}
     .modal-card{max-width:680px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:1rem}
-    .text-gray-500{color:#334155!important}
-    [data-theme="dark"] .text-gray-500{color:#d1d5db!important}
-    input[type="date"],
-    input[type="number"],
-    select{min-width:0}
-    .narrow-date{min-width:0}
-    #inp-date{width:100%}
-    .ex-sec{min-width:0}
-    .ex-form-field{display:flex;flex-direction:column;gap:0.25rem;min-width:0}
-    .ex-form-hint{font-size:11px;line-height:1.4}
-    .ex-config-grid{display:grid;gap:0.75rem;grid-template-columns:minmax(0,1fr)}
-    @media (min-width:640px){.ex-config-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
 <body class="text-gray-900 dark:text-gray-100" data-theme="auto">
-  <div id="error-bar" class="fixed top-0 left-0 right-0 z-50 hidden">
-    <div class="bg-red-600 text-white px-4 py-2 text-sm flex items-start gap-3">
-      <span class="font-semibold">Script error</span>
-      <span id="error-text" class="flex-1"></span>
-      <button id="error-close" class="underline">閉じる</button>
-    </div>
-  </div>
   <header class="sticky top-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-700">
     <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
       <h1 class="text-lg font-bold">筋トレ記録</h1>
@@ -106,159 +87,160 @@
       </div>
     </section>
 
-    <section id="view-workout" class="hidden">
-      <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
-        <div class="flex items-center justify-between">
-          <div class="text-sm">
-            <div class="text-[11px] text-gray-500">日付</div>
-            <div id="workout-date" class="font-semibold">-</div>
-          </div>
-          <div class="text-sm">
-            <div class="text-[11px] text-gray-500">部位</div>
-            <div id="workout-part" class="font-semibold">-</div>
-          </div>
-          <div class="flex gap-2">
-            <button id="btn-back-to-home" class="px-3 py-2 rounded-xl border text-sm">戻る</button>
-            <button id="btn-save-workout" class="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm">保存</button>
-          </div>
-        </div>
-        <div class="flex items-center justify-between">
-          <div class="text-sm text-gray-600">ブロック</div>
-          <div class="flex gap-2">
-            <button id="btn-add-block" class="px-3 py-2 rounded-xl border text-sm bg-white">ブロック追加</button>
-          </div>
-        </div>
+<section id="view-workout" class="hidden">
+  <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="text-sm">
+        <div class="text-[11px] text-gray-500">日付</div>
+        <div id="workout-date" class="font-semibold">-</div>
       </div>
-      <div id="blocks" class="space-y-4"></div>
-    </section>
-
-    <section id="view-history" class="hidden">
-      <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
-        <div class="grid grid-cols-2 gap-2">
-          <div class="min-w-0">
-            <label class="text-xs text-gray-500 block">開始日</label>
-            <input id="filter-start" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
-          </div>
-          <div class="min-w-0">
-            <label class="text-xs text-gray-500 block">終了日</label>
-            <input id="filter-end" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
-          </div>
-          <div class="min-w-0">
-            <label class="text-xs text-gray-500">部位</label>
-            <select id="filter-part" class="w-full border rounded-lg px-3 py-2"></select>
-          </div>
-          <div class="min-w-0">
-            <label class="text-xs text-gray-500">種目名</label>
-            <select id="filter-ex" class="w-full border rounded-lg px-3 py-2"></select>
-          </div>
-          <div class="min-w-0">
-            <label class="text-xs text-gray-500">器具</label>
-            <select id="filter-eq" class="w-full border rounded-lg px-3 py-2"></select>
-          </div>
-          <div class="min-w-0">
-            <label class="text-xs text-gray-500">アタッチメント</label>
-            <select id="filter-att" class="w-full border rounded-lg px-3 py-2"></select>
-          </div>
-          <div class="min-w-0">
-            <label class="text-xs text-gray-500">角度</label>
-            <select id="filter-ang" class="w-full border rounded-lg px-3 py-2"></select>
-          </div>
-          <div class="min-w-0">
-            <label class="text-xs text-gray-500">ポジション</label>
-            <select id="filter-pos" class="w-full border rounded-lg px-3 py-2"></select>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <button id="btn-apply-filter" class="px-3 py-2 rounded-xl bg-gray-900 text-white">絞り込み</button>
-          <button id="btn-clear-filter" class="px-3 py-2 rounded-xl bg-white border">クリア</button>
-        </div>
+      <div class="text-sm">
+        <div class="text-[11px] text-gray-500">部位</div>
+        <div id="workout-part" class="font-semibold">-</div>
       </div>
-
-      <div id="history-chart-wrap" class="rounded-2xl border bg-white p-3 shadow-soft mt-3 hidden">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-sm text-gray-600">1RM推移</div>
-          <button id="btn-back-to-home-from-simple" class="px-3 py-1.5 rounded-lg border hidden">入力画面に戻る</button>
-        </div>
-        <canvas id="history-chart" height="160"></canvas>
+      <div class="flex gap-2">
+        <button id="btn-back-to-home" class="px-3 py-2 rounded-xl border text-sm">戻る</button>
+        <button id="btn-save-workout" class="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm">保存</button>
       </div>
+    </div>
+    <div class="flex items-center justify-between">
+      <div class="text-sm text-gray-600">ブロック</div>
+      <div class="flex gap-2">
+        <button id="btn-add-block" class="px-3 py-2 rounded-xl border text-sm bg-white">ブロック追加</button>
+      </div>
+    </div>
+  </div>
+  <div id="blocks" class="space-y-4"></div>
+</section>
 
-      <div id="history-list" class="mt-3 space-y-3"></div>
-    </section>
-    <section id="view-settings" class="hidden">
-      <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-4">
+<section id="view-history" class="hidden">
+  <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
+    <div class="grid grid-cols-2 gap-2">
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500 block">開始日</label>
+        <input id="filter-start" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
+      </div>
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500 block">終了日</label>
+        <input id="filter-end" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
+      </div>
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500">部位</label>
+        <select id="filter-part" class="w-full border rounded-lg px-3 py-2"></select>
+      </div>
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500">種目名</label>
+        <select id="filter-ex" class="w-full border rounded-lg px-3 py-2"></select>
+      </div>
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500">器具</label>
+        <select id="filter-eq" class="w-full border rounded-lg px-3 py-2"></select>
+      </div>
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500">アタッチメント</label>
+        <select id="filter-att" class="w-full border rounded-lg px-3 py-2"></select>
+      </div>
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500">角度</label>
+        <select id="filter-ang" class="w-full border rounded-lg px-3 py-2"></select>
+      </div>
+      <div class="min-w-0">
+        <label class="text-xs text-gray-500">ポジション</label>
+        <select id="filter-pos" class="w-full border rounded-lg px-3 py-2"></select>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button id="btn-apply-filter" class="px-3 py-2 rounded-xl bg-gray-900 text-white">絞り込み</button>
+      <button id="btn-clear-filter" class="px-3 py-2 rounded-xl bg-white border">クリア</button>
+    </div>
+  </div>
+
+  <div id="history-chart-wrap" class="rounded-2xl border bg-white p-3 shadow-soft mt-3 hidden">
+    <div class="flex items-center justify-between mb-2">
+      <div class="text-sm text-gray-600">1RM推移</div>
+      <button id="btn-back-to-home-from-simple" class="px-3 py-1.5 rounded-lg border hidden">入力画面に戻る</button>
+    </div>
+    <canvas id="history-chart" height="160"></canvas>
+  </div>
+
+  <div id="history-list" class="mt-3 space-y-3"></div>
+</section>
+
+<section id="view-settings" class="hidden">
+  <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-4">
+    <div>
+      <div class="text-sm font-semibold mb-1">リスト編集</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <div class="text-sm font-semibold mb-1">リスト編集</div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="text-xs text-gray-500">部位（1行1項目）</label>
-              <textarea id="list-parts" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-            </div>
-            <div>
-              <label class="text-xs text-gray-500">器具（1行1項目）</label>
-              <textarea id="list-equip" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-            </div>
-            <div>
-              <label class="text-xs text-gray-500">アタッチメント（1行1項目／先頭は「なし」を推奨）</label>
-              <textarea id="list-attach" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-            </div>
-            <div>
-              <label class="text-xs text-gray-500">角度（1行1項目）</label>
-              <textarea id="list-angle" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-            </div>
-            <div>
-              <label class="text-xs text-gray-500">ポジション（1行1項目）</label>
-              <textarea id="list-position" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-            </div>
-          </div>
+          <label class="text-xs text-gray-500">部位（1行1項目）</label>
+          <textarea id="list-parts" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
-
-        <div class="border-t pt-3">
-          <div class="text-sm font-semibold mb-1">種目マスタ（部位別管理）</div>
-          <p class="text-xs text-gray-500 mb-2">※ 種目名は器具名や角度名を含めない形式。表示は常にあいうえお順。削除は確認ポップアップあり。</p>
-          <div id="part-boxes" class="space-y-3"></div>
-          <div class="flex gap-2 mt-2">
-            <button id="btn-save-lists" class="px-3 py-2 rounded-xl bg-gray-900 text-white">保存</button>
-            <button id="btn-reset-defaults" class="px-3 py-2 rounded-xl bg-white border">デフォルト復元</button>
-          </div>
+        <div>
+          <label class="text-xs text-gray-500">器具（1行1項目）</label>
+          <textarea id="list-equip" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
-
-        <div class="border-t pt-3">
-          <div class="text-sm font-semibold mb-1">バックアップ</div>
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <label class="text-sm">自動バックアップ</label>
-              <input id="bk-auto" type="checkbox" class="w-5 h-5">
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="text-xs text-gray-500">頻度（分）</label>
-                <input id="bk-frequency" type="number" min="5" class="w-full border rounded px-2 py-1" />
-              </div>
-              <div class="text-xs text-gray-500 flex items-end">最終: <span id="bk-last" class="ml-1">-</span></div>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button id="bk-choose" class="px-3 py-2 rounded-xl border">保存先を選ぶ</button>
-              <button id="bk-now" class="px-3 py-2 rounded-xl border">今すぐバックアップ</button>
-              <button id="bk-restore" class="px-3 py-2 rounded-xl border">バックアップから復元</button>
-            </div>
-            <div class="text-xs text-gray-500">iPhoneでは「今すぐバックアップ」→共有→Files（iCloud Drive）に保存で同期可能。</div>
-          </div>
+        <div>
+          <label class="text-xs text-gray-500">アタッチメント（1行1項目／先頭は「なし」を推奨）</label>
+          <textarea id="list-attach" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
-
-        <div class="border-t pt-3">
-          <div class="text-sm font-semibold mb-1">データ管理</div>
-          <div class="flex flex-wrap gap-2">
-            <button id="btn-export-csv" class="px-3 py-2 rounded-xl bg-white border">CSVエクスポート</button>
-            <label class="px-3 py-2 rounded-xl bg-white border cursor-pointer">
-              CSVインポート
-              <input id="input-import-csv" type="file" accept=".csv,text/csv" class="hidden">
-            </label>
-            <button id="btn-clear-data" class="px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200">全データ削除</button>
-          </div>
-          <p class="text-xs text-gray-500 mt-2">CSV列: date,part,exercise,equipment,attachment,angle,position,setIndex,warmup,weight,repsSelf,repsAssist,durationSec,note,oneRM</p>
+        <div>
+          <label class="text-xs text-gray-500">角度（1行1項目）</label>
+          <textarea id="list-angle" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500">ポジション（1行1項目）</label>
+          <textarea id="list-position" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
         </div>
       </div>
-    </section>
+    </div>
+
+    <div class="border-t pt-3">
+      <div class="text-sm font-semibold mb-1">種目マスタ（部位別管理）</div>
+      <p class="text-xs text-gray-500 mb-2">※ 種目名は器具名や角度名を含めない形式。表示は常にあいうえお順。削除は確認ポップアップあり。</p>
+      <div id="part-boxes" class="space-y-3"></div>
+      <div class="flex gap-2 mt-2">
+        <button id="btn-save-lists" class="px-3 py-2 rounded-xl bg-gray-900 text-white">保存</button>
+        <button id="btn-reset-defaults" class="px-3 py-2 rounded-xl bg-white border">デフォルト復元</button>
+      </div>
+    </div>
+
+    <div class="border-t pt-3">
+      <div class="text-sm font-semibold mb-1">バックアップ</div>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <label class="text-sm">自動バックアップ</label>
+          <input id="bk-auto" type="checkbox" class="w-5 h-5">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-gray-500">頻度（分）</label>
+            <input id="bk-frequency" type="number" min="5" class="w-full border rounded px-2 py-1" />
+          </div>
+          <div class="text-xs text-gray-500 flex items-end">最終: <span id="bk-last" class="ml-1">-</span></div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button id="bk-choose" class="px-3 py-2 rounded-xl border">保存先を選ぶ</button>
+          <button id="bk-now" class="px-3 py-2 rounded-xl border">今すぐバックアップ</button>
+          <button id="bk-restore" class="px-3 py-2 rounded-xl border">バックアップから復元</button>
+        </div>
+        <div class="text-xs text-gray-500">iPhoneでは「今すぐバックアップ」→共有→Files（iCloud Drive）に保存で同期可能。</div>
+      </div>
+    </div>
+
+    <div class="border-t pt-3">
+      <div class="text-sm font-semibold mb-1">データ管理</div>
+      <div class="flex flex-wrap gap-2">
+        <button id="btn-export-csv" class="px-3 py-2 rounded-xl bg-white border">CSVエクスポート</button>
+        <label class="px-3 py-2 rounded-xl bg-white border cursor-pointer">
+          CSVインポート
+          <input id="input-import-csv" type="file" accept=".csv,text/csv" class="hidden">
+        </label>
+        <button id="btn-clear-data" class="px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200">全データ削除</button>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">CSV列: date,part,exercise,equipment,attachment,angle,position,setIndex,warmup,weight,repsSelf,repsAssist,durationSec,note,oneRM</p>
+    </div>
+  </div>
+</section>
 
   </main>
 
@@ -306,29 +288,13 @@
   </template>
 
   <template id="tpl-ex-config-row">
-    <div class="ex-config-row space-y-2">
+    <div class="ex-config-row space-y-1">
       <div class="text-sm font-semibold ex-name">種目名</div>
-      <div class="ex-config-grid">
-        <div class="ex-form-field">
-          <label class="text-xs font-medium text-gray-600 dark:text-gray-300">器具</label>
-          <select class="ex-eq border rounded-md px-2 py-1 w-full"></select>
-          <p class="ex-form-hint text-gray-500">使用するマシンやフリーウェイトの種類</p>
-        </div>
-        <div class="ex-form-field">
-          <label class="text-xs font-medium text-gray-600 dark:text-gray-300">アタッチメント</label>
-          <select class="ex-att border rounded-md px-2 py-1 w-full"></select>
-          <p class="ex-form-hint text-gray-500">ケーブルで使うグリップやバーなどの付属品</p>
-        </div>
-        <div class="ex-form-field">
-          <label class="text-xs font-medium text-gray-600 dark:text-gray-300">角度</label>
-          <select class="ex-ang border rounded-md px-2 py-1 w-full"></select>
-          <p class="ex-form-hint text-gray-500">ベンチ角度やケーブル高さなどの設定</p>
-        </div>
-        <div class="ex-form-field">
-          <label class="text-xs font-medium text-gray-600 dark:text-gray-300">スタンス</label>
-          <select class="ex-pos border rounded-md px-2 py-1 w-full"></select>
-          <p class="ex-form-hint text-gray-500">手幅・足幅などのポジション</p>
-        </div>
+      <div class="grid grid-cols-4 gap-1">
+        <select class="ex-eq col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-att col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-ang col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-pos col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
       </div>
       <div class="text-[11px] text-gray-500 ex-meta">最高重量: - / 最高1RM: - / 前回: -</div>
     </div>
@@ -366,17 +332,6 @@
   </template>
 
   <script>
-    (()=> {
-      const bar = document.getElementById('error-bar');
-      const text = document.getElementById('error-text');
-      const close = document.getElementById('error-close');
-      function show(msg){ text.textContent = String(msg||'Unknown error'); bar.classList.remove('hidden'); }
-      window.addEventListener('error', e=> show(e.message));
-      window.addEventListener('unhandledrejection', e=> show((e.reason&&e.reason.message)||e.reason));
-      close.addEventListener('click', ()=> bar.classList.add('hidden'));
-      window.__forceError = ()=> { throw new Error('Forced error'); };
-    })();
-
     const $ = (sel, root=document)=> root.querySelector(sel);
     const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
     const debounce = (fn, ms=300)=> { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
@@ -388,7 +343,6 @@
     const sortJa = (arr)=> arr.slice().sort((a,b)=> String(a).localeCompare(String(b),'ja',{usage:'sort',sensitivity:'base'}));
     const sortExerciseMapJa = (map)=> map.slice().sort((a,b)=> (a.name||'').localeCompare(b.name||'','ja',{usage:'sort',sensitivity:'base'}));
 
-    // === PATCH: routes & helpers ===
     const ROUTES = Object.freeze({
       HOME: '#/home',
       WORKOUT: '#/workout',
@@ -670,7 +624,6 @@
       store.set(K_INPROG, state.inProgress);
     }
 
-    /* DASHBOARD */
     function renderHome(){
       const dateEl = $('#inp-date');
       dateEl.value = state.inProgress.date || todayISO();
@@ -696,7 +649,6 @@
       }
     }
 
-    /* WORKOUT */
     function renderWorkout(){
       $('#workout-date').textContent = state.inProgress.date || todayISO();
       $('#workout-part').textContent = state.inProgress.part || '-';
@@ -707,7 +659,7 @@
       wrap.innerHTML = '';
       (state.inProgress.blocks||[]).forEach((block, idx)=> wrap.appendChild(renderBlock(block, idx)));
     }
-    /* Builders */
+
     function renderBlock(block, idx){
       const frag = document.importNode($('#tpl-block').content, true);
       frag.querySelector('.block-index').textContent = '#'+(idx+1);
@@ -778,7 +730,6 @@
       btnCancel.onclick=()=> bg.remove();
       btnOk.onclick=()=>{
         const cbs = Array.from(list.querySelectorAll('input[type=checkbox]:checked'));
-        // チェック順（checkedAtが無い場合はDOM順のまま）
         cbs.sort((a,b)=>{
           const ta=a.dataset.checkedAt, tb=b.dataset.checkedAt;
           if(ta && tb) return ta.localeCompare(tb);
@@ -795,10 +746,8 @@
       const block = state.inProgress.blocks[blockIdx];
       const before = block.exs || [];
 
-      // 選択順のまま exs を構築（既存があれば使い回し）
       block.exs = names.map(name => before.find(e=> e.name===name) || { name, eq: state.lists.equip[0]||'', att:'なし', ang:'なし', pos:'なし' });
 
-      // 既存セットの items も同順で並び替え/補完
       (block.sets||[]).forEach(s=>{
         const prevItems = s.items||[];
         s.items = names.map(name=>{
@@ -807,7 +756,6 @@
         });
       });
 
-      // セット未作成なら1セット目を作る
       if(!block.sets || block.sets.length===0){
         block.sets = [{ warm:false, items: names.map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0 })) }];
       }
@@ -819,7 +767,6 @@
       const node = document.importNode($('#tpl-ex-config-row').content, true);
       node.querySelector('.ex-name').textContent = ex.name;
 
-      // ▲/▼（テンプレに無い場合は非表示になるだけ）
       const up = node.querySelector('.ex-move-up');
       const down = node.querySelector('.ex-move-down');
       if(up) up.onclick = ()=>{
@@ -837,7 +784,6 @@
         persist(); renderWorkout();
       };
 
-      // 「なし」を先頭固定で描画
       const fill = (sel, arr, val, cb)=>{
         sel.innerHTML=''; orderWithNoneFirst(arr).forEach(v=> {
           const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
@@ -845,7 +791,7 @@
         sel.value = val || 'なし';
         sel.onchange = e=> cb(e.target.value);
       };
-      fill(node.querySelector('.ex-eq'),  state.lists.equip,    ex.eq || state.lists.equip[0], v=>{ ex.eq=v; persist(); });
+      fill(node.querySelector('.ex-eq'),  state.lists.equip,   ex.eq || state.lists.equip[0], v=>{ ex.eq=v; persist(); });
       fill(node.querySelector('.ex-att'), state.lists.attach,   ex.att || 'なし',               v=>{ ex.att=v; persist(); });
       fill(node.querySelector('.ex-ang'), state.lists.angle,    ex.ang || 'なし',               v=>{ ex.ang=v; persist(); });
       fill(node.querySelector('.ex-pos'), state.lists.position, ex.pos || 'なし',               v=>{ ex.pos=v; persist(); });
@@ -917,17 +863,15 @@
       const node = document.importNode($('#tpl-ex-item-row').content, true);
       const item = set.items[idx] ||= { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
 
-      // 見出し：実際の種目名
       const titleEl = node.querySelector('.ex-title');
       if(titleEl) titleEl.textContent = ex.name;
 
-      // 入力
       const elW = node.querySelector('.ex-weight');
       const elR = node.querySelector('.ex-reps');
       const elA = node.querySelector('.ex-assist');
       const elN = node.querySelector('.ex-note');
       const elOne = node.querySelector('.ex-1rm');
-      const elSec = node.querySelector('.ex-sec'); // 秒入力は残す（手入力用）
+      const elSec = node.querySelector('.ex-sec');
 
       elW.value = item.w || '';
       elR.value = item.reps || '';
@@ -947,7 +891,6 @@
       [elW, elR, elA, elN].forEach(el => el && el.addEventListener('input', recalc));
       if(elSec) elSec.addEventListener('input', recalc);
 
-      // タイマーボタン（▶/■）は廃止：テンプレに残っていても何もしない
       const toggle = node.querySelector('.ex-sec-toggle');
       if(toggle) toggle.remove();
 
@@ -955,7 +898,6 @@
       return node;
     }
 
-    /* Save workout & history */
     function saveWorkout(){
       const copy = JSON.parse(JSON.stringify(state.inProgress));
       copy.blocks.forEach(b=>{
@@ -1109,7 +1051,6 @@
       });
     }
 
-    /* SETTINGS */
     function renderSettings(){
       $('#list-parts').value = sortJa(state.lists.parts).join('\n');
       $('#list-equip').value = sortJa(state.lists.equip).join('\n');
@@ -1360,7 +1301,6 @@
       return rows;
     }
 
-    /* Keyboard-safe */
     (function setupKeyboardSafe(){
       if (window.visualViewport) {
         const vv = window.visualViewport;
