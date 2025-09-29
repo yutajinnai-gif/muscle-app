@@ -51,6 +51,18 @@
     .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(2px)}
     .modal-card{max-width:680px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:1rem}
+    .text-gray-500{color:#334155!important}
+    [data-theme="dark"] .text-gray-500{color:#d1d5db!important}
+    input[type="date"],
+    input[type="number"],
+    select{min-width:0}
+    .narrow-date{min-width:0}
+    #inp-date{width:100%}
+    .ex-sec{min-width:0}
+    .ex-form-field{display:flex;flex-direction:column;gap:0.25rem;min-width:0}
+    .ex-form-hint{font-size:11px;line-height:1.4}
+    .ex-config-grid{display:grid;gap:0.75rem;grid-template-columns:minmax(0,1fr)}
+    @media (min-width:640px){.ex-config-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
 <body class="text-gray-900 dark:text-gray-100" data-theme="auto">
@@ -294,13 +306,29 @@
   </template>
 
   <template id="tpl-ex-config-row">
-    <div class="ex-config-row space-y-1">
+    <div class="ex-config-row space-y-2">
       <div class="text-sm font-semibold ex-name">種目名</div>
-      <div class="grid grid-cols-4 gap-1">
-        <select class="ex-eq col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-att col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-ang col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-pos col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
+      <div class="ex-config-grid">
+        <div class="ex-form-field">
+          <label class="text-xs font-medium text-gray-600 dark:text-gray-300">器具</label>
+          <select class="ex-eq border rounded-md px-2 py-1 w-full"></select>
+          <p class="ex-form-hint text-gray-500">使用するマシンやフリーウェイトの種類</p>
+        </div>
+        <div class="ex-form-field">
+          <label class="text-xs font-medium text-gray-600 dark:text-gray-300">アタッチメント</label>
+          <select class="ex-att border rounded-md px-2 py-1 w-full"></select>
+          <p class="ex-form-hint text-gray-500">ケーブルで使うグリップやバーなどの付属品</p>
+        </div>
+        <div class="ex-form-field">
+          <label class="text-xs font-medium text-gray-600 dark:text-gray-300">角度</label>
+          <select class="ex-ang border rounded-md px-2 py-1 w-full"></select>
+          <p class="ex-form-hint text-gray-500">ベンチ角度やケーブル高さなどの設定</p>
+        </div>
+        <div class="ex-form-field">
+          <label class="text-xs font-medium text-gray-600 dark:text-gray-300">スタンス</label>
+          <select class="ex-pos border rounded-md px-2 py-1 w-full"></select>
+          <p class="ex-form-hint text-gray-500">手幅・足幅などのポジション</p>
+        </div>
       </div>
       <div class="text-[11px] text-gray-500 ex-meta">最高重量: - / 最高1RM: - / 前回: -</div>
     </div>
