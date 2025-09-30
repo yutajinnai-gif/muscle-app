@@ -52,22 +52,68 @@
       --nav-h: 64px;
       --kb: 0px;
       --accent:#4f46e5;
-      --bg:#ffffff;
+      --bg:#f8fafc;
       --fg:#0f172a;
-      --card:#f8fafc;
-      --muted:#64748b;
-      --border:#e2e8f0;
+      --card:#ffffff;
+      --muted:#334155;
+      --border:#cbd5f5;
+      --control-bg:#ffffff;
+      --control-border:#cbd5f5;
+      --control-placeholder:#64748b;
     }
-    [data-theme="dark"] {
-      --bg:#0b1220;
-      --fg:#e5e7eb;
-      --card:#111827;
-      --muted:#9ca3af;
-      --border:#1f2937;
+    body[data-theme="dark"] {
+      --bg:#e2e8f0;
+      --fg:#0f172a;
+      --card:#ffffff;
+      --muted:#1e293b;
+      --border:#cbd5f5;
+      --control-bg:#ffffff;
+      --control-border:#94a3b8;
+      --control-placeholder:#475569;
     }
     html,body { height:100% }
-    body { background:var(--bg); color:var(--fg) }
+    body {
+      background:var(--bg);
+      color:var(--fg);
+    }
+    header,
+    nav,
+    .card,
+    .block-card,
+    .rounded-2xl.border,
+    .rounded-xl.border,
+    .rounded-lg.border,
+    .rounded-md.border {
+      background:var(--card) !important;
+      color:var(--fg) !important;
+      border-color:var(--border) !important;
+    }
+    header,
+    nav {
+      backdrop-filter:blur(16px);
+    }
+    header,
+    nav,
+    nav .tab-btn span {
+      color:var(--fg) !important;
+    }
     input,select,textarea,button{font-size:16px}
+    input,
+    select,
+    textarea {
+      background:var(--control-bg) !important;
+      color:var(--fg) !important;
+      border-color:var(--control-border) !important;
+    }
+    input::placeholder,
+    textarea::placeholder {
+      color:var(--control-placeholder);
+    }
+    body[data-theme="dark"] .text-gray-500,
+    body[data-theme="dark"] .text-gray-600,
+    body[data-theme="dark"] .text-gray-700 {
+      color:var(--muted) !important;
+    }
     main{padding-bottom:calc(var(--nav-h) + 24px + env(safe-area-inset-bottom) + var(--kb))}
     nav{padding-bottom:calc(env(safe-area-inset-bottom));transition:transform .2s,opacity .2s}
     body.kb-open nav{transform:translateY(100%);opacity:0;pointer-events:none}
