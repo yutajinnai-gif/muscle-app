@@ -75,6 +75,7 @@
     body {
       background:var(--bg);
       color:var(--fg);
+      margin:0;
     }
     header,
     nav,
@@ -121,6 +122,9 @@
     .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(2px)}
     .modal-card{max-width:680px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:1rem}
+    .part-btn{background:var(--card) !important;color:var(--fg) !important;border-color:var(--border) !important;transition:background-color .15s ease,color .15s ease,transform .15s ease,box-shadow .15s ease}
+    .part-btn.is-active{background:var(--accent) !important;color:#fff !important;border-color:var(--accent) !important;box-shadow:0 10px 20px rgba(79,70,229,.25);transform:translateY(-1px)}
+    body[data-theme="dark"] .part-btn{background:var(--control-bg) !important;color:var(--fg) !important}
   </style>
 </head>
 <body class="text-gray-900 dark:text-gray-100" data-theme="light">
@@ -726,13 +730,11 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.dataset.part = part;
-            btn.className = 'part-btn px-3 py-2 rounded-xl border text-sm transition-colors';
-            const active = state.inProgress.part === part;
-            btn.classList.toggle('bg-gray-900', active);
-            btn.classList.toggle('text-white', active);
-            btn.classList.toggle('bg-white', !active);
-            btn.classList.toggle('text-gray-900', !active);
+            btn.className = 'part-btn px-3 py-2 rounded-xl border text-sm';
             btn.textContent = part;
+            const active = state.inProgress.part === part;
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
             btn.onclick = ()=> {
               state.inProgress.part = part;
               persist();
