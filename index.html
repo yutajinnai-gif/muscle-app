@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>筋トレメモ | BUILD_TAG=FIX-20251001-REGRESSION</title>
+  <title>筋トレメモ | BUILD_TAG=FIX-20251001-IOS</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -126,7 +126,12 @@
       return Number.isFinite(num) ? num : null;
     };
 
-    const cloneDeep = (obj) => structuredClone(obj);
+    const cloneDeep = (obj) => {
+      if (typeof structuredClone === 'function') {
+        return structuredClone(obj);
+      }
+      return JSON.parse(JSON.stringify(obj));
+    };
 
     /*** error banner ***/
     const errorRoot = document.getElementById('error-root');
