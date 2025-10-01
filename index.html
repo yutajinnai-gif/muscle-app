@@ -51,25 +51,26 @@
     :root {
       --nav-h: 64px;
       --kb: 0px;
-      --accent:#4f46e5;
-      --bg:#f8fafc;
+      --accent:#4c1d95;
+      --accent-weak:#c4b5fd;
+      --bg:#eef2ff;
       --fg:#0f172a;
       --card:#ffffff;
       --muted:#334155;
       --border:#cbd5f5;
       --control-bg:#ffffff;
       --control-border:#cbd5f5;
-      --control-placeholder:#64748b;
+      --control-placeholder:#475569;
     }
     body[data-theme="dark"] {
-      --bg:#e2e8f0;
-      --fg:#0f172a;
-      --card:#ffffff;
-      --muted:#1e293b;
-      --border:#cbd5f5;
-      --control-bg:#ffffff;
-      --control-border:#94a3b8;
-      --control-placeholder:#475569;
+      --bg:#111827;
+      --fg:#e2e8f0;
+      --card:#1f2937;
+      --muted:#94a3b8;
+      --border:#312e81;
+      --control-bg:#1f2937;
+      --control-border:#4338ca;
+      --control-placeholder:#94a3b8;
     }
     *,*::before,*::after{box-sizing:border-box}
     html,body { height:100% }
@@ -124,8 +125,13 @@
     .modal-card{max-width:680px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:1rem}
     .part-btn{background:var(--card) !important;color:var(--fg) !important;border-color:var(--border) !important;transition:background-color .15s ease,color .15s ease,transform .15s ease,box-shadow .15s ease}
-    .part-btn.is-active{background:var(--accent) !important;color:#fff !important;border-color:var(--accent) !important;box-shadow:0 10px 20px rgba(79,70,229,.25);transform:translateY(-1px)}
+    .part-btn.is-active{background:var(--accent) !important;color:#fff !important;border-color:var(--accent) !important;box-shadow:0 12px 30px rgba(76,29,149,.3);transform:translateY(-2px)}
     body[data-theme="dark"] .part-btn{background:var(--control-bg) !important;color:var(--fg) !important}
+    .detail-chip{display:inline-flex;align-items:center;gap:0.35rem;padding:0.35rem 0.6rem;border-radius:9999px;background:var(--accent-weak);color:#312e81;font-size:11px;font-weight:600;}
+    body[data-theme="dark"] .detail-chip{background:#4338ca;color:#e0e7ff}
+    #view-workout{padding-bottom:calc(var(--nav-h) + 72px + env(safe-area-inset-bottom));}
+    body[data-route="workout"] nav{transform:translateY(110%);opacity:0;pointer-events:none;}
+    .set-card{border-color:rgba(76,29,149,.25) !important;background:linear-gradient(180deg,rgba(236,233,254,.9),rgba(255,255,255,.9));}
   </style>
 </head>
 <body class="text-gray-900 dark:text-gray-100" data-theme="light">
@@ -356,11 +362,8 @@
       <div class="ex-config space-y-3"></div>
       <div class="set-area space-y-2">
         <div class="flex items-center justify-between">
-          <div class="text-sm text-gray-600">セット</div>
-          <div class="flex gap-2">
-            <button class="btn-add-set px-2 py-1.5 rounded-md bg-white border text-sm">セット追加</button>
-            <button class="btn-clear-sets px-2 py-1.5 rounded-md border text-sm">全セット削除</button>
-          </div>
+          <div class="text-sm font-semibold text-gray-700">セット</div>
+          <div class="text-[11px] text-gray-500">複製ボタンでセットを追加</div>
         </div>
         <div class="set-list space-y-2"></div>
       </div>
@@ -368,7 +371,7 @@
   </template>
 
   <template id="tpl-ex-config-row">
-    <div class="ex-config-row space-y-2 rounded-xl border bg-white p-3">
+    <div class="ex-config-row space-y-3 rounded-xl border bg-white p-3">
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 min-w-0">
           <span class="ex-order inline-flex items-center justify-center w-6 h-6 text-[11px] font-semibold rounded-full bg-indigo-100 text-indigo-700">#1</span>
@@ -382,11 +385,15 @@
           <button type="button" class="ex-move-down px-2 py-1 rounded-md border bg-white">↓</button>
         </div>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1">
-        <select class="ex-eq col-span-2 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-att col-span-2 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-ang col-span-2 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-pos col-span-2 sm:col-span-1 border rounded-md px-2 py-1"></select>
+      <div class="space-y-2 text-[11px]">
+        <div class="flex flex-wrap gap-2">
+          <span class="detail-chip ex-eq">器具: -</span>
+          <span class="detail-chip ex-att">アタッチメント: -</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <span class="detail-chip ex-ang">角度: -</span>
+          <span class="detail-chip ex-pos">ポジション: -</span>
+        </div>
       </div>
       <div class="flex items-center justify-between gap-2 text-[11px] text-gray-500">
         <div class="ex-meta flex-1 min-w-0">最高重量: - / 最高1RM: - / 前回: -</div>
@@ -412,15 +419,15 @@
 
   <template id="tpl-ex-item-row">
     <div class="ex-item space-y-1">
-      <div class="text-xs ex-title font-medium">種目1</div>
-      <div class="grid grid-cols-12 gap-1 items-center">
-        <input type="number" inputmode="decimal" placeholder="重量" class="ex-weight col-span-4 border rounded px-2 py-1" />
-        <input type="number" inputmode="numeric" placeholder="自力" class="ex-reps col-span-2 border rounded px-2 py-1" />
-        <input type="number" inputmode="numeric" placeholder="補助" class="ex-assist col-span-2 border rounded px-2 py-1" />
-        <div class="col-span-4 flex items-center gap-1">
-          <input type="number" inputmode="numeric" placeholder="時間(秒)" class="ex-sec flex-1 border rounded px-2 py-1 min-w-[90px]" />
-          <button class="ex-sec-toggle px-2 py-1 rounded border text-xs">▶</button>
-        </div>
+      <div class="space-y-0.5">
+        <div class="text-xs ex-title font-semibold">種目1</div>
+        <div class="text-[11px] text-gray-500 ex-detail">-</div>
+      </div>
+      <div class="grid grid-cols-12 gap-2 items-center">
+        <input type="number" inputmode="decimal" placeholder="重量" class="ex-weight col-span-3 border rounded px-2 py-1" />
+        <input type="number" inputmode="numeric" placeholder="自力" class="ex-reps col-span-3 border rounded px-2 py-1" />
+        <input type="number" inputmode="numeric" placeholder="補助" class="ex-assist col-span-3 border rounded px-2 py-1" />
+        <input type="number" inputmode="numeric" placeholder="時間(秒)" class="ex-sec col-span-3 border rounded px-2 py-1" />
         <input type="text" placeholder="メモ" class="ex-note col-span-12 border rounded px-2 py-1" />
         <div class="col-span-12 text-[11px] text-gray-500">推定1RM: <span class="ex-1rm">-</span> kg</div>
       </div>
@@ -484,75 +491,75 @@
       }
     };
 
-    const PREFERRED_PART_ORDER = ['胸','背中','肩','腕','脚','腹筋','有酸素'];
+    const PREFERRED_PART_ORDER = ['胸','背中','肩','腕','脚','腹筋'];
+    const EXERCISE_PRESETS = Object.freeze({
+      'フライ': ['胸'],
+      'プレス': ['胸','脚'],
+      'ベンチプレス': ['胸'],
+      'チェストプレス': ['胸'],
+      'ディップス': ['胸'],
+      'プッシュアップ': ['胸'],
+      'チンニング': ['背中'],
+      'デッドリフト': ['背中','脚'],
+      'ラットプルダウン': ['背中'],
+      'プーリーロー': ['背中'],
+      'ベントオーバーロー': ['背中'],
+      'ローイング': ['背中'],
+      'プルオーバー': ['背中'],
+      'ショルダープレス': ['肩'],
+      'フロントレイズ': ['肩'],
+      'サイドレイズ': ['肩'],
+      'リアデルト': ['肩'],
+      'リアレイズ': ['肩'],
+      'フェイスプル': ['肩'],
+      'アーノルドプレス': ['肩'],
+      'ミリタリープレス': ['肩'],
+      'パーシャルサイドレイズ': ['肩'],
+      'アームカール': ['腕'],
+      'スカルクラッシャー': ['腕'],
+      'ハンマーカール': ['腕'],
+      'プレスダウン': ['腕'],
+      'オーバーヘッドプレス': ['腕'],
+      'キックバック': ['腕'],
+      'リバースプッシュ': ['腕'],
+      '志澤カール': ['腕'],
+      'スパイダーカール': ['腕'],
+      'ナロープレス': ['腕'],
+      'プリチャーカール': ['腕'],
+      'カール': ['脚'],
+      'エクステンション': ['脚'],
+      'スクワット': ['脚'],
+      'インナーサイ': ['脚'],
+      'アウターサイ': ['脚'],
+      'ブルガリアン': ['脚'],
+      'ヒップスラスト': ['脚'],
+      'クランチ': ['腹筋'],
+      'レッグレイズ': ['腹筋'],
+      'ベンチレッグレイズ': ['腹筋']
+    });
     const DEFAULTS = {
-      parts: ['胸','背中','肩','腕','脚','腹筋','有酸素'],
-      equip: ['-','ケーブル','ゴムチューブ','スミス','ダンベル','バーベル','プレート','ペックマシン','マシン','自重','イージーバー'],
-      attach: ['-','マグ(ナロー)','マグ(ワイド)','マグ(ミドル)','ロープ','Vバー','イージーバー','バンド','ワイドバー','ショートバー','パラレルバー'],
+      parts: ['胸','背中','肩','腕','脚','腹筋'],
+      equip: ['-','ケーブル','ダンベル','バーベル','スミス','マシン','ペックマシン','自重','プレート','ゴムチューブ','イージーバー'],
+      attach: ['マグ(ナロー)','マグ(ワイド)','マグ(ミドル)','ロープ','Vバー','イージーバー','バンド','ワイドバー','ショートバー','パラレルバー'],
       angle: ['-','インクライン','デクライン','フラット'],
-      position: ['-','ワイド','ナロー','ボックス','リバース'],
-      exerciseMap: [
-        { name:'フライ', parts:['胸'] },
-        { name:'プレス', parts:['胸'] },
-        { name:'ベンチプレス', parts:['胸'] },
-        { name:'チェストプレス', parts:['胸'] },
-        { name:'ディップス', parts:['胸','腕'] },
-        { name:'プッシュアップ', parts:['胸'] },
-        { name:'チンニング', parts:['背中'] },
-        { name:'デッドリフト', parts:['背中','脚'] },
-        { name:'ラットプルダウン', parts:['背中'] },
-        { name:'プーリーロー', parts:['背中'] },
-        { name:'ベントオーバーロー', parts:['背中'] },
-        { name:'ローイング', parts:['背中'] },
-        { name:'プルオーバー', parts:['背中'] },
-        { name:'ショルダープレス', parts:['肩'] },
-        { name:'フロントレイズ', parts:['肩'] },
-        { name:'サイドレイズ', parts:['肩'] },
-        { name:'リアデルト', parts:['肩'] },
-        { name:'リアレイズ', parts:['肩'] },
-        { name:'フェイスプル', parts:['肩','背中'] },
-        { name:'アーノルドプレス', parts:['肩'] },
-        { name:'ミリタリープレス', parts:['肩'] },
-        { name:'パーシャルサイドレイズ', parts:['肩'] },
-        { name:'アームカール', parts:['腕'] },
-        { name:'スカルクラッシャー', parts:['腕'] },
-        { name:'ハンマーカール', parts:['腕'] },
-        { name:'プレスダウン', parts:['腕'] },
-        { name:'オーバーヘッドプレス', parts:['腕','肩'] },
-        { name:'キックバック', parts:['腕'] },
-        { name:'リバースプッシュ', parts:['腕'] },
-        { name:'志澤カール', parts:['腕'] },
-        { name:'スパイダーカール', parts:['腕'] },
-        { name:'ナロープレス', parts:['腕','胸'] },
-        { name:'プリチャーカール', parts:['腕'] },
-        { name:'カール', parts:['脚'] },
-        { name:'エクステンション', parts:['脚'] },
-        { name:'プレス', parts:['脚'] },
-        { name:'スクワット', parts:['脚'] },
-        { name:'インナーサイ', parts:['脚'] },
-        { name:'アウターサイ', parts:['脚'] },
-        { name:'ブルガリアン', parts:['脚'] },
-        { name:'ヒップスラスト', parts:['脚'] },
-        { name:'クランチ', parts:['腹筋'] },
-        { name:'レッグレイズ', parts:['腹筋'] },
-        { name:'ベンチレッグレイズ', parts:['腹筋'] }
-      ]
+      position: ['ワイド','ナロー','ボックス','リバース'],
+      exerciseMap: Object.entries(EXERCISE_PRESETS).map(([name, parts])=> ({ name, parts: parts.slice() }))
     };
 
     const state = { lists:null, workouts:null, inProgress:null, chart:null };
 
     function cleanupExercises(map){
-      const banWords = ['ダンベル','バーベル','ケーブル','インクライン','デクライン','フラット','(ダンベル)','(バーベル)'];
-      const norm = (name)=> banWords.reduce((s,w)=> s.replaceAll(w,''), String(name)).replace(/\s+/g,'').replace(/[（）]/g,'').trim();
-      const out = []; const seen = new Set();
+      const allowedNames = new Set(Object.keys(EXERCISE_PRESETS));
+      const out = [];
       (map||[]).forEach(e=>{
-        const n = norm(e.name||'');
-        if(!n) return;
-        if(!seen.has(n)){ seen.add(n); out.push({ name:n, parts:Array.from(new Set(e.parts||[])) }); }
-        else {
-          const idx = out.findIndex(x=> x.name===n);
-          out[idx].parts = Array.from(new Set([...(out[idx].parts||[]), ...(e.parts||[])]));
-        }
+        const name = String(e?.name || '').trim();
+        if(!allowedNames.has(name)) return;
+        const allowedParts = EXERCISE_PRESETS[name];
+        const parts = Array.from(new Set((Array.isArray(e?.parts) ? e.parts : []).map(p=> String(p).trim()).filter(p=> allowedParts.includes(p))));
+        out.push({ name, parts: parts.length ? parts : allowedParts.slice() });
+      });
+      Object.entries(EXERCISE_PRESETS).forEach(([name, parts])=>{
+        if(!out.find(e=> e.name===name)) out.push({ name, parts: parts.slice() });
       });
       return sortExerciseMapJa(out);
     }
@@ -567,16 +574,24 @@
     async function migrateAllIfNeeded(){
       let lists = store.getAny(K_LISTS, null);
       if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); }
-      const ensureList = (arr, fallback)=>{
-        const base = Array.isArray(arr) && arr.length ? arr : fallback;
-        const normalized = Array.from(new Set((base||[]).map(normalizeOption)));
-        return orderWithNoneFirst(normalized);
+      const applyPreset = (arr, preset, includeNone=true)=>{
+        const presetNormalized = Array.from(new Set((preset||[]).map(normalizeOption)));
+        const provided = new Set((Array.isArray(arr)?arr:[]).map(normalizeOption));
+        let result = presetNormalized.filter(v=> provided.has(v));
+        if(result.length === 0) result = presetNormalized.slice();
+        if(includeNone && !result.includes('-')) result = ['-', ...result];
+        return result;
       };
-      lists.parts = Array.isArray(lists.parts) && lists.parts.length ? sortJa(Array.from(new Set(lists.parts))) : DEFAULTS.parts.slice();
-      lists.equip = ensureList(lists.equip, DEFAULTS.equip);
-      lists.attach = ensureList(lists.attach, DEFAULTS.attach);
-      lists.angle = ensureList(lists.angle, DEFAULTS.angle);
-      lists.position = ensureList(lists.position, DEFAULTS.position);
+      const ensureParts = (arr)=>{
+        const allowed = new Set(DEFAULTS.parts);
+        const cleaned = (Array.isArray(arr)?arr:[]).map(p=> String(p).trim()).filter(p=> allowed.has(p));
+        return cleaned.length ? DEFAULTS.parts.filter(p=> cleaned.includes(p)) : DEFAULTS.parts.slice();
+      };
+      lists.parts = ensureParts(lists.parts);
+      lists.equip = applyPreset(lists.equip, DEFAULTS.equip);
+      lists.attach = applyPreset(lists.attach, DEFAULTS.attach, true);
+      lists.angle = applyPreset(lists.angle, DEFAULTS.angle);
+      lists.position = applyPreset(lists.position, DEFAULTS.position, true);
       lists.exerciseMap = cleanupExercises(lists.exerciseMap || DEFAULTS.exerciseMap);
       store.set(K_LISTS, lists);
 
@@ -624,7 +639,7 @@
       }
       if(!inProg.part && inProg.selectedParts.length){ inProg.part = inProg.selectedParts[0]; }
       if(!Array.isArray(inProg.blocks)) inProg.blocks = [];
-      inProg.selectedParts = inProg.selectedParts.map(p=> String(p));
+      inProg.selectedParts = Array.from(new Set(inProg.selectedParts.map(p=> String(p).trim()).filter(Boolean)));
       if(inProg.selectedParts.length > 2){ inProg.selectedParts = inProg.selectedParts.slice(0,2); }
       store.set(K_INPROG, inProg);
 
@@ -742,10 +757,12 @@
       const hash = location.hash || ROUTES.HOME;
       Object.values(VIEWS).forEach(id => { const el = document.querySelector(id); if(el) el.classList.add('hidden'); });
 
-      if(hash.startsWith(ROUTES.HOME))    { document.querySelector(VIEWS.HOME).classList.remove('hidden');    renderHome(); }
-      else if(hash.startsWith(ROUTES.WORKOUT)) { document.querySelector(VIEWS.WORKOUT).classList.remove('hidden'); renderWorkout(); }
-      else if(hash.startsWith(ROUTES.HISTORY)) { document.querySelector(VIEWS.HISTORY).classList.remove('hidden'); renderHistory(); }
-      else                                  { document.querySelector(VIEWS.SETTINGS).classList.remove('hidden'); renderSettings(); }
+      let routeKey = 'home';
+      if(hash.startsWith(ROUTES.HOME))    { document.querySelector(VIEWS.HOME).classList.remove('hidden');    renderHome(); routeKey='home'; }
+      else if(hash.startsWith(ROUTES.WORKOUT)) { document.querySelector(VIEWS.WORKOUT).classList.remove('hidden'); renderWorkout(); routeKey='workout'; }
+      else if(hash.startsWith(ROUTES.HISTORY)) { document.querySelector(VIEWS.HISTORY).classList.remove('hidden'); renderHistory(); routeKey='history'; }
+      else                                  { document.querySelector(VIEWS.SETTINGS).classList.remove('hidden'); renderSettings(); routeKey='settings'; }
+      document.body.dataset.route = routeKey;
       setActiveTab(hash);
     }
     window.addEventListener('hashchange', renderRoute);
@@ -846,6 +863,7 @@
       if(!Array.isArray(state.inProgress.selectedParts)){
         state.inProgress.selectedParts = state.inProgress.part ? [state.inProgress.part] : [];
       }
+      state.inProgress.selectedParts = Array.from(new Set((state.inProgress.selectedParts||[]).map(p=> String(p).trim()).filter(Boolean)));
       if(state.inProgress.selectedParts.length > 2){
         state.inProgress.selectedParts = state.inProgress.selectedParts.slice(0,2);
       }
@@ -857,7 +875,7 @@
     }
 
     function sortPartsForHome(parts){
-      const uniq = Array.from(new Set(parts||[]));
+      const uniq = Array.from(new Set((parts||[]).map(p=> String(p).trim()).filter(Boolean)));
       return uniq.sort((a,b)=>{
         const ia = PREFERRED_PART_ORDER.indexOf(a);
         const ib = PREFERRED_PART_ORDER.indexOf(b);
@@ -879,7 +897,7 @@
       const partWrap = $('#part-buttons');
       if (partWrap) {
         const parts = sortPartsForHome(state.lists.parts || []);
-        const selected = Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts : [];
+        const selected = Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts.map(p=> String(p).trim()) : [];
         if(selected.length === 0 && parts.length > 0){
           state.inProgress.selectedParts = [parts[0]];
           state.inProgress.part = parts[0];
@@ -896,9 +914,10 @@
           parts.forEach(part => {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.dataset.part = part;
+            const cleanPart = String(part).trim();
+            btn.dataset.part = cleanPart;
             btn.className = 'part-btn px-3 py-2 rounded-xl border text-sm flex items-center gap-2';
-            const idx = selected.indexOf(part);
+            const idx = selected.indexOf(cleanPart);
             if(idx >= 0){
               const badge = document.createElement('span');
               badge.className = 'inline-flex items-center justify-center w-5 h-5 text-[11px] font-semibold rounded-full bg-indigo-100 text-indigo-700';
@@ -906,14 +925,14 @@
               btn.appendChild(badge);
             }
             const label = document.createElement('span');
-            label.textContent = part;
+            label.textContent = cleanPart;
             btn.appendChild(label);
             const active = idx >= 0;
             btn.classList.toggle('is-active', active);
             btn.setAttribute('aria-pressed', active ? 'true' : 'false');
             btn.onclick = ()=> {
               const current = Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts.slice() : [];
-              const pos = current.indexOf(part);
+              const pos = current.indexOf(cleanPart);
               if(pos >= 0){
                 current.splice(pos, 1);
               }else{
@@ -921,9 +940,9 @@
                   alert('選択できる部位は2つまでです。');
                   return;
                 }
-                current.push(part);
+                current.push(cleanPart);
               }
-              state.inProgress.selectedParts = current;
+              state.inProgress.selectedParts = Array.from(new Set(current.map(p=> String(p).trim()).filter(Boolean)));
               state.inProgress.part = current[0] || '';
               persist();
               afterDataChanged();
@@ -1122,12 +1141,6 @@
       (block.exs||[]).forEach(ex=> cfgWrap.appendChild(renderExConfigRow(block, ex)));
 
       const setWrap = frag.querySelector('.set-list');
-      frag.querySelector('.btn-add-set').onclick = ()=> { addSet(block, true); };
-      frag.querySelector('.btn-clear-sets').onclick = async ()=>{
-        if(await confirmAction('このブロックの全セットを削除しますか？')){
-          block.sets = []; persist(); renderWorkout(); afterDataChanged();
-        }
-      };
       (block.sets||[]).forEach((set, sIdx)=> setWrap.appendChild(renderSetCard(block, set, sIdx)));
 
       return frag;
@@ -1175,7 +1188,10 @@
       const info = document.createElement('div');
       info.className = 'text-[11px] text-gray-500';
       info.textContent = `対象部位: ${blockParts.length ? blockParts.join(' × ') : '-'}`;
-      head.append(title, info);
+      const help = document.createElement('div');
+      help.className = 'text-[11px] text-gray-500 leading-relaxed space-y-1';
+      help.innerHTML = '<div>① 器具: 使用するマシンやツールを選択</div><div>② アタッチメント: ハンドルなどの付属品を選択</div><div>③ 角度 / ポジション: ベンチ角度や手幅などのセットアップ情報を選択</div>';
+      head.append(title, info, help);
 
       const content = document.createElement('div');
       content.className = 'flex flex-col gap-3 overflow-hidden';
@@ -1336,22 +1352,39 @@
           partTag.textContent = meta.part ? `部位: ${meta.part}` : '';
           header.append(title, partTag);
 
-          const grid = document.createElement('div');
-          grid.className = 'grid grid-cols-2 sm:grid-cols-4 gap-1';
-
-          const selEq = document.createElement('select'); selEq.className = 'border rounded-md px-2 py-1';
-          const selAtt = document.createElement('select'); selAtt.className = 'border rounded-md px-2 py-1';
-          const selAng = document.createElement('select'); selAng.className = 'border rounded-md px-2 py-1';
-          const selPos = document.createElement('select'); selPos.className = 'border rounded-md px-2 py-1';
+          const selEq = document.createElement('select'); selEq.className = 'border rounded-md px-2 py-1 text-sm';
+          const selAtt = document.createElement('select'); selAtt.className = 'border rounded-md px-2 py-1 text-sm';
+          const selAng = document.createElement('select'); selAng.className = 'border rounded-md px-2 py-1 text-sm';
+          const selPos = document.createElement('select'); selPos.className = 'border rounded-md px-2 py-1 text-sm';
 
           fillSelect(selEq, state.lists.equip || DEFAULTS.equip, meta.eq, v=>{ meta.eq = v; });
           fillSelect(selAtt, state.lists.attach || DEFAULTS.attach, meta.att, v=>{ meta.att = v; });
           fillSelect(selAng, state.lists.angle || DEFAULTS.angle, meta.ang, v=>{ meta.ang = v; });
           fillSelect(selPos, state.lists.position || DEFAULTS.position, meta.pos, v=>{ meta.pos = v; });
 
-          grid.append(selEq, selAtt, selAng, selPos);
+          const wrapDetail = document.createElement('div');
+          wrapDetail.className = 'space-y-2';
+          const rowEquip = document.createElement('div');
+          rowEquip.className = 'grid grid-cols-1 sm:grid-cols-2 gap-2';
+          const rowAngle = document.createElement('div');
+          rowAngle.className = 'grid grid-cols-1 sm:grid-cols-2 gap-2';
 
-          row.append(header, grid);
+          const makeField = (label, select)=>{
+            const field = document.createElement('label');
+            field.className = 'flex flex-col gap-1 text-[11px] text-gray-500';
+            const span = document.createElement('span');
+            span.className = 'font-semibold text-gray-600';
+            span.textContent = label;
+            field.append(span, select);
+            return field;
+          };
+
+          rowEquip.append(makeField('器具', selEq), makeField('アタッチメント', selAtt));
+          rowAngle.append(makeField('角度', selAng), makeField('ポジション', selPos));
+
+          wrapDetail.append(rowEquip, rowAngle);
+
+          row.append(header, wrapDetail);
           configWrap.appendChild(row);
         });
       };
@@ -1417,7 +1450,7 @@
       });
 
       if(!block.sets || block.sets.length===0){
-        block.sets = [{ warm:false, oneHand:false, items: names.map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 })) }];
+        block.sets = [createEmptySet(block)];
       }
 
       persist(); renderWorkout(); afterDataChanged && afterDataChanged();
@@ -1450,19 +1483,17 @@
         persist(); renderWorkout();
       };
 
-      const fill = (sel, arr, val, cb)=>{
-        if(!sel) return;
-        sel.innerHTML='';
-        orderWithNoneFirst(arr).forEach(v=> {
-          const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
-        });
-        sel.value = normalizeOption(val);
-        sel.onchange = e=> cb(normalizeOption(e.target.value));
+      const updateDetailChips = ()=>{
+        const eqEl = node.querySelector('.ex-eq');
+        const attEl = node.querySelector('.ex-att');
+        const angEl = node.querySelector('.ex-ang');
+        const posEl = node.querySelector('.ex-pos');
+        if(eqEl) eqEl.textContent = `器具: ${normalizeDetail(ex.eq, '-')}`;
+        if(attEl) attEl.textContent = `アタッチメント: ${normalizeDetail(ex.att, '-')}`;
+        if(angEl) angEl.textContent = `角度: ${normalizeDetail(ex.ang, '-')}`;
+        if(posEl) posEl.textContent = `ポジション: ${normalizeDetail(ex.pos, '-')}`;
       };
-      fill(node.querySelector('.ex-eq'),  state.lists.equip,   ex.eq || state.lists.equip?.[0] || '-', v=>{ ex.eq=v; persist(); });
-      fill(node.querySelector('.ex-att'), state.lists.attach,   ex.att || '-', v=>{ ex.att=v; persist(); });
-      fill(node.querySelector('.ex-ang'), state.lists.angle,    ex.ang || '-', v=>{ ex.ang=v; persist(); });
-      fill(node.querySelector('.ex-pos'), state.lists.position, ex.pos || '-', v=>{ ex.pos=v; persist(); });
+      updateDetailChips();
 
       updateExMetaLine(node, ex);
 
@@ -1684,11 +1715,27 @@
         const cloned = JSON.parse(JSON.stringify(source));
         cloned.warm = false;
         if(typeof cloned.oneHand !== 'boolean') cloned.oneHand = !!source.oneHand;
-        block.sets.splice(sIdx+1, 0, cloned);
+        const insertIndex = sIdx + 1;
+        const blockIdx = state.inProgress.blocks.indexOf(block);
+        block.sets.splice(insertIndex, 0, cloned);
         persist(); renderWorkout(); afterDataChanged();
+        setTimeout(()=>{
+          const blockNodes = $$('#blocks .block-card');
+          const targetBlock = blockNodes[blockIdx];
+          if(!targetBlock) return;
+          const setCards = $$('.set-card', targetBlock);
+          const targetCard = setCards[insertIndex];
+          if(targetCard){
+            try{ targetCard.scrollIntoView({ behavior:'smooth', block:'center' }); }
+            catch{ targetCard.scrollIntoView(); }
+          }
+        }, 80);
       };
       node.querySelector('.btn-del-set').onclick = ()=> {
         block.sets.splice(sIdx,1);
+        if(block.sets.length === 0){
+          block.sets.push(createEmptySet(block));
+        }
         persist(); renderWorkout(); afterDataChanged();
       };
       return node;
@@ -1705,20 +1752,9 @@
       }
     }
 
-    function addSet(block, copyLast){
-      if(!block.sets) block.sets = [];
-      if(copyLast && block.sets.length){
-        const last = block.sets[block.sets.length-1];
-        const cloned = JSON.parse(JSON.stringify(last));
-        cloned.warm = false;
-        if(typeof cloned.oneHand !== 'boolean') cloned.oneHand = !!last.oneHand;
-        block.sets.push(cloned);
-      } else {
-        const items = (block.exs||[]).map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 }));
-        block.sets.push({ warm:false, oneHand:false, items });
-      }
-      persist(); renderWorkout(); afterDataChanged();
-      setTimeout(()=> window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }), 0);
+    function createEmptySet(block){
+      const items = (block.exs||[]).map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 }));
+      return { warm:false, oneHand:false, items };
     }
 
     function renderExItemRow(block, set, idx, ex){
@@ -1727,6 +1763,8 @@
 
       const titleEl = node.querySelector('.ex-title');
       if(titleEl) titleEl.textContent = `${idx+1}. ${ex.name}`;
+      const detailEl = node.querySelector('.ex-detail');
+      if(detailEl) detailEl.textContent = formatDetailText(ex);
 
       const elW = node.querySelector('.ex-weight');
       const elR = node.querySelector('.ex-reps');
@@ -1752,9 +1790,6 @@
 
       [elW, elR, elA, elN].forEach(el => el && el.addEventListener('input', recalc));
       if(elSec) elSec.addEventListener('input', recalc);
-
-      const toggle = node.querySelector('.ex-sec-toggle');
-      if(toggle) toggle.remove();
 
       elOne.textContent = item.oneRM || '-';
       return node;
@@ -2213,7 +2248,8 @@
       document.addEventListener('focusin', (e)=>{
         const el = e.target;
         if (el.matches('input, textarea, select')) {
-          setTimeout(()=> ensureVisible(el), 250);
+          ensureVisible(el);
+          setTimeout(()=> ensureVisible(el), 220);
         }
       });
     })();
