@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=CSV-YYYYMMDD</title>
+  <title>BUILD_TAG=PERF-YYYYMMDD</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -908,8 +908,41 @@
       };
     };
 
+    const HISTORY_ITEM_GAP = 16;
+    const DEFAULT_HISTORY_ITEM_HEIGHT = 320;
+    const HISTORY_VIRTUAL_OVERSCAN = 6;
+    const historyHeightCache = new Map();
+    let historyListScrollTop = 0;
+
     let historyChartCanvas = null;
     let historyChartManager = null;
+    let historyChartObserver = null;
+    let historyChartHost = null;
+    let historyChartPendingData = { labels: [], values: [] };
+
+    const applyHistoryChartData = () => {
+      if (!historyChartManager || !historyChartPendingData) return;
+      const { labels, values } = historyChartPendingData;
+      historyChartManager.update(labels, values);
+    };
+
+    const ensureHistoryChartObserver = () => {
+      if (historyChartObserver) return;
+      historyChartObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          if (!historyChartCanvas) return;
+          if (historyChartHost && entry.target !== historyChartHost) return;
+          if (!historyChartManager) {
+            historyChartManager = createChartManager(historyChartCanvas);
+          }
+          applyHistoryChartData();
+          if (historyChartObserver && entry.target) {
+            historyChartObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1 });
+    };
 
     /*** render helpers ***/
     const appRoot = document.getElementById('app');
@@ -1178,6 +1211,187 @@
       appData.workouts = appData.workouts.filter((wk) => wk.id !== workoutId);
       persist();
       requestRender();
+    };
+
+    const createHistoryWorkoutNode = (workout, workoutIndex, totalWorkouts) => {
+      const item = createElem('article', { className: 'rounded-2xl border border-slate-300 bg-white p-5 shadow-sm' });
+      item.dataset.historyIndex = String(workoutIndex);
+      const header = createElem('div', { className: 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between' });
+      const timestamp = formatDate(workout.completedAt || workout.startedAt);
+      header.append(createElem('p', { className: 'text-sm font-semibold text-slate-900', textContent: timestamp }));
+      const deleteBtn = createElem('button', {
+        className: 'self-start text-xs font-semibold text-red-700 underline decoration-dotted hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500',
+        textContent: '削除',
+        attrs: { type: 'button' }
+      });
+      deleteBtn.addEventListener('click', () => deleteWorkout(workout.id));
+      header.append(deleteBtn);
+      item.append(header);
+
+      workout.exercises.forEach((exercise) => {
+        const exerciseBlock = createElem('div', { className: 'mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4' });
+        exerciseBlock.append(createElem('h4', { className: 'text-base font-bold text-slate-900', textContent: exercise.name }));
+        const metaItems = [
+          { label: '器具', value: exercise.equipment },
+          { label: 'アタッチメント', value: exercise.attachment },
+          { label: '角度 (°)', value: exercise.angle != null ? `${exercise.angle}°` : null },
+          { label: 'スタンス / ポジション', value: exercise.position },
+          { label: '実施日', value: exercise.performedOn },
+          { label: 'インターバル (秒)', value: exercise.intervalSeconds != null ? `${exercise.intervalSeconds}秒` : null }
+        ].filter((entry) => entry.value !== null && entry.value !== undefined && entry.value !== '');
+        if (metaItems.length) {
+          const metaList = createElem('ul', { className: 'grid grid-cols-1 gap-2 text-sm text-slate-800 sm:grid-cols-2' });
+          metaItems.forEach(({ label, value }) => {
+            const meta = createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm' });
+            meta.append(
+              createElem('p', { className: 'text-xs font-semibold uppercase tracking-wide text-slate-800', textContent: label }),
+              createElem('p', { className: 'text-sm font-medium text-slate-900', textContent: value })
+            );
+            metaList.append(meta);
+          });
+          exerciseBlock.append(metaList);
+        }
+        const setsList = createElem('ul', { className: 'space-y-2' });
+        exercise.sets.forEach((set, index) => {
+          const info = `#${index + 1} 重量: ${set.weight ?? '-'}${appData.settings.unit} / 回数: ${set.reps ?? '-'} / 推定1RM: ${set.oneRM ?? '-'}${set.note ? ' / ' + set.note : ''}`;
+          setsList.append(createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm', textContent: info }));
+        });
+        const trendBtn = createElem('button', {
+          className: 'text-xs font-semibold text-blue-700 underline decoration-dotted hover:text-blue-800',
+          textContent: '推移を表示',
+          attrs: { type: 'button' }
+        });
+        trendBtn.addEventListener('click', () => {
+          appData.historyView.exerciseName = exercise.name;
+          requestRender();
+        });
+        exerciseBlock.append(setsList, trendBtn);
+        item.append(exerciseBlock);
+      });
+
+      if (workoutIndex !== totalWorkouts - 1) {
+        item.style.marginBottom = `${HISTORY_ITEM_GAP}px`;
+      }
+      return item;
+    };
+
+    const createHistoryVirtualList = (workouts) => {
+      const count = workouts.length;
+      const viewport = createElem('div', { className: 'relative max-h-[70vh] overflow-y-auto' });
+      const spacer = createElem('div', { className: 'relative w-full' });
+      const inner = createElem('div', { className: 'absolute inset-x-0 top-0' });
+      spacer.append(inner);
+      viewport.append(spacer);
+
+      if (!count) {
+        spacer.style.height = '0px';
+        historyListScrollTop = 0;
+        return viewport;
+      }
+
+      const cachedHeights = Array.from(historyHeightCache.values());
+      const averageHeight = cachedHeights.length
+        ? Math.max(160, Math.round(cachedHeights.reduce((sum, value) => sum + value, 0) / cachedHeights.length))
+        : DEFAULT_HISTORY_ITEM_HEIGHT;
+      const itemHeights = workouts.map((workout) => {
+        const cached = historyHeightCache.get(workout.id);
+        return cached && cached > 0 ? cached : averageHeight;
+      });
+      const positions = new Array(count + 1).fill(0);
+      for (let i = 0; i < count; i += 1) {
+        const blockHeight = itemHeights[i] + (i === count - 1 ? 0 : HISTORY_ITEM_GAP);
+        positions[i + 1] = positions[i] + blockHeight;
+      }
+      let totalHeight = positions[count];
+      spacer.style.height = `${totalHeight}px`;
+
+      let renderedStart = -1;
+      let renderedEnd = -1;
+      let measurementScheduled = false;
+
+      const recomputePositions = (startIndex = 0) => {
+        if (startIndex < 0) startIndex = 0;
+        for (let i = startIndex; i < count; i += 1) {
+          const blockHeight = itemHeights[i] + (i === count - 1 ? 0 : HISTORY_ITEM_GAP);
+          positions[i + 1] = positions[i] + blockHeight;
+        }
+        totalHeight = positions[count];
+        spacer.style.height = `${totalHeight}px`;
+      };
+
+      const measureRenderedItems = () => {
+        let changedFrom = count;
+        Array.from(inner.children).forEach((child) => {
+          const index = Number(child.dataset.historyIndex);
+          if (!Number.isFinite(index)) return;
+          const rect = child.getBoundingClientRect();
+          const measured = Math.max(0, Math.round(rect.height));
+          if (!measured || Math.abs(measured - itemHeights[index]) <= 1) return;
+          itemHeights[index] = measured;
+          historyHeightCache.set(workouts[index].id, measured);
+          if (index < changedFrom) changedFrom = index;
+        });
+        if (changedFrom < count) {
+          recomputePositions(changedFrom);
+          renderedStart = -1;
+          renderViewport();
+        }
+      };
+
+      const scheduleMeasurement = () => {
+        if (measurementScheduled) return;
+        measurementScheduled = true;
+        requestAnimationFrame(() => {
+          measurementScheduled = false;
+          measureRenderedItems();
+        });
+      };
+
+      const renderViewport = () => {
+        const scrollTop = viewport.scrollTop;
+        const viewportHeight = viewport.clientHeight || 1;
+        let start = 0;
+        while (start < count && positions[start + 1] <= scrollTop) {
+          start += 1;
+        }
+        start = Math.max(0, start - HISTORY_VIRTUAL_OVERSCAN);
+        let end = start;
+        const targetBottom = scrollTop + viewportHeight;
+        while (end < count && positions[end] < targetBottom) {
+          end += 1;
+        }
+        end = Math.min(count, end + HISTORY_VIRTUAL_OVERSCAN);
+        if (end <= start) {
+          end = Math.min(count, start + 1);
+        }
+        if (start === renderedStart && end === renderedEnd) return;
+        renderedStart = start;
+        renderedEnd = end;
+        const fragment = document.createDocumentFragment();
+        for (let index = start; index < end; index += 1) {
+          fragment.append(createHistoryWorkoutNode(workouts[index], index, count));
+        }
+        inner.style.transform = `translateY(${positions[start]}px)`;
+        inner.replaceChildren(fragment);
+        scheduleMeasurement();
+      };
+
+      const handleScroll = () => {
+        historyListScrollTop = viewport.scrollTop;
+        renderViewport();
+      };
+      viewport.addEventListener('scroll', handleScroll, { passive: true });
+
+      setTimeout(() => {
+        const maxScroll = Math.max(totalHeight - viewport.clientHeight, 0);
+        const target = Math.min(historyListScrollTop, maxScroll);
+        if (Number.isFinite(target)) {
+          viewport.scrollTop = target;
+        }
+        renderViewport();
+      }, 0);
+
+      return viewport;
     };
 
     const clearAllData = async () => {
@@ -1708,80 +1922,52 @@
       const nodes = [];
       const cardBody = createElem('div', { className: 'space-y-6' });
       if (!appData.workouts.length) {
+        historyListScrollTop = 0;
         cardBody.append(createElem('p', { className: 'text-sm text-slate-800', textContent: '履歴はまだありません。' }));
       } else {
-        const list = createElem('div', { className: 'space-y-4' });
-        appData.workouts.forEach((workout) => {
-          const item = createElem('article', { className: 'rounded-2xl border border-slate-300 bg-white p-5 shadow-sm' });
-          const header = createElem('div', { className: 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between' });
-          const timestamp = formatDate(workout.completedAt || workout.startedAt);
-          header.append(createElem('p', { className: 'text-sm font-semibold text-slate-900', textContent: timestamp }));
-          const deleteBtn = createElem('button', { className: 'self-start text-xs font-semibold text-red-700 underline decoration-dotted hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500', textContent: '削除', attrs: { type: 'button' } });
-          deleteBtn.addEventListener('click', () => deleteWorkout(workout.id));
-          header.append(deleteBtn);
-          item.append(header);
-          workout.exercises.forEach((exercise) => {
-            const exerciseBlock = createElem('div', { className: 'mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4' });
-            exerciseBlock.append(createElem('h4', { className: 'text-base font-bold text-slate-900', textContent: exercise.name }));
-            const metaItems = [
-              { label: '器具', value: exercise.equipment },
-              { label: 'アタッチメント', value: exercise.attachment },
-              { label: '角度 (°)', value: exercise.angle != null ? `${exercise.angle}°` : null },
-              { label: 'スタンス / ポジション', value: exercise.position },
-              { label: '実施日', value: exercise.performedOn },
-              { label: 'インターバル (秒)', value: exercise.intervalSeconds != null ? `${exercise.intervalSeconds}秒` : null }
-            ].filter((item) => item.value !== null && item.value !== undefined && item.value !== '');
-            if (metaItems.length) {
-              const metaList = createElem('ul', { className: 'grid grid-cols-1 gap-2 text-sm text-slate-800 sm:grid-cols-2' });
-              metaItems.forEach(({ label, value }) => {
-                const meta = createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm' });
-                meta.append(
-                  createElem('p', { className: 'text-xs font-semibold uppercase tracking-wide text-slate-800', textContent: label }),
-                  createElem('p', { className: 'text-sm font-medium text-slate-900', textContent: value })
-                );
-                metaList.append(meta);
-              });
-              exerciseBlock.append(metaList);
-            }
-            const setsList = createElem('ul', { className: 'space-y-2' });
-            exercise.sets.forEach((set, index) => {
-              const info = `#${index + 1} 重量: ${set.weight ?? '-'}${appData.settings.unit} / 回数: ${set.reps ?? '-'} / 推定1RM: ${set.oneRM ?? '-'}${set.note ? ' / ' + set.note : ''}`;
-              setsList.append(createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm', textContent: info }));
-            });
-            const trendBtn = createElem('button', { className: 'text-xs font-semibold text-blue-700 underline decoration-dotted hover:text-blue-800', textContent: '推移を表示', attrs: { type: 'button' } });
-            trendBtn.addEventListener('click', () => {
-              appData.historyView.exerciseName = exercise.name;
-              requestRender();
-            });
-            exerciseBlock.append(setsList, trendBtn);
-            item.append(exerciseBlock);
-          });
-          list.append(item);
-        });
-        cardBody.append(list);
+        cardBody.append(createHistoryVirtualList(appData.workouts));
       }
+
       if (!historyChartCanvas) {
         historyChartCanvas = createElem('canvas');
-        historyChartManager = createChartManager(historyChartCanvas);
       }
       const chartContainer = createElem('div', { className: 'mt-6 h-64 relative' });
       chartContainer.append(historyChartCanvas);
       cardBody.append(chartContainer);
+
+      if (historyChartObserver && historyChartHost && historyChartHost !== chartContainer) {
+        historyChartObserver.unobserve(historyChartHost);
+      }
+      historyChartHost = chartContainer;
+
       const exerciseName = appData.historyView.exerciseName;
       if (exerciseName) {
         const dataset = [];
         appData.workouts.slice().reverse().forEach((workout) => {
-          workout.exercises.filter((ex) => ex.name === exerciseName).forEach((exercise) => {
-            const best = Math.max(...exercise.sets.map((set) => Number(set.oneRM) || 0));
-            dataset.push({ date: workout.completedAt || workout.startedAt, value: best });
-          });
+          workout.exercises
+            .filter((ex) => ex.name === exerciseName)
+            .forEach((exercise) => {
+              const best = Math.max(...exercise.sets.map((set) => Number(set.oneRM) || 0));
+              dataset.push({ date: workout.completedAt || workout.startedAt, value: best });
+            });
         });
-        const labels = dataset.map((d) => formatDate(d.date));
-        const values = dataset.map((d) => d.value);
-        historyChartManager.update(labels, values);
+        historyChartPendingData = {
+          labels: dataset.map((d) => formatDate(d.date)),
+          values: dataset.map((d) => d.value)
+        };
       } else {
-        historyChartManager.update([], []);
+        historyChartPendingData = { labels: [], values: [] };
       }
+
+      if (historyChartManager) {
+        applyHistoryChartData();
+      } else {
+        ensureHistoryChartObserver();
+        if (historyChartObserver) {
+          historyChartObserver.observe(chartContainer);
+        }
+      }
+
       nodes.push(createCard('ワークアウト履歴', cardBody));
       return nodes;
     };
