@@ -368,13 +368,25 @@
   </template>
 
   <template id="tpl-ex-config-row">
-    <div class="ex-config-row space-y-1">
-      <div class="text-sm font-semibold ex-name">種目名</div>
-      <div class="grid grid-cols-4 gap-1">
-        <select class="ex-eq col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-att col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-ang col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
-        <select class="ex-pos col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
+    <div class="ex-config-row space-y-2 rounded-xl border bg-white p-3">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="ex-order inline-flex items-center justify-center w-6 h-6 text-[11px] font-semibold rounded-full bg-indigo-100 text-indigo-700">#1</span>
+          <div class="min-w-0">
+            <div class="text-sm font-semibold ex-name truncate">種目名</div>
+            <div class="text-[11px] text-gray-500 ex-part">部位: -</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 text-xs">
+          <button type="button" class="ex-move-up px-2 py-1 rounded-md border bg-white">↑</button>
+          <button type="button" class="ex-move-down px-2 py-1 rounded-md border bg-white">↓</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1">
+        <select class="ex-eq col-span-2 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-att col-span-2 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-ang col-span-2 sm:col-span-1 border rounded-md px-2 py-1"></select>
+        <select class="ex-pos col-span-2 sm:col-span-1 border rounded-md px-2 py-1"></select>
       </div>
       <div class="flex items-center justify-between gap-2 text-[11px] text-gray-500">
         <div class="ex-meta flex-1 min-w-0">最高重量: - / 最高1RM: - / 前回: -</div>
@@ -389,6 +401,7 @@
         <div class="text-sm font-semibold">Set <span class="set-no">#1</span></div>
         <div class="flex items-center gap-2">
           <label class="inline-flex items-center gap-1 text-xs"><input type="checkbox" class="set-warm border rounded"> W-Up</label>
+          <label class="inline-flex items-center gap-1 text-xs"><input type="checkbox" class="set-one-hand border rounded"> 1hand</label>
           <button class="btn-dup-set px-2 py-1.5 rounded-md border text-xs">複製</button>
           <button class="btn-del-set px-2 py-1.5 rounded-md border text-xs">削除</button>
         </div>
@@ -440,9 +453,10 @@
     });
 
     function orderWithNoneFirst(arr){
-      const a = Array.from(new Set(arr||[]));
-      const head = a.filter(v => v === 'なし');
-      const rest = a.filter(v => v !== 'なし')
+      const a = Array.from(new Set(arr||[])).map(v => normalizeOption(v));
+      if(!a.includes('-')) a.unshift('-');
+      const head = a.filter(v => v === '-');
+      const rest = a.filter(v => v !== '-')
                     .sort((x,y)=> x.localeCompare(y,'ja',{usage:'sort',sensitivity:'base'}));
       return [...head, ...rest];
     }
@@ -470,30 +484,58 @@
       }
     };
 
+    const PREFERRED_PART_ORDER = ['胸','背中','肩','腕','脚','腹筋','有酸素'];
     const DEFAULTS = {
-      parts: ['胸','背中','肩','腕','脚','腹筋'],
-      equip: ['バーベル','ダンベル','マシン','ケーブル','自重'],
-      attach: ['なし','ストレートバー','Vバー','ロープ','Dハンドル','EZバー'],
-      angle: ['なし','フラット','インクライン','デクライン','ナチュラル'],
-      position: ['なし','ナロー','ミディアム','ワイド','オーバーグリップ','アンダーグリップ','ニュートラル'],
+      parts: ['胸','背中','肩','腕','脚','腹筋','有酸素'],
+      equip: ['-','ケーブル','ゴムチューブ','スミス','ダンベル','バーベル','プレート','ペックマシン','マシン','自重','イージーバー'],
+      attach: ['-','マグ(ナロー)','マグ(ワイド)','マグ(ミドル)','ロープ','Vバー','イージーバー','バンド','ワイドバー','ショートバー','パラレルバー'],
+      angle: ['-','インクライン','デクライン','フラット'],
+      position: ['-','ワイド','ナロー','ボックス','リバース'],
       exerciseMap: [
-        { name:'ベンチプレス', parts:['胸'] }, { name:'フライ', parts:['胸'] }, { name:'クロスオーバー', parts:['胸'] },
-        { name:'ペックフライ', parts:['胸'] }, { name:'プッシュアップ', parts:['胸'] }, { name:'ディップス', parts:['胸','腕'] },
-        { name:'デッドリフト', parts:['背中','脚'] }, { name:'ローイング', parts:['背中'] }, { name:'ワンハンドロー', parts:['背中'] },
-        { name:'シーテッドロー', parts:['背中'] }, { name:'ラットプルダウン', parts:['背中'] }, { name:'プルアップ', parts:['背中'] },
-        { name:'チンアップ', parts:['背中','腕'] }, { name:'フェイスプル', parts:['背中','肩'] }, { name:'ストレートアームプルダウン', parts:['背中'] },
-        { name:'ショルダープレス', parts:['肩'] }, { name:'サイドレイズ', parts:['肩'] }, { name:'フロントレイズ', parts:['肩'] },
-        { name:'リアレイズ', parts:['肩','背中'] }, { name:'アップライトロー', parts:['肩'] }, { name:'アーノルドプレス', parts:['肩'] },
-        { name:'バイセプスカール', parts:['腕'] }, { name:'ハンマーカール', parts:['腕'] }, { name:'プリーチャーカール', parts:['腕'] },
-        { name:'トライセプスエクステンション', parts:['腕'] }, { name:'オーバーヘッドトライセプスエクステンション', parts:['腕'] }, { name:'スカルクラッシャー', parts:['腕'] },
-        { name:'プレスダウン', parts:['腕'] }, { name:'クローズグリップベンチプレス', parts:['腕','胸'] },
-        { name:'スクワット', parts:['脚'] }, { name:'レッグプレス', parts:['脚'] }, { name:'ハックスクワット', parts:['脚'] },
-        { name:'ブルガリアンスクワット', parts:['脚'] }, { name:'ランジ', parts:['脚'] }, { name:'レッグエクステンション', parts:['脚'] },
-        { name:'レッグカール', parts:['脚'] }, { name:'ルーマニアンデッドリフト', parts:['脚','背中'] }, { name:'ヒップスラスト', parts:['脚'] },
-        { name:'カーフレイズ', parts:['脚'] },
-        { name:'クランチ', parts:['腹筋'] }, { name:'ハンギングレッグレイズ', parts:['腹筋'] }, { name:'ケーブルクランチ', parts:['腹筋'] },
-        { name:'プランク', parts:['腹筋'] }, { name:'アブローラー', parts:['腹筋'] }, { name:'ロシアンツイスト', parts:['腹筋'] },
-        { name:'リバースクランチ', parts:['腹筋'] }
+        { name:'フライ', parts:['胸'] },
+        { name:'プレス', parts:['胸'] },
+        { name:'ベンチプレス', parts:['胸'] },
+        { name:'チェストプレス', parts:['胸'] },
+        { name:'ディップス', parts:['胸','腕'] },
+        { name:'プッシュアップ', parts:['胸'] },
+        { name:'チンニング', parts:['背中'] },
+        { name:'デッドリフト', parts:['背中','脚'] },
+        { name:'ラットプルダウン', parts:['背中'] },
+        { name:'プーリーロー', parts:['背中'] },
+        { name:'ベントオーバーロー', parts:['背中'] },
+        { name:'ローイング', parts:['背中'] },
+        { name:'プルオーバー', parts:['背中'] },
+        { name:'ショルダープレス', parts:['肩'] },
+        { name:'フロントレイズ', parts:['肩'] },
+        { name:'サイドレイズ', parts:['肩'] },
+        { name:'リアデルト', parts:['肩'] },
+        { name:'リアレイズ', parts:['肩'] },
+        { name:'フェイスプル', parts:['肩','背中'] },
+        { name:'アーノルドプレス', parts:['肩'] },
+        { name:'ミリタリープレス', parts:['肩'] },
+        { name:'パーシャルサイドレイズ', parts:['肩'] },
+        { name:'アームカール', parts:['腕'] },
+        { name:'スカルクラッシャー', parts:['腕'] },
+        { name:'ハンマーカール', parts:['腕'] },
+        { name:'プレスダウン', parts:['腕'] },
+        { name:'オーバーヘッドプレス', parts:['腕','肩'] },
+        { name:'キックバック', parts:['腕'] },
+        { name:'リバースプッシュ', parts:['腕'] },
+        { name:'志澤カール', parts:['腕'] },
+        { name:'スパイダーカール', parts:['腕'] },
+        { name:'ナロープレス', parts:['腕','胸'] },
+        { name:'プリチャーカール', parts:['腕'] },
+        { name:'カール', parts:['脚'] },
+        { name:'エクステンション', parts:['脚'] },
+        { name:'プレス', parts:['脚'] },
+        { name:'スクワット', parts:['脚'] },
+        { name:'インナーサイ', parts:['脚'] },
+        { name:'アウターサイ', parts:['脚'] },
+        { name:'ブルガリアン', parts:['脚'] },
+        { name:'ヒップスラスト', parts:['脚'] },
+        { name:'クランチ', parts:['腹筋'] },
+        { name:'レッグレイズ', parts:['腹筋'] },
+        { name:'ベンチレッグレイズ', parts:['腹筋'] }
       ]
     };
 
@@ -515,37 +557,55 @@
       return sortExerciseMapJa(out);
     }
 
+    function normalizeOption(value){
+      if(value === undefined || value === null) return '-';
+      if(value === 'なし') return '-';
+      const str = String(value).trim();
+      return str === '' ? '-' : str;
+    }
+
     async function migrateAllIfNeeded(){
       let lists = store.getAny(K_LISTS, null);
       if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); }
-      const uniq = a => Array.from(new Set(a||[]));
-      const putNoneFirst = a => {
-        const arr = uniq(a||[]);
-        const rest = arr.filter(x=>x!=='なし');
-        return ['なし', ...rest];
+      const ensureList = (arr, fallback)=>{
+        const base = Array.isArray(arr) && arr.length ? arr : fallback;
+        const normalized = Array.from(new Set((base||[]).map(normalizeOption)));
+        return orderWithNoneFirst(normalized);
       };
-      if(!lists.position) lists.position = DEFAULTS.position.slice();
-      lists.attach   = putNoneFirst(lists.attach || DEFAULTS.attach);
-      lists.angle    = putNoneFirst(lists.angle  || DEFAULTS.angle);
-      lists.position = putNoneFirst(lists.position);
+      lists.parts = Array.isArray(lists.parts) && lists.parts.length ? sortJa(Array.from(new Set(lists.parts))) : DEFAULTS.parts.slice();
+      lists.equip = ensureList(lists.equip, DEFAULTS.equip);
+      lists.attach = ensureList(lists.attach, DEFAULTS.attach);
+      lists.angle = ensureList(lists.angle, DEFAULTS.angle);
+      lists.position = ensureList(lists.position, DEFAULTS.position);
       lists.exerciseMap = cleanupExercises(lists.exerciseMap || DEFAULTS.exerciseMap);
-      lists.parts     = sortJa(lists.parts || DEFAULTS.parts);
-      lists.equip     = sortJa(lists.equip || DEFAULTS.equip);
-      lists.attach    = sortJa(lists.attach);
-      lists.angle     = sortJa(lists.angle);
-      lists.position  = sortJa(lists.position);
       store.set(K_LISTS, lists);
 
       let workouts = store.getAny(K_WORKOUTS, []);
       workouts.forEach(w=>{
         (w.blocks||[]).forEach(b=>{
-          if(!b.part && w.part) b.part = w.part;
+          if(!Array.isArray(b.parts) || b.parts.length===0){
+            const partCandidates = [];
+            if(b.part) partCandidates.push(b.part);
+            if(w.part) partCandidates.push(w.part);
+            b.parts = Array.from(new Set(partCandidates.filter(Boolean)));
+          }else{
+            b.parts = Array.from(new Set(b.parts.map(p=> String(p))));
+          }
+          if(!b.part && b.parts && b.parts.length){ b.part = b.parts[0]; }
           (b.exs||[]).forEach(ex=>{
-            if(ex.pos == null) ex.pos = 'なし';
-            if(ex.att == null) ex.att = 'なし';
-            if(ex.ang == null) ex.ang = 'なし';
+            ex.eq = normalizeOption(ex.eq ?? ex.equipment ?? '-');
+            ex.att = normalizeOption(ex.att);
+            ex.ang = normalizeOption(ex.ang);
+            ex.pos = normalizeOption(ex.pos);
+            if(!ex.part && Array.isArray(b.parts) && b.parts.length){
+              const match = (state?.lists?.exerciseMap || DEFAULTS.exerciseMap).find(e=> e.name===ex.name);
+              const candidate = (match?.parts||[]).find(p=> b.parts.includes(p));
+              ex.part = candidate || b.parts[0] || '';
+            }
           });
           (b.sets||[]).forEach(s=>{
+            if(s && typeof s.warm === 'undefined') s.warm = false;
+            if(s && typeof s.oneHand === 'undefined') s.oneHand = false;
             (s.items||[]).forEach(it=>{
               if(it.sec == null) it.sec = 0;
               if(typeof it.oneRM !== 'number') it.oneRM = 0;
@@ -555,10 +615,17 @@
       });
       store.set(K_WORKOUTS, workouts);
 
-      let inProg = store.getAny(K_INPROG, { date: todayISO(), part:'胸', blocks: [] });
+      let inProg = store.getAny(K_INPROG, { date: todayISO(), part:'胸', selectedParts:['胸'], blocks: [] });
       if(!inProg.date) inProg.date = todayISO();
-      if(!inProg.part) inProg.part = '胸';
+      if(!Array.isArray(inProg.selectedParts)){
+        const arr = [];
+        if(inProg.part) arr.push(inProg.part);
+        inProg.selectedParts = Array.from(new Set(arr.filter(Boolean)));
+      }
+      if(!inProg.part && inProg.selectedParts.length){ inProg.part = inProg.selectedParts[0]; }
       if(!Array.isArray(inProg.blocks)) inProg.blocks = [];
+      inProg.selectedParts = inProg.selectedParts.map(p=> String(p));
+      if(inProg.selectedParts.length > 2){ inProg.selectedParts = inProg.selectedParts.slice(0,2); }
       store.set(K_INPROG, inProg);
 
       let backupCfg = store.getAny(K_BACKUPCFG, null);
@@ -695,40 +762,45 @@
     }
 
     function normalizeDetail(value, fallback=''){
-      return (value === undefined || value === null || value === '') ? fallback : value;
+      if(value === undefined || value === null) return fallback;
+      const str = String(value).trim();
+      if(!str) return fallback;
+      if(str === 'なし') return '-';
+      return str;
     }
 
     function makeExerciseKeyFromEx(ex){
       return [
         normalizeDetail(ex?.name || '', ''),
-        normalizeDetail(ex?.eq || '', ''),
-        normalizeDetail(ex?.att || 'なし', 'なし'),
-        normalizeDetail(ex?.ang || 'なし', 'なし'),
-        normalizeDetail(ex?.pos || 'なし', 'なし')
+        normalizeDetail(ex?.eq || '', '-'),
+        normalizeDetail(ex?.att || '-', '-'),
+        normalizeDetail(ex?.ang || '-', '-'),
+        normalizeDetail(ex?.pos || '-', '-')
       ].join('|');
     }
 
     function makeExerciseKeyFromRow(row){
       return [
         normalizeDetail(row?.exercise || '', ''),
-        normalizeDetail(row?.equipment || '', ''),
-        normalizeDetail(row?.attachment || 'なし', 'なし'),
-        normalizeDetail(row?.angle || 'なし', 'なし'),
-        normalizeDetail(row?.position || 'なし', 'なし')
+        normalizeDetail(row?.equipment || '', '-'),
+        normalizeDetail(row?.attachment || '-', '-'),
+        normalizeDetail(row?.angle || '-', '-'),
+        normalizeDetail(row?.position || '-', '-')
       ].join('|');
     }
 
     function formatDetailText(meta){
-      const eq = normalizeDetail(meta?.eq || meta?.equipment, '-') || '-';
-      const att = normalizeDetail(meta?.att || meta?.attachment, 'なし');
-      const ang = normalizeDetail(meta?.ang || meta?.angle, 'なし');
-      const pos = normalizeDetail(meta?.pos || meta?.position, 'なし');
+      const eq = normalizeDetail(meta?.eq ?? meta?.equipment, '-') || '-';
+      const att = normalizeDetail(meta?.att ?? meta?.attachment, '-') || '-';
+      const ang = normalizeDetail(meta?.ang ?? meta?.angle, '-') || '-';
+      const pos = normalizeDetail(meta?.pos ?? meta?.position, '-') || '-';
       return `${eq} / ${att} / ${ang} / ${pos}`;
     }
 
-    function formatRecordLine({ index, warm, weight, reps, assist, sec, note, oneRM }){
+    function formatRecordLine({ index, warm, oneHand, weight, reps, assist, sec, note, oneRM }){
       const parts = [];
       if(warm) parts.push('W-Up');
+      if(oneHand) parts.push('1hand');
       const w = Number(weight||0);
       const r = Number(reps||0);
       if(w>0 && r>0){ parts.push(`${w}kg x${r}`); }
@@ -768,14 +840,32 @@
     function initData(){
       state.lists = store.get(K_LISTS, JSON.parse(JSON.stringify(DEFAULTS)));
       state.workouts = store.get(K_WORKOUTS, []);
-      state.inProgress = store.get(K_INPROG, { date: todayISO(), part: '胸', blocks: [] });
+      state.inProgress = store.get(K_INPROG, { date: todayISO(), part: '胸', selectedParts:['胸'], blocks: [] });
       if(!state.inProgress.date) state.inProgress.date = todayISO();
       if(!state.inProgress.blocks) state.inProgress.blocks = [];
+      if(!Array.isArray(state.inProgress.selectedParts)){
+        state.inProgress.selectedParts = state.inProgress.part ? [state.inProgress.part] : [];
+      }
+      if(state.inProgress.selectedParts.length > 2){
+        state.inProgress.selectedParts = state.inProgress.selectedParts.slice(0,2);
+      }
     }
     function persist(){
       store.set(K_LISTS, state.lists);
       store.set(K_WORKOUTS, state.workouts);
       store.set(K_INPROG, state.inProgress);
+    }
+
+    function sortPartsForHome(parts){
+      const uniq = Array.from(new Set(parts||[]));
+      return uniq.sort((a,b)=>{
+        const ia = PREFERRED_PART_ORDER.indexOf(a);
+        const ib = PREFERRED_PART_ORDER.indexOf(b);
+        if(ia >= 0 && ib >= 0) return ia - ib;
+        if(ia >= 0) return -1;
+        if(ib >= 0) return 1;
+        return String(a).localeCompare(String(b),'ja',{usage:'sort',sensitivity:'base'});
+      });
     }
 
     function renderHome(){
@@ -788,9 +878,10 @@
 
       const partWrap = $('#part-buttons');
       if (partWrap) {
-        const parts = sortJa(state.lists.parts || []);
-        const hasCurrent = parts.includes(state.inProgress.part);
-        if (!hasCurrent && parts.length > 0) {
+        const parts = sortPartsForHome(state.lists.parts || []);
+        const selected = Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts : [];
+        if(selected.length === 0 && parts.length > 0){
+          state.inProgress.selectedParts = [parts[0]];
           state.inProgress.part = parts[0];
           persist();
           afterDataChanged();
@@ -806,13 +897,34 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.dataset.part = part;
-            btn.className = 'part-btn px-3 py-2 rounded-xl border text-sm';
-            btn.textContent = part;
-            const active = state.inProgress.part === part;
+            btn.className = 'part-btn px-3 py-2 rounded-xl border text-sm flex items-center gap-2';
+            const idx = selected.indexOf(part);
+            if(idx >= 0){
+              const badge = document.createElement('span');
+              badge.className = 'inline-flex items-center justify-center w-5 h-5 text-[11px] font-semibold rounded-full bg-indigo-100 text-indigo-700';
+              badge.textContent = String(idx + 1);
+              btn.appendChild(badge);
+            }
+            const label = document.createElement('span');
+            label.textContent = part;
+            btn.appendChild(label);
+            const active = idx >= 0;
             btn.classList.toggle('is-active', active);
             btn.setAttribute('aria-pressed', active ? 'true' : 'false');
             btn.onclick = ()=> {
-              state.inProgress.part = part;
+              const current = Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts.slice() : [];
+              const pos = current.indexOf(part);
+              if(pos >= 0){
+                current.splice(pos, 1);
+              }else{
+                if(current.length >= 2){
+                  alert('選択できる部位は2つまでです。');
+                  return;
+                }
+                current.push(part);
+              }
+              state.inProgress.selectedParts = current;
+              state.inProgress.part = current[0] || '';
               persist();
               afterDataChanged();
               renderHome();
@@ -825,8 +937,14 @@
       const btn = $('#btn-start-or-resume');
       if (btn) {
         const hasBlocks = (state.inProgress.blocks||[]).length > 0;
-        btn.textContent = hasBlocks ? 'トレーニングを再開' : '今日のトレーニングを開始';
-        btn.onclick = ()=> { location.hash = ROUTES.WORKOUT; };
+        const selectedCount = (state.inProgress.selectedParts||[]).length;
+        btn.textContent = hasBlocks ? 'トレーニングを再開' : '種目選択へ進む';
+        btn.disabled = selectedCount === 0;
+        btn.classList.toggle('opacity-60', selectedCount === 0);
+        btn.onclick = ()=> {
+          if((state.inProgress.selectedParts||[]).length === 0) return;
+          location.hash = ROUTES.WORKOUT;
+        };
       }
 
       renderLastPartSummary();
@@ -836,7 +954,7 @@
       const summaryCard = $('#last-part-summary');
       if(!summaryCard) return;
       const parts = sortJa(state.lists.parts || []);
-      const part = state.inProgress.part;
+      const part = (state.inProgress.selectedParts||[])[0] || state.inProgress.part;
       summaryCard.innerHTML = '';
       if(!part || !parts.includes(part)){
         summaryCard.classList.add('hidden');
@@ -937,18 +1055,19 @@
         setsWrap.className = 'space-y-1 text-xs text-gray-600';
 
         if(entry){
-          entry.rows.forEach(row => {
-            const line = document.createElement('div');
-            line.textContent = formatRecordLine({
-              index: row.setIndex,
-              warm: row.warmup,
-              weight: row.weight,
-              reps: row.repsSelf,
-              assist: row.repsAssist,
-              sec: row.durationSec,
-              note: row.note,
-              oneRM: row.oneRM
-            });
+      entry.rows.forEach(row => {
+        const line = document.createElement('div');
+        line.textContent = formatRecordLine({
+          index: row.setIndex,
+          warm: row.warmup,
+          oneHand: row.oneHand,
+          weight: row.weight,
+          reps: row.repsSelf,
+          assist: row.repsAssist,
+          sec: row.durationSec,
+          note: row.note,
+          oneRM: row.oneRM
+        });
             setsWrap.appendChild(line);
           });
         }
@@ -969,19 +1088,27 @@
 
     function renderWorkout(){
       $('#workout-date').textContent = state.inProgress.date || todayISO();
-      $('#workout-part').textContent = state.inProgress.part || '-';
+      const partsLabel = (state.inProgress.selectedParts||[]).length ? state.inProgress.selectedParts.join(' × ') : (state.inProgress.part || '-');
+      $('#workout-part').textContent = partsLabel || '-';
       $('#btn-back-to-home').onclick = ()=> { location.hash = ROUTES.HOME; };
       $('#btn-save-workout').onclick = ()=> { saveWorkout(); location.hash = ROUTES.HOME; };
       $('#btn-add-block').onclick = addBlock;
       const wrap = $('#blocks');
       wrap.innerHTML = '';
+      if((state.inProgress.blocks||[]).length === 0){
+        addBlock();
+        return;
+      }
       (state.inProgress.blocks||[]).forEach((block, idx)=> wrap.appendChild(renderBlock(block, idx)));
     }
 
     function renderBlock(block, idx){
       const frag = document.importNode($('#tpl-block').content, true);
       frag.querySelector('.block-index').textContent = '#'+(idx+1);
-      frag.querySelector('.block-part').textContent = `（${block.part || state.inProgress.part}）`;
+      const blockParts = (block.parts && block.parts.length) ? block.parts : (state.inProgress.selectedParts||[]);
+      const blockPartLabel = blockParts.length ? blockParts.join(' × ') : (block.part || state.inProgress.part || '-');
+      if(blockParts.length && block.part !== blockParts[0]) block.part = blockParts[0];
+      frag.querySelector('.block-part').textContent = `（${blockPartLabel}）`;
 
       frag.querySelector('.btn-choose-ex').onclick = ()=> openExerciseChooser(idx);
       frag.querySelector('.btn-del-block').onclick = async ()=>{
@@ -1007,7 +1134,8 @@
     }
 
     function addBlock(){
-      state.inProgress.blocks.push({ part: state.inProgress.part, exs: [], sets: [] });
+      const parts = (state.inProgress.selectedParts||[]).slice(0,2);
+      state.inProgress.blocks.push({ part: parts[0] || state.inProgress.part, parts, exs: [], sets: [] });
       persist(); renderWorkout();
       setTimeout(()=> window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 0);
       const idx = state.inProgress.blocks.length - 1;
@@ -1015,67 +1143,281 @@
     }
 
     function openExerciseChooser(blockIdx){
-      const part = state.inProgress.blocks[blockIdx].part || state.inProgress.part;
-      const allowed = sortJa(state.lists.exerciseMap.filter(e=> (e.parts||[]).includes(part)).map(e=> e.name));
-      const current = new Set((state.inProgress.blocks[blockIdx].exs||[]).map(e=> e.name));
+      const block = state.inProgress.blocks[blockIdx];
+      const blockParts = (block.parts && block.parts.length)
+        ? block.parts
+        : ((state.inProgress.selectedParts && state.inProgress.selectedParts.length)
+            ? state.inProgress.selectedParts
+            : [block.part || state.inProgress.part].filter(Boolean));
 
-      const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
-      const card = document.createElement('div'); card.className='modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw]';
-      const head = document.createElement('div'); head.className='text-sm font-semibold mb-2'; head.textContent = `種目選択（${part}）`;
-      const list = document.createElement('div'); list.className='max-h-[60vh] overflow-auto space-y-1';
+      const allowedEntries = sortExerciseMapJa(state.lists.exerciseMap || [])
+        .filter(entry => !entry.parts || entry.parts.length === 0 || entry.parts.some(p => blockParts.includes(p)));
+      const currentOrder = new Map();
+      (block.exs || []).forEach((ex, idx)=> currentOrder.set(ex.name, `0${idx}`));
+      const currentMeta = new Map((block.exs || []).map(ex => [ex.name, {
+        eq: normalizeOption(ex.eq ?? '-'),
+        att: normalizeOption(ex.att ?? '-'),
+        ang: normalizeOption(ex.ang ?? '-'),
+        pos: normalizeOption(ex.pos ?? '-'),
+        part: ex.part || (blockParts.find(p => (state.lists.exerciseMap||[]).find(e=> e.name===ex.name)?.parts?.includes(p)) || blockParts[0] || '')
+      }]));
 
-      if(allowed.length===0){
-        const msg=document.createElement('div'); msg.className='text-sm text-gray-500';
+      const bg = document.createElement('div');
+      bg.className = 'modal-bg flex items-center justify-center z-50';
+      const card = document.createElement('div');
+      card.className = 'modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw] max-h-[90vh] flex flex-col gap-3';
+
+      const head = document.createElement('div');
+      head.className = 'flex flex-col gap-1';
+      const title = document.createElement('div');
+      title.className = 'text-sm font-semibold';
+      title.textContent = '種目と詳細の選択';
+      const info = document.createElement('div');
+      info.className = 'text-[11px] text-gray-500';
+      info.textContent = `対象部位: ${blockParts.length ? blockParts.join(' × ') : '-'}`;
+      head.append(title, info);
+
+      const content = document.createElement('div');
+      content.className = 'flex flex-col gap-3 overflow-hidden';
+
+      const listWrap = document.createElement('div');
+      listWrap.className = 'rounded-xl border p-2 space-y-1 overflow-auto';
+      listWrap.style.maxHeight = '35vh';
+
+      if(allowedEntries.length === 0){
+        const msg=document.createElement('div');
+        msg.className='text-sm text-gray-500';
         msg.textContent='この部位に紐づく種目がありません。設定＞種目マスタで追加してください。';
-        list.appendChild(msg);
+        listWrap.appendChild(msg);
       }else{
-        allowed.forEach(name=>{
-          const row=document.createElement('label'); row.className='flex items-center gap-2 text-sm';
-          const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=current.has(name);
-          cb.dataset.name=name; cb.dataset.checkedAt='';
-          cb.addEventListener('change', ()=>{ cb.dataset.checkedAt = cb.checked ? String(Date.now()+Math.random()) : ''; });
-          const sp=document.createElement('span'); sp.textContent=name;
-          row.append(cb,sp); list.appendChild(row);
+        allowedEntries.forEach(entry=>{
+          const row = document.createElement('label');
+          row.className = 'flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-indigo-50 transition-colors';
+          row.dataset.name = entry.name;
+          const left = document.createElement('div');
+          left.className = 'flex items-center gap-2';
+
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.dataset.name = entry.name;
+          cb.dataset.checkedAt = '';
+          if(currentOrder.has(entry.name)){
+            cb.checked = true;
+            cb.dataset.checkedAt = currentOrder.get(entry.name) || '';
+          }
+          cb.addEventListener('change', ()=>{
+            cb.dataset.checkedAt = cb.checked ? `${Date.now()}_${Math.random()}` : '';
+            if(cb.checked && !selectionMeta.has(entry.name)){
+              const baseMeta = currentMeta.get(entry.name) || {};
+              selectionMeta.set(entry.name, {
+                eq: normalizeOption(baseMeta.eq ?? '-'),
+                att: normalizeOption(baseMeta.att ?? '-'),
+                ang: normalizeOption(baseMeta.ang ?? '-'),
+                pos: normalizeOption(baseMeta.pos ?? '-'),
+                part: baseMeta.part || (entry.parts||[]).find(p => blockParts.includes(p)) || blockParts[0] || ''
+              });
+            }
+            if(!cb.checked){ selectionMeta.delete(entry.name); }
+            updateOrderIndicators();
+            renderConfig();
+          });
+
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = entry.name;
+
+          left.append(cb, nameSpan);
+
+          const partsBadge = document.createElement('div');
+          partsBadge.className = 'flex flex-wrap gap-1 text-[10px] text-gray-500';
+          (entry.parts||[]).forEach(p=>{
+            const badge = document.createElement('span');
+            badge.className = 'px-1 py-0.5 rounded-full bg-gray-100 text-gray-600';
+            badge.textContent = p;
+            partsBadge.appendChild(badge);
+          });
+          left.appendChild(partsBadge);
+
+          const orderIndicator = document.createElement('span');
+          orderIndicator.className = 'order-indicator text-[11px] font-semibold text-indigo-600 hidden';
+          orderIndicator.textContent = '#1';
+
+          row.append(left, orderIndicator);
+          listWrap.appendChild(row);
         });
       }
 
-      const actions=document.createElement('div'); actions.className='flex justify-end gap-2 mt-3';
-      const btnCancel=document.createElement('button'); btnCancel.className='px-3 py-2 rounded-xl bg-white border'; btnCancel.textContent='キャンセル';
-      const btnOk=document.createElement('button'); btnOk.className='px-3 py-2 rounded-xl bg-gray-900 text-white'; btnOk.textContent='OK';
+      const configWrap = document.createElement('div');
+      configWrap.className = 'rounded-xl border p-2 space-y-2 flex-1 overflow-auto';
+      configWrap.style.minHeight = '0';
+
+      const selectionMeta = new Map(currentMeta);
+
+      const actions = document.createElement('div');
+      actions.className = 'flex justify-end gap-2 pt-1';
+      const btnCancel=document.createElement('button');
+      btnCancel.className='px-3 py-2 rounded-xl bg-white border';
+      btnCancel.textContent='キャンセル';
+      const btnOk=document.createElement('button');
+      btnOk.className='px-3 py-2 rounded-xl bg-gray-900 text-white';
+      btnOk.textContent='決定';
       actions.append(btnCancel, btnOk);
 
-      card.append(head, list, actions); bg.appendChild(card); document.body.appendChild(bg);
-      btnCancel.onclick=()=> bg.remove();
-      btnOk.onclick=()=>{
-        const cbs = Array.from(list.querySelectorAll('input[type=checkbox]:checked'));
+      const getOrderedNames = ()=>{
+        const cbs = Array.from(listWrap.querySelectorAll('input[type=checkbox]:checked'));
         cbs.sort((a,b)=>{
-          const ta=a.dataset.checkedAt, tb=b.dataset.checkedAt;
-          if(ta && tb) return ta.localeCompare(tb);
-          if(ta) return -1; if(tb) return 1; return 0;
+          const ta=a.dataset.checkedAt||'';
+          const tb=b.dataset.checkedAt||'';
+          return ta.localeCompare(tb);
         });
-        const names = cbs.map(cb=> cb.dataset.name);
-        applySelectedExercises(blockIdx, names);
+        return cbs.map(cb=> cb.dataset.name);
+      };
+
+      const updateOrderIndicators = ()=>{
+        const ordered = getOrderedNames();
+        const map = new Map(ordered.map((name, idx)=> [name, idx+1]));
+        listWrap.querySelectorAll('label[data-name]').forEach(row=>{
+          const name = row.dataset.name;
+          const indicator = row.querySelector('.order-indicator');
+          if(!indicator) return;
+          if(map.has(name)){
+            indicator.textContent = `#${map.get(name)}`;
+            indicator.classList.remove('hidden');
+          }else{
+            indicator.classList.add('hidden');
+          }
+        });
+      };
+
+      const fillSelect = (select, options, value, onChange)=>{
+        select.innerHTML='';
+        orderWithNoneFirst(options).forEach(opt=>{
+          const o = document.createElement('option');
+          o.value = opt;
+          o.textContent = opt;
+          select.appendChild(o);
+        });
+        select.value = normalizeOption(value);
+        select.onchange = e=> onChange(normalizeOption(e.target.value));
+      };
+
+      const renderConfig = ()=>{
+        configWrap.innerHTML = '';
+        const ordered = getOrderedNames();
+        if(ordered.length === 0){
+          const msg = document.createElement('div');
+          msg.className = 'text-sm text-gray-500';
+          msg.textContent = 'チェックした種目がここに表示されます。順番に応じて#が表示されます。';
+          configWrap.appendChild(msg);
+          return;
+        }
+        ordered.forEach((name, idx)=>{
+          if(!selectionMeta.has(name)){
+            const entry = allowedEntries.find(e=> e.name===name) || { parts: [] };
+            selectionMeta.set(name, {
+              eq: '-',
+              att: '-',
+              ang: '-',
+              pos: '-',
+              part: (entry.parts||[]).find(p => blockParts.includes(p)) || blockParts[0] || ''
+            });
+          }
+          const meta = selectionMeta.get(name);
+          const entry = allowedEntries.find(e=> e.name===name) || { parts: [] };
+          const row = document.createElement('div');
+          row.className = 'rounded-lg border bg-gray-50 p-3 space-y-2';
+
+          const header = document.createElement('div');
+          header.className = 'flex items-center justify-between';
+          const title = document.createElement('div');
+          title.className = 'text-sm font-semibold';
+          title.textContent = `${idx+1}. ${name}`;
+          const partTag = document.createElement('span');
+          partTag.className = 'text-[11px] text-gray-500';
+          partTag.textContent = meta.part ? `部位: ${meta.part}` : '';
+          header.append(title, partTag);
+
+          const grid = document.createElement('div');
+          grid.className = 'grid grid-cols-2 sm:grid-cols-4 gap-1';
+
+          const selEq = document.createElement('select'); selEq.className = 'border rounded-md px-2 py-1';
+          const selAtt = document.createElement('select'); selAtt.className = 'border rounded-md px-2 py-1';
+          const selAng = document.createElement('select'); selAng.className = 'border rounded-md px-2 py-1';
+          const selPos = document.createElement('select'); selPos.className = 'border rounded-md px-2 py-1';
+
+          fillSelect(selEq, state.lists.equip || DEFAULTS.equip, meta.eq, v=>{ meta.eq = v; });
+          fillSelect(selAtt, state.lists.attach || DEFAULTS.attach, meta.att, v=>{ meta.att = v; });
+          fillSelect(selAng, state.lists.angle || DEFAULTS.angle, meta.ang, v=>{ meta.ang = v; });
+          fillSelect(selPos, state.lists.position || DEFAULTS.position, meta.pos, v=>{ meta.pos = v; });
+
+          grid.append(selEq, selAtt, selAng, selPos);
+
+          row.append(header, grid);
+          configWrap.appendChild(row);
+        });
+      };
+
+      updateOrderIndicators();
+      renderConfig();
+
+      content.append(listWrap, configWrap);
+
+      card.append(head, content, actions);
+      bg.appendChild(card);
+      document.body.appendChild(bg);
+
+      btnCancel.onclick = ()=> bg.remove();
+      btnOk.onclick = ()=>{
+        const names = getOrderedNames();
+        if(names.length === 0){
+          alert('少なくとも1つの種目を選択してください。');
+          return;
+        }
+        applySelectedExercises(blockIdx, names, selectionMeta);
         bg.remove();
       };
       bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
     }
 
-    function applySelectedExercises(blockIdx, names){
+    function applySelectedExercises(blockIdx, names, metaMap){
       const block = state.inProgress.blocks[blockIdx];
       const before = block.exs || [];
+      const blockParts = (block.parts && block.parts.length) ? block.parts : (state.inProgress.selectedParts||[]);
+      const equipList = state.lists.equip || DEFAULTS.equip;
+      const attachList = state.lists.attach || DEFAULTS.attach;
+      const angleList = state.lists.angle || DEFAULTS.angle;
+      const positionList = state.lists.position || DEFAULTS.position;
+      const defMap = new Map((state.lists.exerciseMap||[]).map(e=> [e.name, e]));
+      const metaLookup = metaMap && typeof metaMap.get === 'function'
+        ? metaMap
+        : new Map(Object.entries(metaMap || {}));
 
-      block.exs = names.map(name => before.find(e=> e.name===name) || { name, eq: state.lists.equip[0]||'', att:'なし', ang:'なし', pos:'なし' });
+      block.exs = names.map(name => {
+        const prev = before.find(e=> e.name===name) || {};
+        const meta = metaLookup.get(name) || {};
+        const def = defMap.get(name);
+        const partCandidate = meta.part || prev.part || (blockParts.find(p => (def?.parts||[]).includes(p))) || (def?.parts?.[0] || blockParts[0] || '');
+        return {
+          name,
+          eq: orderWithNoneFirst(equipList).includes(normalizeOption(meta.eq ?? prev.eq)) ? normalizeOption(meta.eq ?? prev.eq) : (equipList[0] || '-'),
+          att: orderWithNoneFirst(attachList).includes(normalizeOption(meta.att ?? prev.att)) ? normalizeOption(meta.att ?? prev.att) : '-',
+          ang: orderWithNoneFirst(angleList).includes(normalizeOption(meta.ang ?? prev.ang)) ? normalizeOption(meta.ang ?? prev.ang) : '-',
+          pos: orderWithNoneFirst(positionList).includes(normalizeOption(meta.pos ?? prev.pos)) ? normalizeOption(meta.pos ?? prev.pos) : '-',
+          part: partCandidate
+        };
+      });
 
       (block.sets||[]).forEach(s=>{
+        if(typeof s.oneHand === 'undefined') s.oneHand = false;
         const prevItems = s.items||[];
         s.items = names.map(name=>{
           const prevIdx = before.findIndex(e=> e.name===name);
-          return (prevIdx>=0 && prevItems[prevIdx]) ? prevItems[prevIdx] : { w:0, reps:0, assist:0, note:'', oneRM:0 };
+          const fallback = { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
+          return (prevIdx>=0 && prevItems[prevIdx]) ? { ...fallback, ...prevItems[prevIdx] } : { ...fallback };
         });
       });
 
       if(!block.sets || block.sets.length===0){
-        block.sets = [{ warm:false, items: names.map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0 })) }];
+        block.sets = [{ warm:false, oneHand:false, items: names.map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 })) }];
       }
 
       persist(); renderWorkout(); afterDataChanged && afterDataChanged();
@@ -1083,42 +1425,51 @@
 
     function renderExConfigRow(block, ex){
       const node = document.importNode($('#tpl-ex-config-row').content, true);
-      node.querySelector('.ex-name').textContent = ex.name;
+      const idx = block.exs.findIndex(e=> e===ex);
+      const orderEl = node.querySelector('.ex-order');
+      if(orderEl) orderEl.textContent = `#${idx+1}`;
+      const nameEl = node.querySelector('.ex-name');
+      if(nameEl) nameEl.textContent = ex.name;
+      const partEl = node.querySelector('.ex-part');
+      if(partEl) partEl.textContent = ex.part ? `部位: ${ex.part}` : '部位: -';
 
       const up = node.querySelector('.ex-move-up');
       const down = node.querySelector('.ex-move-down');
       if(up) up.onclick = ()=>{
-        const idx = block.exs.findIndex(e=> e===ex);
-        if(idx<=0) return;
-        [block.exs[idx-1], block.exs[idx]] = [block.exs[idx], block.exs[idx-1]];
-        (block.sets||[]).forEach(s=> [s.items[idx-1], s.items[idx]] = [s.items[idx], s.items[idx-1]]);
+        const idxCurrent = block.exs.findIndex(e=> e===ex);
+        if(idxCurrent<=0) return;
+        [block.exs[idxCurrent-1], block.exs[idxCurrent]] = [block.exs[idxCurrent], block.exs[idxCurrent-1]];
+        (block.sets||[]).forEach(s=> [s.items[idxCurrent-1], s.items[idxCurrent]] = [s.items[idxCurrent], s.items[idxCurrent-1]]);
         persist(); renderWorkout();
       };
       if(down) down.onclick = ()=>{
-        const idx = block.exs.findIndex(e=> e===ex);
-        if(idx>=block.exs.length-1) return;
-        [block.exs[idx+1], block.exs[idx]] = [block.exs[idx], block.exs[idx+1]];
-        (block.sets||[]).forEach(s=> [s.items[idx+1], s.items[idx]] = [s.items[idx], s.items[idx+1]]);
+        const idxCurrent = block.exs.findIndex(e=> e===ex);
+        if(idxCurrent>=block.exs.length-1) return;
+        [block.exs[idxCurrent+1], block.exs[idxCurrent]] = [block.exs[idxCurrent], block.exs[idxCurrent+1]];
+        (block.sets||[]).forEach(s=> [s.items[idxCurrent+1], s.items[idxCurrent]] = [s.items[idxCurrent], s.items[idxCurrent+1]]);
         persist(); renderWorkout();
       };
 
       const fill = (sel, arr, val, cb)=>{
-        sel.innerHTML=''; orderWithNoneFirst(arr).forEach(v=> {
+        if(!sel) return;
+        sel.innerHTML='';
+        orderWithNoneFirst(arr).forEach(v=> {
           const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
         });
-        sel.value = val || 'なし';
-        sel.onchange = e=> cb(e.target.value);
+        sel.value = normalizeOption(val);
+        sel.onchange = e=> cb(normalizeOption(e.target.value));
       };
-      fill(node.querySelector('.ex-eq'),  state.lists.equip,   ex.eq || state.lists.equip[0], v=>{ ex.eq=v; persist(); });
-      fill(node.querySelector('.ex-att'), state.lists.attach,   ex.att || 'なし',               v=>{ ex.att=v; persist(); });
-      fill(node.querySelector('.ex-ang'), state.lists.angle,    ex.ang || 'なし',               v=>{ ex.ang=v; persist(); });
-      fill(node.querySelector('.ex-pos'), state.lists.position, ex.pos || 'なし',               v=>{ ex.pos=v; persist(); });
+      fill(node.querySelector('.ex-eq'),  state.lists.equip,   ex.eq || state.lists.equip?.[0] || '-', v=>{ ex.eq=v; persist(); });
+      fill(node.querySelector('.ex-att'), state.lists.attach,   ex.att || '-', v=>{ ex.att=v; persist(); });
+      fill(node.querySelector('.ex-ang'), state.lists.angle,    ex.ang || '-', v=>{ ex.ang=v; persist(); });
+      fill(node.querySelector('.ex-pos'), state.lists.position, ex.pos || '-', v=>{ ex.pos=v; persist(); });
 
       updateExMetaLine(node, ex);
 
       const historyBtn = node.querySelector('.btn-ex-history');
       if(historyBtn){
-        historyBtn.onclick = ()=> openExerciseHistory(ex, block.part || state.inProgress.part);
+        const targetPart = ex.part || block.part || (block.parts && block.parts[0]) || (state.inProgress.selectedParts||[])[0] || state.inProgress.part;
+        historyBtn.onclick = ()=> openExerciseHistory(ex, targetPart);
       }
       return node;
     }
@@ -1161,9 +1512,9 @@
         const key = [
           normalizeDetail(row.part, ''),
           normalizeDetail(row.equipment, ''),
-          normalizeDetail(row.attachment, 'なし'),
-          normalizeDetail(row.angle, 'なし'),
-          normalizeDetail(row.position, 'なし')
+          normalizeDetail(row.attachment, '-'),
+          normalizeDetail(row.angle, '-'),
+          normalizeDetail(row.position, '-')
         ].join('|');
         if(!groups.has(key)) groups.set(key, { meta: row, workouts: new Map() });
         const group = groups.get(key);
@@ -1186,14 +1537,14 @@
       const targetKey = [
         normalizeDetail(part, ''),
         normalizeDetail(ex.eq, ''),
-        normalizeDetail(ex.att, 'なし'),
-        normalizeDetail(ex.ang, 'なし'),
-        normalizeDetail(ex.pos, 'なし')
+        normalizeDetail(ex.att, '-'),
+        normalizeDetail(ex.ang, '-'),
+        normalizeDetail(ex.pos, '-')
       ].join('|');
 
       if(part && !groups.has(targetKey)){
         groups.set(targetKey, {
-          meta: { exercise: ex.name, part, equipment: ex.eq || '', attachment: normalizeDetail(ex.att, 'なし'), angle: normalizeDetail(ex.ang, 'なし'), position: normalizeDetail(ex.pos, 'なし') },
+          meta: { exercise: ex.name, part, equipment: ex.eq || '', attachment: normalizeDetail(ex.att, '-'), angle: normalizeDetail(ex.ang, '-'), position: normalizeDetail(ex.pos, '-') },
           workouts: []
         });
       }
@@ -1202,7 +1553,7 @@
       if(keys.length===0){
         keys = [targetKey];
         groups.set(targetKey, {
-          meta: { exercise: ex.name, part: part || '-', equipment: ex.eq || '', attachment: normalizeDetail(ex.att, 'なし'), angle: normalizeDetail(ex.ang, 'なし'), position: normalizeDetail(ex.pos, 'なし') },
+          meta: { exercise: ex.name, part: part || '-', equipment: ex.eq || '', attachment: normalizeDetail(ex.att, '-'), angle: normalizeDetail(ex.ang, '-'), position: normalizeDetail(ex.pos, '-') },
           workouts: []
         });
       }
@@ -1228,7 +1579,7 @@
         groupCard.className = 'rounded-xl border bg-white shadow-soft p-3 space-y-2';
         const groupHead = document.createElement('div');
         groupHead.className = 'text-xs font-semibold text-gray-700 flex items-center gap-2';
-        const metaSource = group?.meta || { exercise: ex.name, part: part || '-', equipment: ex.eq || '', attachment: normalizeDetail(ex.att, 'なし'), angle: normalizeDetail(ex.ang, 'なし'), position: normalizeDetail(ex.pos, 'なし') };
+        const metaSource = group?.meta || { exercise: ex.name, part: part || '-', equipment: ex.eq || '', attachment: normalizeDetail(ex.att, '-'), angle: normalizeDetail(ex.ang, '-'), position: normalizeDetail(ex.pos, '-') };
         const detailText = `${normalizeDetail(metaSource.part, '-') || '-'} / ${formatDetailText(metaSource)}`;
         const headLabel = document.createElement('span');
         headLabel.textContent = detailText;
@@ -1264,6 +1615,7 @@
               line.textContent = formatRecordLine({
                 index: row.setIndex,
                 warm: row.warmup,
+                oneHand: row.oneHand,
                 weight: row.weight,
                 reps: row.repsSelf,
                 assist: row.repsAssist,
@@ -1292,9 +1644,9 @@
         params.set('exercise', ex.name);
         if(part) params.set('part', part);
         if(ex.eq) params.set('equipment', ex.eq);
-        params.set('attachment', normalizeDetail(ex.att, 'なし'));
-        params.set('angle', normalizeDetail(ex.ang, 'なし'));
-        params.set('position', normalizeDetail(ex.pos, 'なし'));
+        params.set('attachment', normalizeDetail(ex.att, '-'));
+        params.set('angle', normalizeDetail(ex.ang, '-'));
+        params.set('position', normalizeDetail(ex.pos, '-'));
         location.hash = `${ROUTES.HISTORY}?${params.toString()}`;
         bg.remove();
       };
@@ -1317,6 +1669,11 @@
       const warm = node.querySelector('.set-warm');
       warm.checked = !!set.warm;
       warm.addEventListener('input', ()=> { set.warm = warm.checked; persist(); afterDataChanged(); });
+      const oneHand = node.querySelector('.set-one-hand');
+      if(oneHand){
+        oneHand.checked = !!set.oneHand;
+        oneHand.addEventListener('input', ()=> { set.oneHand = oneHand.checked; persist(); afterDataChanged(); });
+      }
 
       const itemsWrap = node.querySelector('.ex-items');
       ensureSetItems(block, set);
@@ -1326,6 +1683,7 @@
         const source = block.sets[sIdx];
         const cloned = JSON.parse(JSON.stringify(source));
         cloned.warm = false;
+        if(typeof cloned.oneHand !== 'boolean') cloned.oneHand = !!source.oneHand;
         block.sets.splice(sIdx+1, 0, cloned);
         persist(); renderWorkout(); afterDataChanged();
       };
@@ -1353,10 +1711,11 @@
         const last = block.sets[block.sets.length-1];
         const cloned = JSON.parse(JSON.stringify(last));
         cloned.warm = false;
+        if(typeof cloned.oneHand !== 'boolean') cloned.oneHand = !!last.oneHand;
         block.sets.push(cloned);
       } else {
         const items = (block.exs||[]).map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 }));
-        block.sets.push({ warm:false, items });
+        block.sets.push({ warm:false, oneHand:false, items });
       }
       persist(); renderWorkout(); afterDataChanged();
       setTimeout(()=> window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }), 0);
@@ -1367,7 +1726,7 @@
       const item = set.items[idx] ||= { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
 
       const titleEl = node.querySelector('.ex-title');
-      if(titleEl) titleEl.textContent = ex.name;
+      if(titleEl) titleEl.textContent = `${idx+1}. ${ex.name}`;
 
       const elW = node.querySelector('.ex-weight');
       const elR = node.querySelector('.ex-reps');
@@ -1415,7 +1774,12 @@
       if(copy.blocks.length===0){ alert('記録が空です。セットを入力してください。'); return; }
       copy.id = 'w_'+Date.now();
       state.workouts.push(copy);
-      state.inProgress = { date: state.inProgress.date || todayISO(), part: state.inProgress.part, blocks: [] };
+      state.inProgress = {
+        date: state.inProgress.date || todayISO(),
+        part: state.inProgress.part,
+        selectedParts: Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts.slice(0,2) : [],
+        blocks: []
+      };
       persist(); alert('保存しました'); afterDataChanged();
     }
 
@@ -1427,11 +1791,22 @@
             (b.exs||[]).forEach((ex, exIdx)=>{
               const it = (s.items||[])[exIdx] || {};
               rows.push({
-                id: w.id, date: w.date || state.inProgress.date || todayISO(), part: b.part || '不明',
-                exercise: ex.name, equipment: ex.eq||'', attachment: ex.att||'なし',
-                angle: ex.ang||'なし', position: ex.pos||'なし', setIndex: sIdx+1,
-                warmup: !!s.warm, weight: Number(it.w||0), repsSelf: Number(it.reps||0),
-                repsAssist: Number(it.assist||0), durationSec: Number(it.sec||0), note: it.note||'',
+                id: w.id,
+                date: w.date || state.inProgress.date || todayISO(),
+                part: ex.part || (Array.isArray(b.parts) && b.parts.length ? b.parts[0] : (b.part || '不明')),
+                exercise: ex.name,
+                equipment: normalizeOption(ex.eq || ''),
+                attachment: normalizeOption(ex.att || '-'),
+                angle: normalizeOption(ex.ang || '-'),
+                position: normalizeOption(ex.pos || '-'),
+                setIndex: sIdx+1,
+                warmup: !!s.warm,
+                oneHand: !!s.oneHand,
+                weight: Number(it.w||0),
+                repsSelf: Number(it.reps||0),
+                repsAssist: Number(it.assist||0),
+                durationSec: Number(it.sec||0),
+                note: it.note||'',
                 oneRM: Number(it.oneRM||0)
               });
             });
@@ -1444,7 +1819,7 @@
     function renderHistory(){
       const parts = ['(指定なし)', ...sortJa(state.lists.parts)];
       const exs   = ['(指定なし)', ...sortJa(Array.from(new Set(flattenSets().map(r=> r.exercise))))];
-      const eqs   = ['(指定なし)', ...sortJa(state.lists.equip)];
+      const eqs   = ['(指定なし)', ...orderWithNoneFirst(state.lists.equip)];
       const atts  = ['(指定なし)', ...orderWithNoneFirst(state.lists.attach)];
       const angs  = ['(指定なし)', ...orderWithNoneFirst(state.lists.angle)];
       const poss  = ['(指定なし)', ...orderWithNoneFirst(state.lists.position)];
@@ -1574,10 +1949,10 @@
 
     function renderSettings(){
       $('#list-parts').value = sortJa(state.lists.parts).join('\n');
-      $('#list-equip').value = sortJa(state.lists.equip).join('\n');
-      $('#list-attach').value = sortJa(state.lists.attach).join('\n');
-      $('#list-angle').value = sortJa(state.lists.angle).join('\n');
-      $('#list-position').value = sortJa(state.lists.position).join('\n');
+      $('#list-equip').value = orderWithNoneFirst(state.lists.equip).join('\n');
+      $('#list-attach').value = orderWithNoneFirst(state.lists.attach).join('\n');
+      $('#list-angle').value = orderWithNoneFirst(state.lists.angle).join('\n');
+      $('#list-position').value = orderWithNoneFirst(state.lists.position).join('\n');
 
       const boxes = $('#part-boxes');
       boxes.innerHTML = '';
@@ -1715,13 +2090,10 @@
     function saveLists(){
       const parseLines = v => v.split('\n').map(s=>s.trim()).filter(Boolean);
       state.lists.parts = sortJa(parseLines($('#list-parts').value));
-      state.lists.equip = sortJa(parseLines($('#list-equip').value));
-      state.lists.attach = sortJa(parseLines($('#list-attach').value));
-      if(state.lists.attach[0] !== 'なし'){ state.lists.attach = ['なし', ...state.lists.attach.filter(x=>x!=='なし')]; }
-      state.lists.angle = sortJa(parseLines($('#list-angle').value));
-      if(state.lists.angle[0] !== 'なし'){ state.lists.angle = ['なし', ...state.lists.angle.filter(x=>x!=='なし')]; }
-      state.lists.position = sortJa(parseLines($('#list-position').value));
-      if(state.lists.position[0] !== 'なし'){ state.lists.position = ['なし', ...state.lists.position.filter(x=>x!=='なし')]; }
+      state.lists.equip = orderWithNoneFirst(parseLines($('#list-equip').value));
+      state.lists.attach = orderWithNoneFirst(parseLines($('#list-attach').value));
+      state.lists.angle = orderWithNoneFirst(parseLines($('#list-angle').value));
+      state.lists.position = orderWithNoneFirst(parseLines($('#list-position').value));
 
       state.lists.exerciseMap = cleanupExercises(sortExerciseMapJa(
         state.lists.exerciseMap.filter(r=> (r.name && r.name.trim().length>0))
@@ -1736,10 +2108,10 @@
     function resetDefaults(){
       state.lists = JSON.parse(JSON.stringify(DEFAULTS));
       state.lists.parts = sortJa(state.lists.parts);
-      state.lists.equip = sortJa(state.lists.equip);
-      state.lists.attach = sortJa(state.lists.attach);
-      state.lists.angle = sortJa(state.lists.angle);
-      state.lists.position = sortJa(state.lists.position);
+      state.lists.equip = orderWithNoneFirst(state.lists.equip);
+      state.lists.attach = orderWithNoneFirst(state.lists.attach);
+      state.lists.angle = orderWithNoneFirst(state.lists.angle);
+      state.lists.position = orderWithNoneFirst(state.lists.position);
       state.lists.exerciseMap = cleanupExercises(sortExerciseMapJa(state.lists.exerciseMap));
       persist(); renderSettings(); alert('デフォルトに復元しました'); afterDataChanged();
     }
@@ -1774,8 +2146,8 @@
           const part = r[partI] || '不明';
           const key = date+'|'+part;
           (groups[key] ||= []).push({
-            exercise: r[exI]||'', equipment: r[eqI]||'', attachment: r[attI]||'なし',
-            angle: r[angI]||'なし', position: r[posI]||'なし', setIndex: Number(r[sI]||1),
+            exercise: r[exI]||'', equipment: normalizeOption(r[eqI]||''), attachment: normalizeOption(r[attI]||'-'),
+            angle: normalizeOption(r[angI]||'-'), position: normalizeOption(r[posI]||'-'), setIndex: Number(r[sI]||1),
             warmup: Number(r[warmI]||0)>0, weight: Number(r[wI]||0), repsSelf: Number(r[rsI]||0),
             repsAssist: Number(r[raI]||0), durationSec: Number(r[durI]||0), note: r[noteI]||'',
             oneRM: Number(r[oneI]||0)
@@ -1789,11 +2161,11 @@
           const exs = exNames.map(name=>{
             const any = items.find(it=> it.exercise===name) || {};
             const cleanedName = cleanupExercises([{name, parts:[]}])[0]?.name || name;
-            return { name: cleanedName, eq:any.equipment||'', att:any.attachment||'なし', ang:any.angle||'なし', pos:any.position||'なし' };
+            return { name: cleanedName, eq:any.equipment||'', att:any.attachment||'-', ang:any.angle||'-', pos:any.position||'-' };
           });
           const sets = [];
           for(let s=1; s<=Math.max(1, maxSet); s++){
-            const set = { warm:false, items: exNames.map(()=> ({ w:0,reps:0,assist:0,sec:0,note:'',oneRM:0 })) };
+            const set = { warm:false, oneHand:false, items: exNames.map(()=> ({ w:0,reps:0,assist:0,sec:0,note:'',oneRM:0 })) };
             exNames.forEach((name, i)=>{
               const it = items.find(it=> it.exercise===name && it.setIndex===s);
               if(it){
