@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>筋トレメモ | BUILD_TAG=CORE-20240309</title>
+  <title>筋トレメモ | BUILD_TAG=UI-20251001</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -21,14 +21,14 @@
     .input-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
   </style>
 </head>
-<body class="text-slate-900">
+<body class="text-slate-900 overflow-x-hidden">
   <div id="error-root" class="error-banner hidden"></div>
-  <main id="app" class="max-w-3xl mx-auto main-content"></main>
+  <main id="app" class="max-w-3xl mx-auto main-content px-4 sm:px-6"></main>
   <nav class="tab-nav">
-    <button data-route="home" class="tab-button flex-1 text-sm font-semibold text-slate-600">ホーム</button>
-    <button data-route="history" class="tab-button flex-1 text-sm font-semibold text-slate-600">履歴</button>
-    <button data-route="workout" class="tab-button flex-1 text-sm font-semibold text-slate-600">記録</button>
-    <button data-route="settings" class="tab-button flex-1 text-sm font-semibold text-slate-600">設定</button>
+    <button data-route="home" class="tab-button flex-1 text-sm font-semibold text-slate-800">ホーム</button>
+    <button data-route="history" class="tab-button flex-1 text-sm font-semibold text-slate-800">履歴</button>
+    <button data-route="workout" class="tab-button flex-1 text-sm font-semibold text-slate-800">記録</button>
+    <button data-route="settings" class="tab-button flex-1 text-sm font-semibold text-slate-800">設定</button>
   </nav>
   <script>
   (function(){
@@ -52,6 +52,63 @@
       if (opts.value !== undefined) el.value = opts.value;
       if (opts.children) opts.children.forEach(child => el.appendChild(child));
       return el;
+    };
+
+    const createInfoIcon = (tooltip) => {
+      return createElem('span', {
+        className: 'inline-flex items-center justify-center w-5 h-5 rounded-full border border-blue-600 text-[0.625rem] font-bold text-blue-700 cursor-help',
+        textContent: 'i',
+        attrs: { title: tooltip, 'aria-label': tooltip }
+      });
+    };
+
+    const createFieldWrapper = (labelText, tooltip, description, inputEl) => {
+      const wrapper = createElem('label', { className: 'flex flex-col gap-2 text-sm font-semibold text-slate-900' });
+      const header = createElem('div', { className: 'flex items-center gap-2' });
+      header.append(
+        createElem('span', { textContent: labelText }),
+        createInfoIcon(tooltip)
+      );
+      wrapper.append(header);
+      if (description) {
+        wrapper.append(createElem('span', { className: 'text-xs font-normal text-slate-800', textContent: description }));
+      }
+      wrapper.append(inputEl);
+      return wrapper;
+    };
+
+    const getTodayDateValue = () => {
+      const now = new Date();
+      const offset = now.getTimezoneOffset();
+      const local = new Date(now.getTime() - offset * 60000);
+      return local.toISOString().slice(0, 10);
+    };
+
+    const registerLongPress = (element, handler, delay = 600) => {
+      let timerId = null;
+      const cancel = () => {
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = null;
+        }
+      };
+      const start = (event) => {
+        if (event.type === 'touchstart' && event.touches.length > 1) return;
+        if (event.target.closest('input, textarea, select, button')) return;
+        cancel();
+        timerId = setTimeout(() => {
+          handler();
+          cancel();
+        }, delay);
+      };
+      element.addEventListener('touchstart', start, { passive: true });
+      element.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        start(event);
+      });
+      ['touchend', 'touchcancel', 'touchmove', 'mouseup', 'mouseleave'].forEach((type) => {
+        element.addEventListener(type, cancel);
+      });
     };
 
     const formatDate = (value) => {
@@ -198,7 +255,7 @@
 
     const confirmAction = (message) => {
       return openModal((finish) => {
-        const text = createElem('p', { className: 'text-sm text-slate-700 mb-4', textContent: message });
+        const text = createElem('p', { className: 'text-sm text-slate-800 mb-4', textContent: message });
         const btnWrap = createElem('div', { className: 'flex justify-end gap-2' });
         const cancelBtn = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
         const okBtn = createElem('button', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'OK', attrs: { type: 'button' } });
@@ -392,9 +449,11 @@
       document.querySelectorAll('.tab-button').forEach((tab) => {
         const route = tab.getAttribute('data-route');
         if (route === currentRoute) {
-          tab.classList.add('text-blue-600');
+          tab.classList.add('text-blue-600', 'font-bold');
+          tab.classList.remove('text-slate-800');
         } else {
-          tab.classList.remove('text-blue-600');
+          tab.classList.remove('text-blue-600', 'font-bold');
+          tab.classList.add('text-slate-800');
         }
       });
     };
@@ -419,6 +478,8 @@
     const renderRoute = () => {
       if (!appRoot) return;
       appRoot.replaceChildren();
+      const heading = createElem('h1', { className: 'mb-6 text-2xl font-bold text-slate-900', textContent: '筋トレメモ' });
+      appRoot.append(heading);
       if (currentRoute === ROUTES.HOME) renderHome();
       else if (currentRoute === ROUTES.HISTORY) renderHistory();
       else if (currentRoute === ROUTES.SETTINGS) renderSettings();
@@ -460,6 +521,12 @@
       const newExercise = {
         id: `ex-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
         name: exerciseName,
+        equipment: '',
+        attachment: '',
+        angle: null,
+        position: '',
+        performedOn: getTodayDateValue(),
+        intervalSeconds: null,
         sets: [createEmptySet()]
       };
       appData.currentWorkout.exercises.push(newExercise);
@@ -492,6 +559,39 @@
       }
       recomputeExercise(appData.currentWorkout.id, exercise);
       persist();
+    };
+
+    const updateExerciseField = (exerciseId, field, value) => {
+      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
+      if (!exercise) return;
+      if (field === 'angle' || field === 'intervalSeconds') {
+        if (value === '' || value === null || value === undefined) {
+          exercise[field] = null;
+        } else {
+          const num = safeNumber(value);
+          exercise[field] = num === null ? null : num;
+        }
+      } else if (field === 'performedOn') {
+        exercise[field] = value || '';
+      } else {
+        exercise[field] = value;
+      }
+      persist();
+    };
+
+    const duplicateSet = (exerciseId, setIndex) => {
+      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
+      if (!exercise) return;
+      const baseSet = exercise.sets[setIndex];
+      if (!baseSet) return;
+      const cloned = createEmptySet();
+      cloned.weight = baseSet.weight;
+      cloned.reps = baseSet.reps;
+      cloned.note = baseSet.note;
+      exercise.sets.splice(setIndex + 1, 0, cloned);
+      recomputeExercise(appData.currentWorkout.id, exercise);
+      persist();
+      renderRoute();
     };
 
     const deleteExercise = async (exerciseId) => {
@@ -569,59 +669,92 @@
     /*** route renderers ***/
     const renderHome = () => {
       const workout = appData.currentWorkout;
-      const cardBody = createElem('div');
-      const headerInfo = createElem('div', { className: 'text-sm text-slate-600 mb-4', textContent: `開始: ${formatDate(workout.startedAt)}` });
+      const cardBody = createElem('div', { className: 'space-y-6' });
+      const headerInfo = createElem('p', {
+        className: 'rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800',
+        textContent: `開始: ${formatDate(workout.startedAt)}`
+      });
       cardBody.append(headerInfo);
       if (!workout.exercises.length) {
-        cardBody.append(createElem('p', { className: 'text-slate-600 text-sm', textContent: '種目を追加して記録を開始しましょう。' }));
+        cardBody.append(createElem('p', { className: 'text-sm leading-relaxed text-slate-800', textContent: '種目を追加して記録を開始しましょう。' }));
       } else {
         workout.exercises.forEach((exercise) => {
-          const exCard = createElem('div', { className: 'border border-slate-200 rounded-xl p-4 mb-4 bg-slate-50/60' });
-          const exHeader = createElem('div', { className: 'flex items-center justify-between mb-3' });
-          const deleteBtn = createElem('button', { className: 'text-xs font-semibold text-red-600 underline decoration-dotted', textContent: '削除', attrs: { type: 'button' } });
+          const exCard = createElem('section', { className: 'space-y-5 rounded-2xl border border-slate-300 bg-white p-5 shadow-sm' });
+          const exHeader = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between' });
+          exHeader.append(createElem('h3', { className: 'text-lg font-bold text-slate-900', textContent: exercise.name }));
+          const deleteBtn = createElem('button', { className: 'self-start text-sm font-semibold text-red-700 underline decoration-dotted hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500', textContent: '削除', attrs: { type: 'button' } });
           deleteBtn.addEventListener('click', () => deleteExercise(exercise.id));
-          exHeader.append(
-            createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: exercise.name }),
-            deleteBtn
-          );
+          exHeader.append(deleteBtn);
           exCard.append(exHeader);
-          const table = createElem('div', { className: 'space-y-3' });
+
+          const metaPanel = createElem('div', { className: 'space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4' });
+          const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+          const equipmentInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: バーベル' }, value: exercise.equipment ?? '' });
+          equipmentInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'equipment', event.target.value));
+          const equipmentField = createFieldWrapper('器具', '使用した器具を入力します。', '使用した器具の種類を記録しましょう。', equipmentInput);
+          const attachmentInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ワイドグリップ' }, value: exercise.attachment ?? '' });
+          attachmentInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'attachment', event.target.value));
+          const attachmentField = createFieldWrapper('アタッチメント', '利用したアタッチメントを記録します。', 'ケーブルハンドルなどをメモできます。', attachmentInput);
+          equipmentRow.append(equipmentField, attachmentField);
+          metaPanel.append(equipmentRow);
+
+          const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+          const angleInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'decimal', min: '0', max: '180', step: '1', placeholder: '例: 30' }, value: exercise.angle ?? '' });
+          angleInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'angle', event.target.value));
+          const angleField = createFieldWrapper('角度 (°)', 'ベンチやマシンの角度を記録します。', '角度の変化を記録してフォームを比較。', angleInput);
+          const positionInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ナロー・スタンス' }, value: exercise.position ?? '' });
+          positionInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'position', event.target.value));
+          const positionField = createFieldWrapper('スタンス / ポジション', '足幅やグリップ幅などを記録します。', 'スタンスやポジションの工夫を書き残しましょう。', positionInput);
+          angleRow.append(angleField, positionField);
+          metaPanel.append(angleRow);
+
+          const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+          const performedOnInput = createElem('input', { className: 'input-base text-slate-900', attrs: { type: 'date', min: '2000-01-01', max: '2099-12-31', step: '1' }, value: exercise.performedOn ?? '' });
+          performedOnInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'performedOn', event.target.value));
+          const performedOnField = createFieldWrapper('実施日', 'トレーニングを行った日付です。', '後から見返すために日付を残せます。', performedOnInput);
+          const intervalInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'numeric', min: '0', max: '600', step: '5', placeholder: '例: 90' }, value: exercise.intervalSeconds ?? '' });
+          intervalInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'intervalSeconds', event.target.value));
+          const intervalField = createFieldWrapper('インターバル (秒)', 'セット間の休憩秒数を記録します。', 'タイマーで計測した秒数を入力。', intervalInput);
+          scheduleRow.append(performedOnField, intervalField);
+          metaPanel.append(scheduleRow);
+          exCard.append(metaPanel);
+
+          const table = createElem('div', { className: 'space-y-4' });
           exercise.sets.forEach((set, index) => {
-            const row = createElem('div', { className: 'grid grid-cols-1 sm:grid-cols-4 gap-3 items-end' });
-            const weightWrap = createElem('label', { className: 'flex flex-col text-sm font-semibold text-slate-700 gap-1' });
-            const weightInput = createElem('input', { className: 'input-base', attrs: { type: 'number', inputmode: 'decimal', min: '0' }, value: set.weight ?? '' });
+            const row = createElem('div', { className: 'grid grid-cols-1 sm:grid-cols-4 gap-4 items-start rounded-xl border border-slate-200 bg-white p-4 shadow-sm', attrs: { title: '長押しでこのセットを複製できます' } });
+            registerLongPress(row, () => duplicateSet(exercise.id, index));
+            const weightInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' }, value: set.weight ?? '' });
             weightInput.addEventListener('input', (event) => {
               updateSetField(exercise.id, index, 'weight', event.target.value);
               renderRoute();
             });
-            weightWrap.append(createElem('span', { textContent: `重量 (${appData.settings.unit})` }), weightInput);
-            const repsWrap = createElem('label', { className: 'flex flex-col text-sm font-semibold text-slate-700 gap-1' });
-            const repsInput = createElem('input', { className: 'input-base', attrs: { type: 'number', inputmode: 'numeric', min: '0' }, value: set.reps ?? '' });
+            const weightField = createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput);
+            const repsInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'numeric', min: '0', step: '1' }, value: set.reps ?? '' });
             repsInput.addEventListener('input', (event) => {
               updateSetField(exercise.id, index, 'reps', event.target.value);
               renderRoute();
             });
-            repsWrap.append(createElem('span', { textContent: '回数' }), repsInput);
-            const noteWrap = createElem('label', { className: 'flex flex-col text-sm font-semibold text-slate-700 gap-1 sm:col-span-2' });
-            const noteInput = createElem('textarea', { className: 'input-base min-h-[2.5rem]', attrs: { rows: '2' }, textContent: set.note || '' });
+            const repsField = createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput);
+            const noteInput = createElem('textarea', { className: 'input-base min-h-[3rem] text-slate-900 placeholder-slate-400', attrs: { rows: '2', placeholder: 'フォームや感覚をメモ' }, textContent: set.note || '' });
             noteInput.addEventListener('input', (event) => {
               updateSetField(exercise.id, index, 'note', event.target.value);
             });
-            noteWrap.append(createElem('span', { textContent: 'メモ' }), noteInput);
-            const oneRmLabel = createElem('p', { className: 'text-sm text-slate-600 sm:col-span-4', textContent: set.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -' });
-            row.append(weightWrap, repsWrap, noteWrap, oneRmLabel);
+            const noteField = createFieldWrapper('セットメモ', '気づいたことや次回の課題を記録します。', 'フォームやRPEを自由に入力。', noteInput);
+            noteField.classList.add('sm:col-span-2');
+            const oneRmLabel = createElem('p', { className: 'sm:col-span-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800', textContent: set.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -' });
+            row.append(weightField, repsField, noteField, oneRmLabel);
             table.append(row);
           });
-          const addSetBtn = createElem('button', { className: 'btn-muted mt-3 px-3 py-2 rounded-lg text-sm font-semibold', textContent: 'セットを追加', attrs: { type: 'button' } });
+          const addSetBtn = createElem('button', { className: 'btn-muted mt-2 inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100', textContent: 'セットを追加', attrs: { type: 'button' } });
           addSetBtn.addEventListener('click', () => addSet(exercise.id));
           exCard.append(table, addSetBtn);
           cardBody.append(exCard);
         });
       }
-      const actions = createElem('div', { className: 'flex flex-col sm:flex-row gap-3 mt-4' });
-      const addExerciseBtn = createElem('button', { className: 'btn-primary px-4 py-3 rounded-xl text-sm font-semibold flex-1', textContent: '種目を追加', attrs: { type: 'button' } });
+      const actions = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row' });
+      const addExerciseBtn = createElem('button', { className: 'btn-primary flex-1 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500', textContent: '種目を追加', attrs: { type: 'button' } });
       addExerciseBtn.addEventListener('click', addExercise);
-      const finishBtn = createElem('button', { className: 'btn-muted px-4 py-3 rounded-xl text-sm font-semibold flex-1', textContent: '完了して履歴へ', attrs: { type: 'button' } });
+      const finishBtn = createElem('button', { className: 'btn-muted flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500', textContent: '完了して履歴へ', attrs: { type: 'button' } });
       finishBtn.addEventListener('click', finishWorkout);
       actions.append(addExerciseBtn, finishBtn);
       cardBody.append(actions);
@@ -629,30 +762,49 @@
     };
 
     const renderHistory = () => {
-      const cardBody = createElem('div');
+      const cardBody = createElem('div', { className: 'space-y-6' });
       if (!appData.workouts.length) {
-        cardBody.append(createElem('p', { className: 'text-sm text-slate-600', textContent: '履歴はまだありません。' }));
+        cardBody.append(createElem('p', { className: 'text-sm text-slate-800', textContent: '履歴はまだありません。' }));
       } else {
         const list = createElem('div', { className: 'space-y-4' });
         appData.workouts.forEach((workout) => {
-          const item = createElem('article', { className: 'border border-slate-200 rounded-xl p-4 bg-white/60' });
-          const header = createElem('div', { className: 'flex items-center justify-between mb-3' });
-          const deleteBtn = createElem('button', { className: 'text-xs text-red-600 font-semibold underline decoration-dotted', textContent: '削除', attrs: { type: 'button' } });
+          const item = createElem('article', { className: 'rounded-2xl border border-slate-300 bg-white p-5 shadow-sm' });
+          const header = createElem('div', { className: 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between' });
+          const timestamp = formatDate(workout.completedAt || workout.startedAt);
+          header.append(createElem('p', { className: 'text-sm font-semibold text-slate-900', textContent: timestamp }));
+          const deleteBtn = createElem('button', { className: 'self-start text-xs font-semibold text-red-700 underline decoration-dotted hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500', textContent: '削除', attrs: { type: 'button' } });
           deleteBtn.addEventListener('click', () => deleteWorkout(workout.id));
-          header.append(
-            createElem('div', { className: 'text-sm text-slate-700', textContent: formatDate(workout.completedAt || workout.startedAt) }),
-            deleteBtn
-          );
+          header.append(deleteBtn);
           item.append(header);
           workout.exercises.forEach((exercise) => {
-            const exerciseBlock = createElem('div', { className: 'mb-3' });
-            exerciseBlock.append(createElem('h4', { className: 'text-base font-semibold text-slate-800', textContent: exercise.name }));
-            const setsList = createElem('ul', { className: 'mt-2 space-y-2' });
+            const exerciseBlock = createElem('div', { className: 'mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4' });
+            exerciseBlock.append(createElem('h4', { className: 'text-base font-bold text-slate-900', textContent: exercise.name }));
+            const metaItems = [
+              { label: '器具', value: exercise.equipment },
+              { label: 'アタッチメント', value: exercise.attachment },
+              { label: '角度 (°)', value: exercise.angle != null ? `${exercise.angle}°` : null },
+              { label: 'スタンス / ポジション', value: exercise.position },
+              { label: '実施日', value: exercise.performedOn },
+              { label: 'インターバル (秒)', value: exercise.intervalSeconds != null ? `${exercise.intervalSeconds}秒` : null }
+            ].filter((item) => item.value !== null && item.value !== undefined && item.value !== '');
+            if (metaItems.length) {
+              const metaList = createElem('ul', { className: 'grid grid-cols-1 gap-2 text-sm text-slate-800 sm:grid-cols-2' });
+              metaItems.forEach(({ label, value }) => {
+                const meta = createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm' });
+                meta.append(
+                  createElem('p', { className: 'text-xs font-semibold uppercase tracking-wide text-slate-800', textContent: label }),
+                  createElem('p', { className: 'text-sm font-medium text-slate-900', textContent: value })
+                );
+                metaList.append(meta);
+              });
+              exerciseBlock.append(metaList);
+            }
+            const setsList = createElem('ul', { className: 'space-y-2' });
             exercise.sets.forEach((set, index) => {
               const info = `#${index + 1} 重量: ${set.weight ?? '-'}${appData.settings.unit} / 回数: ${set.reps ?? '-'} / 推定1RM: ${set.oneRM ?? '-'}${set.note ? ' / ' + set.note : ''}`;
-              setsList.append(createElem('li', { className: 'text-sm text-slate-700 bg-slate-100 rounded-lg px-3 py-2', textContent: info }));
+              setsList.append(createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm', textContent: info }));
             });
-            const trendBtn = createElem('button', { className: 'mt-1 text-xs text-blue-700 underline decoration-dotted', textContent: '推移を表示', attrs: { type: 'button' } });
+            const trendBtn = createElem('button', { className: 'text-xs font-semibold text-blue-700 underline decoration-dotted hover:text-blue-800', textContent: '推移を表示', attrs: { type: 'button' } });
             trendBtn.addEventListener('click', () => {
               appData.historyView.exerciseName = exercise.name;
               renderRoute();
@@ -690,18 +842,38 @@
     };
 
     const renderWorkout = () => {
-      const cardBody = createElem('div');
+      const cardBody = createElem('div', { className: 'space-y-6' });
       if (!appData.workouts.length) {
-        cardBody.append(createElem('p', { className: 'text-sm text-slate-600', textContent: '保存済みのワークアウトはありません。' }));
+        cardBody.append(createElem('p', { className: 'text-sm text-slate-800', textContent: '保存済みのワークアウトはありません。' }));
       } else {
         const latest = appData.workouts[0];
-        cardBody.append(createElem('p', { className: 'text-sm text-slate-600 mb-3', textContent: `最新の完了日時: ${formatDate(latest.completedAt || latest.startedAt)}` }));
+        cardBody.append(createElem('p', { className: 'text-sm font-semibold text-slate-900', textContent: `最新の完了日時: ${formatDate(latest.completedAt || latest.startedAt)}` }));
         latest.exercises.forEach((exercise) => {
-          const block = createElem('div', { className: 'border border-slate-200 rounded-xl p-4 mb-3 bg-slate-50/60' });
-          block.append(createElem('h3', { className: 'text-base font-semibold text-slate-800 mb-2', textContent: exercise.name }));
+          const block = createElem('div', { className: 'space-y-3 rounded-2xl border border-slate-300 bg-white p-5 shadow-sm' });
+          block.append(createElem('h3', { className: 'text-base font-bold text-slate-900', textContent: exercise.name }));
+          const metaItems = [
+            { label: '器具', value: exercise.equipment },
+            { label: 'アタッチメント', value: exercise.attachment },
+            { label: '角度 (°)', value: exercise.angle != null ? `${exercise.angle}°` : null },
+            { label: 'スタンス / ポジション', value: exercise.position },
+            { label: '実施日', value: exercise.performedOn },
+            { label: 'インターバル (秒)', value: exercise.intervalSeconds != null ? `${exercise.intervalSeconds}秒` : null }
+          ].filter((item) => item.value !== null && item.value !== undefined && item.value !== '');
+          if (metaItems.length) {
+            const metaList = createElem('ul', { className: 'grid grid-cols-1 gap-2 text-sm text-slate-800 sm:grid-cols-2' });
+            metaItems.forEach(({ label, value }) => {
+              const meta = createElem('li', { className: 'rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm' });
+              meta.append(
+                createElem('p', { className: 'text-xs font-semibold uppercase tracking-wide text-slate-800', textContent: label }),
+                createElem('p', { className: 'text-sm font-medium text-slate-900', textContent: value })
+              );
+              metaList.append(meta);
+            });
+            block.append(metaList);
+          }
           const list = createElem('ul', { className: 'space-y-2' });
           exercise.sets.forEach((set, idx) => {
-            list.append(createElem('li', { className: 'text-sm text-slate-700 bg-white rounded-lg px-3 py-2 border border-slate-200', textContent: `#${idx + 1} 重量:${set.weight ?? '-'}${appData.settings.unit} / 回数:${set.reps ?? '-'} / 推定1RM:${set.oneRM ?? '-'}` }));
+            list.append(createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm', textContent: `#${idx + 1} 重量:${set.weight ?? '-'}${appData.settings.unit} / 回数:${set.reps ?? '-'} / 推定1RM:${set.oneRM ?? '-'}` }));
           });
           block.append(list);
           cardBody.append(block);
@@ -717,7 +889,7 @@
       const unitOptions = ['kg', 'lb'];
       const unitWrap = createElem('div', { className: 'flex gap-3' });
       unitOptions.forEach((unit) => {
-        const label = createElem('label', { className: 'inline-flex items-center gap-2 text-sm text-slate-700 font-semibold' });
+        const label = createElem('label', { className: 'inline-flex items-center gap-2 text-sm text-slate-800 font-semibold' });
         const input = createElem('input', { attrs: { type: 'radio', name: 'unit', value: unit } });
         if (appData.settings.unit === unit) input.checked = true;
         input.addEventListener('change', () => changeUnit(unit));
@@ -731,7 +903,7 @@
       catalogSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '登録済み種目' }));
       const list = createElem('ul', { className: 'space-y-2' });
       appData.settings.exerciseCatalog.forEach((name) => {
-        list.append(createElem('li', { className: 'text-sm text-slate-700 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200', textContent: name }));
+        list.append(createElem('li', { className: 'text-sm text-slate-800 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200', textContent: name }));
       });
       catalogSection.append(list);
       cardBody.append(catalogSection);
