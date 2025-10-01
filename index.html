@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>筋トレメモ | BUILD_TAG=FIX-20251001-IOS</title>
+  <title>BUILD_TAG=FIX-20240502-MODAL</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -221,90 +221,126 @@
     const storage = new NamespacedStorage(STORAGE_NAMESPACE, SCHEMA_VERSION);
 
     /*** modal api ***/
-    const modalState = { locked: false };
+    const modalState = { activePromise: null };
 
-    const closeModal = (backdrop, outerResolve, value) => {
-      if (!backdrop) return;
-      backdrop.classList.add('opacity-0');
-      setTimeout(() => {
-        backdrop.remove();
-        document.body.classList.remove('scroll-lock');
-        modalState.locked = false;
-        outerResolve(value);
-      }, 120);
-    };
-
-    const openModal = (buildContent) => {
-      if (modalState.locked) return Promise.resolve(null);
-      modalState.locked = true;
+    const openModal = (buildContent, { cancelValue = null } = {}) => {
+      if (modalState.activePromise) {
+        return modalState.activePromise;
+      }
       document.body.classList.add('scroll-lock');
       const backdrop = createElem('div', { className: 'modal-backdrop' });
-      const card = createElem('div', { className: 'modal-card' });
+      const card = createElem('div', { className: 'modal-card relative' });
       backdrop.append(card);
       document.body.append(backdrop);
-      return new Promise((outerResolve) => {
+
+      let cleanup = () => {};
+      const promise = new Promise((resolve) => {
+        let settled = false;
         const finish = (value) => {
-          document.removeEventListener('keydown', keyHandler);
-          closeModal(backdrop, outerResolve, value);
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(value);
         };
+        const cancel = () => finish(cancelValue);
         const keyHandler = (event) => {
-          if (event.key === 'Escape') finish(null);
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            cancel();
+          }
+        };
+        const outsideHandler = (event) => {
+          if (event.target === backdrop) cancel();
         };
         document.addEventListener('keydown', keyHandler);
-        backdrop.addEventListener('click', (event) => {
-          if (event.target === backdrop) finish(null);
-        });
-        const { content, focus } = buildContent(finish);
+        backdrop.addEventListener('click', outsideHandler);
+
+        cleanup = () => {
+          document.removeEventListener('keydown', keyHandler);
+          backdrop.removeEventListener('click', outsideHandler);
+          if (backdrop.parentNode) backdrop.remove();
+          document.body.classList.remove('scroll-lock');
+          modalState.activePromise = null;
+        };
+
+        const { content, focus } = buildContent({ finish, cancel });
         card.append(content);
         if (typeof focus === 'function') focus();
       });
+
+      modalState.activePromise = promise;
+      return promise;
     };
 
     const confirmAction = (message) => {
-      return openModal((finish) => {
-        const text = createElem('p', { className: 'text-sm text-slate-800 mb-4', textContent: message });
+      return openModal(({ finish, cancel }) => {
+        const header = createElem('div', { className: 'flex items-start justify-between gap-4 mb-4' });
+        header.append(
+          createElem('p', { className: 'text-sm text-slate-800', textContent: message }),
+          (() => {
+            const closeBtn = createElem('button', {
+              className: 'text-xl leading-none text-slate-400 hover:text-slate-700',
+              textContent: '×',
+              attrs: { type: 'button', 'aria-label': '閉じる' }
+            });
+            closeBtn.addEventListener('click', cancel);
+            return closeBtn;
+          })()
+        );
         const btnWrap = createElem('div', { className: 'flex justify-end gap-2' });
         const cancelBtn = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
         const okBtn = createElem('button', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'OK', attrs: { type: 'button' } });
-        cancelBtn.addEventListener('click', () => finish(false));
+        cancelBtn.addEventListener('click', cancel);
         okBtn.addEventListener('click', () => finish(true));
         btnWrap.append(cancelBtn, okBtn);
-        return { content: createElem('div', { children: [text, btnWrap] }), focus: () => okBtn.focus() };
-      }).then((value) => Boolean(value));
+        const content = createElem('div', { children: [header, btnWrap] });
+        return { content, focus: () => okBtn.focus() };
+      }, { cancelValue: false }).then((value) => Boolean(value));
     };
 
     const pickFromList = (title, options) => {
-      return openModal((finish) => {
-        const header = createElem('div', { className: 'mb-3' });
-        header.append(createElem('p', { className: 'text-sm font-semibold text-slate-800', textContent: title }));
+      return openModal(({ finish, cancel }) => {
+        const header = createElem('div', { className: 'mb-3 flex items-start justify-between gap-4' });
+        header.append(
+          createElem('p', { className: 'text-sm font-semibold text-slate-800', textContent: title }),
+          (() => {
+            const closeBtn = createElem('button', {
+              className: 'text-xl leading-none text-slate-400 hover:text-slate-700',
+              textContent: '×',
+              attrs: { type: 'button', 'aria-label': '閉じる' }
+            });
+            closeBtn.addEventListener('click', cancel);
+            return closeBtn;
+          })()
+        );
         const list = createElem('div', { className: 'max-h-64 overflow-y-auto space-y-2' });
         options.forEach((opt) => {
           const btn = createElem('button', { className: 'w-full text-left px-3 py-2 rounded-lg border border-slate-200 hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500', textContent: opt, attrs: { type: 'button' } });
           btn.addEventListener('click', () => finish(opt));
           list.append(btn);
         });
-        const cancel = createElem('button', { className: 'mt-4 btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
-        cancel.addEventListener('click', () => finish(null));
+        const cancelBtn = createElem('button', { className: 'mt-4 btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
+        cancelBtn.addEventListener('click', cancel);
         const firstButton = () => list.querySelector('button');
-        const content = createElem('div', { children: [header, list, cancel] });
-        return { content, focus: () => { const btn = firstButton(); if (btn) btn.focus(); else cancel.focus(); } };
+        const content = createElem('div', { children: [header, list, cancelBtn] });
+        return { content, focus: () => { const btn = firstButton(); if (btn) btn.focus(); else cancelBtn.focus(); } };
       });
     };
 
     const promptText = (title) => {
-      return openModal((finish) => {
+      return openModal(({ finish, cancel }) => {
         const label = createElem('label', { className: 'flex flex-col gap-2' });
         label.append(
           createElem('span', { className: 'text-sm font-semibold text-slate-800', textContent: title }),
           createElem('input', { className: 'input-base', attrs: { type: 'text' } })
         );
         const actions = createElem('div', { className: 'flex justify-end gap-2 mt-4' });
-        const cancel = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
+        const cancelBtn = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
         const ok = createElem('button', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold', textContent: '決定', attrs: { type: 'button' } });
-        cancel.addEventListener('click', () => finish(null));
+        cancelBtn.addEventListener('click', cancel);
         const input = label.querySelector('input');
         ok.addEventListener('click', () => finish(input.value.trim() || null));
-        actions.append(cancel, ok);
+        actions.append(cancelBtn, ok);
         const content = createElem('div', { children: [label, actions] });
         return { content, focus: () => input.focus() };
       });
