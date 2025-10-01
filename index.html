@@ -163,20 +163,21 @@
           </button>
         </div>
       </div>
+      <div id="last-part-summary" class="card space-y-3 hidden"></div>
     </section>
 
 <section id="view-workout" class="hidden">
   <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
-    <div class="flex items-center justify-between">
-      <div class="text-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="text-sm min-w-[140px] flex-1">
         <div class="text-[11px] text-gray-500">日付</div>
-        <div id="workout-date" class="font-semibold">-</div>
+        <div id="workout-date" class="font-semibold break-words">-</div>
       </div>
-      <div class="text-sm">
+      <div class="text-sm min-w-[140px] flex-1">
         <div class="text-[11px] text-gray-500">部位</div>
-        <div id="workout-part" class="font-semibold">-</div>
+        <div id="workout-part" class="font-semibold break-words">-</div>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 shrink-0">
         <button id="btn-back-to-home" class="px-3 py-2 rounded-xl border text-sm">戻る</button>
         <button id="btn-save-workout" class="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm">保存</button>
       </div>
@@ -374,7 +375,10 @@
         <select class="ex-ang col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
         <select class="ex-pos col-span-4 sm:col-span-1 border rounded-md px-2 py-1"></select>
       </div>
-      <div class="text-[11px] text-gray-500 ex-meta">最高重量: - / 最高1RM: - / 前回: -</div>
+      <div class="flex items-center justify-between gap-2 text-[11px] text-gray-500">
+        <div class="ex-meta flex-1 min-w-0">最高重量: - / 最高1RM: - / 前回: -</div>
+        <button type="button" class="btn-ex-history px-2 py-1 rounded-md border text-[11px] text-gray-600 bg-white">履歴</button>
+      </div>
     </div>
   </template>
 
@@ -400,7 +404,7 @@
         <input type="number" inputmode="numeric" placeholder="自力" class="ex-reps col-span-2 border rounded px-2 py-1" />
         <input type="number" inputmode="numeric" placeholder="補助" class="ex-assist col-span-2 border rounded px-2 py-1" />
         <div class="col-span-4 flex items-center gap-1">
-          <input type="number" inputmode="numeric" placeholder="時間(秒)" class="ex-sec flex-1 border rounded px-2 py-1" />
+          <input type="number" inputmode="numeric" placeholder="時間(秒)" class="ex-sec flex-1 border rounded px-2 py-1 min-w-[90px]" />
           <button class="ex-sec-toggle px-2 py-1 rounded border text-xs">▶</button>
         </div>
         <input type="text" placeholder="メモ" class="ex-note col-span-12 border rounded px-2 py-1" />
@@ -689,6 +693,77 @@
       return days.size;
     }
 
+    function normalizeDetail(value, fallback=''){
+      return (value === undefined || value === null || value === '') ? fallback : value;
+    }
+
+    function makeExerciseKeyFromEx(ex){
+      return [
+        normalizeDetail(ex?.name || '', ''),
+        normalizeDetail(ex?.eq || '', ''),
+        normalizeDetail(ex?.att || 'なし', 'なし'),
+        normalizeDetail(ex?.ang || 'なし', 'なし'),
+        normalizeDetail(ex?.pos || 'なし', 'なし')
+      ].join('|');
+    }
+
+    function makeExerciseKeyFromRow(row){
+      return [
+        normalizeDetail(row?.exercise || '', ''),
+        normalizeDetail(row?.equipment || '', ''),
+        normalizeDetail(row?.attachment || 'なし', 'なし'),
+        normalizeDetail(row?.angle || 'なし', 'なし'),
+        normalizeDetail(row?.position || 'なし', 'なし')
+      ].join('|');
+    }
+
+    function formatDetailText(meta){
+      const eq = normalizeDetail(meta?.eq || meta?.equipment, '-') || '-';
+      const att = normalizeDetail(meta?.att || meta?.attachment, 'なし');
+      const ang = normalizeDetail(meta?.ang || meta?.angle, 'なし');
+      const pos = normalizeDetail(meta?.pos || meta?.position, 'なし');
+      return `${eq} / ${att} / ${ang} / ${pos}`;
+    }
+
+    function formatRecordLine({ index, warm, weight, reps, assist, sec, note, oneRM }){
+      const parts = [];
+      if(warm) parts.push('W-Up');
+      const w = Number(weight||0);
+      const r = Number(reps||0);
+      if(w>0 && r>0){ parts.push(`${w}kg x${r}`); }
+      else if(w>0){ parts.push(`${w}kg`); }
+      else if(r>0){ parts.push(`${r}回`); }
+      const a = Number(assist||0);
+      if(a>0) parts.push(`補${a}`);
+      const s = Number(sec||0);
+      if(s>0) parts.push(`${s}秒`);
+      const one = Number(oneRM||0);
+      if(one>0) parts.push(`1RM ${one}kg`);
+      const memo = (note && String(note).trim()) ? String(note).trim() : '';
+      if(memo) parts.push(`メモ: ${memo}`);
+      if(parts.length===0) parts.push('記録なし');
+      return `S${index}: ${parts.join(' / ')}`;
+    }
+
+    function findLatestWorkoutForPart(part){
+      if(!part) return null;
+      const workouts = (state.workouts || []).slice().sort((a,b)=>{
+        const ta = Date.parse(a?.date || '') || 0;
+        const tb = Date.parse(b?.date || '') || 0;
+        if(tb !== ta) return tb - ta;
+        const ia = Number(String(a?.id||'').split('_')[1]||0);
+        const ib = Number(String(b?.id||'').split('_')[1]||0);
+        return ib - ia;
+      });
+      for(const w of workouts){
+        const blocks = (w?.blocks || []).filter(b => normalizeDetail(b?.part || w?.part, '') === part);
+        if(blocks.length>0){
+          return { workout: w, blocks, date: w?.date || '-' };
+        }
+      }
+      return null;
+    }
+
     function initData(){
       state.lists = store.get(K_LISTS, JSON.parse(JSON.stringify(DEFAULTS)));
       state.workouts = store.get(K_WORKOUTS, []);
@@ -752,6 +827,143 @@
         btn.textContent = hasBlocks ? 'トレーニングを再開' : '今日のトレーニングを開始';
         btn.onclick = ()=> { location.hash = ROUTES.WORKOUT; };
       }
+
+      renderLastPartSummary();
+    }
+
+    function renderLastPartSummary(){
+      const summaryCard = $('#last-part-summary');
+      if(!summaryCard) return;
+      const parts = sortJa(state.lists.parts || []);
+      const part = state.inProgress.part;
+      summaryCard.innerHTML = '';
+      if(!part || !parts.includes(part)){
+        summaryCard.classList.add('hidden');
+        return;
+      }
+      summaryCard.classList.remove('hidden');
+
+      const summary = findLatestWorkoutForPart(part);
+      const header = document.createElement('div');
+      header.className = 'flex items-center justify-between gap-2';
+      const info = document.createElement('div');
+      info.className = 'min-w-0';
+      const label = document.createElement('div');
+      label.className = 'text-xs text-gray-500';
+      label.textContent = `前回の${part}`;
+      const date = document.createElement('div');
+      date.className = 'text-sm font-semibold text-gray-800';
+      date.textContent = summary ? (summary.date || '-') : '-';
+      info.append(label, date);
+      header.appendChild(info);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'px-3 py-1.5 rounded-lg border text-xs bg-white';
+      btn.textContent = '履歴を見る';
+      btn.onclick = ()=> {
+        const params = new URLSearchParams();
+        params.set('part', part);
+        location.hash = `${ROUTES.HISTORY}?${params.toString()}`;
+      };
+      header.appendChild(btn);
+
+      summaryCard.appendChild(header);
+
+      if(!summary){
+        const msg = document.createElement('div');
+        msg.className = 'text-sm text-gray-500';
+        msg.textContent = `${part}の記録はまだありません。`;
+        summaryCard.appendChild(msg);
+        return;
+      }
+
+      const rows = flattenSets().filter(r => r.id === summary.workout?.id && r.part === part);
+      if(rows.length===0){
+        const msg = document.createElement('div');
+        msg.className = 'text-sm text-gray-500';
+        msg.textContent = '該当する記録が見つかりません。';
+        summaryCard.appendChild(msg);
+        return;
+      }
+
+      const grouped = new Map();
+      rows.forEach(row => {
+        const key = makeExerciseKeyFromRow(row);
+        if(!grouped.has(key)) grouped.set(key, { meta: row, rows: [] });
+        grouped.get(key).rows.push(row);
+      });
+      grouped.forEach(entry => entry.rows.sort((a,b)=> a.setIndex - b.setIndex));
+
+      const exMetaMap = new Map();
+      summary.blocks.forEach(block => {
+        (block?.exs || []).forEach(ex => {
+          const key = makeExerciseKeyFromEx(ex);
+          if(!exMetaMap.has(key)) exMetaMap.set(key, ex);
+        });
+      });
+
+      const orderKeys = [];
+      const seen = new Set();
+      summary.blocks.forEach(block => {
+        (block?.exs || []).forEach(ex => {
+          const key = makeExerciseKeyFromEx(ex);
+          if(!seen.has(key)){
+            orderKeys.push(key);
+            seen.add(key);
+          }
+        });
+      });
+      grouped.forEach((_, key)=>{ if(!seen.has(key)){ orderKeys.push(key); seen.add(key); } });
+
+      const list = document.createElement('div');
+      list.className = 'space-y-3';
+
+      orderKeys.forEach((key, idx)=>{
+        const entry = grouped.get(key);
+        const wrap = document.createElement('div');
+        wrap.className = 'space-y-1';
+        if(idx>0) wrap.classList.add('pt-2','border-t','border-gray-100');
+
+        const metaSource = entry?.meta || exMetaMap.get(key) || {};
+        const title = document.createElement('div');
+        title.className = 'text-sm font-semibold text-gray-800';
+        title.textContent = metaSource.exercise || metaSource.name || '種目';
+        const detail = document.createElement('div');
+        detail.className = 'text-[11px] text-gray-500';
+        detail.textContent = formatDetailText(metaSource);
+        const setsWrap = document.createElement('div');
+        setsWrap.className = 'space-y-1 text-xs text-gray-600';
+
+        if(entry){
+          entry.rows.forEach(row => {
+            const line = document.createElement('div');
+            line.textContent = formatRecordLine({
+              index: row.setIndex,
+              warm: row.warmup,
+              weight: row.weight,
+              reps: row.repsSelf,
+              assist: row.repsAssist,
+              sec: row.durationSec,
+              note: row.note,
+              oneRM: row.oneRM
+            });
+            setsWrap.appendChild(line);
+          });
+        }
+
+        if(setsWrap.childElementCount === 0){
+          const none = document.createElement('div');
+          none.className = 'text-xs text-gray-500';
+          none.textContent = '記録が見つかりません。';
+          setsWrap.appendChild(none);
+        }
+
+        wrap.append(title, detail, setsWrap);
+        list.appendChild(wrap);
+      });
+
+      summaryCard.appendChild(list);
     }
 
     function renderWorkout(){
@@ -902,6 +1114,11 @@
       fill(node.querySelector('.ex-pos'), state.lists.position, ex.pos || 'なし',               v=>{ ex.pos=v; persist(); });
 
       updateExMetaLine(node, ex);
+
+      const historyBtn = node.querySelector('.btn-ex-history');
+      if(historyBtn){
+        historyBtn.onclick = ()=> openExerciseHistory(ex, block.part || state.inProgress.part);
+      }
       return node;
     }
 
@@ -913,6 +1130,184 @@
       const max1 = Math.max(...all.map(r=> Number(r.oneRM||0)));
       const last = all.sort((a,b)=> a.date<b.date ? 1 : -1)[0];
       meta.textContent = `最高重量: ${maxW||'-'} / 最高1RM: ${max1||'-'} / 前回: ${last ? last.date : '-'}`;
+    }
+
+    function openExerciseHistory(ex, part){
+      const bg = document.createElement('div');
+      bg.className = 'modal-bg flex items-center justify-center z-50';
+
+      const card = document.createElement('div');
+      card.className = 'modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw] max-h-[80vh] flex flex-col';
+
+      const header = document.createElement('div');
+      header.className = 'flex flex-col gap-1';
+      const title = document.createElement('div');
+      title.className = 'text-sm font-semibold';
+      title.textContent = ex.name;
+      const metaLine = document.createElement('div');
+      metaLine.className = 'text-[11px] text-gray-500';
+      metaLine.textContent = `${part ? `部位: ${part} / ` : ''}${formatDetailText(ex)}`;
+      header.append(title, metaLine);
+
+      const rows = flattenSets().filter(r => r.exercise === ex.name).sort((a,b)=>{
+        if(a.date !== b.date) return a.date < b.date ? 1 : -1;
+        if(a.id !== b.id) return a.id < b.id ? 1 : -1;
+        return a.setIndex - b.setIndex;
+      });
+
+      const groups = new Map();
+      rows.forEach(row => {
+        const key = [
+          normalizeDetail(row.part, ''),
+          normalizeDetail(row.equipment, ''),
+          normalizeDetail(row.attachment, 'なし'),
+          normalizeDetail(row.angle, 'なし'),
+          normalizeDetail(row.position, 'なし')
+        ].join('|');
+        if(!groups.has(key)) groups.set(key, { meta: row, workouts: new Map() });
+        const group = groups.get(key);
+        if(!group.workouts.has(row.id)){
+          group.workouts.set(row.id, { id: row.id, date: row.date, part: row.part, rows: [] });
+        }
+        group.workouts.get(row.id).rows.push(row);
+      });
+
+      groups.forEach(group => {
+        group.workouts = Array.from(group.workouts.values()).sort((a,b)=>{
+          if(a.date !== b.date) return a.date < b.date ? 1 : -1;
+          return b.id.localeCompare(a.id);
+        }).map(wk => {
+          wk.rows.sort((a,b)=> a.setIndex - b.setIndex);
+          return wk;
+        });
+      });
+
+      const targetKey = [
+        normalizeDetail(part, ''),
+        normalizeDetail(ex.eq, ''),
+        normalizeDetail(ex.att, 'なし'),
+        normalizeDetail(ex.ang, 'なし'),
+        normalizeDetail(ex.pos, 'なし')
+      ].join('|');
+
+      if(part && !groups.has(targetKey)){
+        groups.set(targetKey, {
+          meta: { exercise: ex.name, part, equipment: ex.eq || '', attachment: normalizeDetail(ex.att, 'なし'), angle: normalizeDetail(ex.ang, 'なし'), position: normalizeDetail(ex.pos, 'なし') },
+          workouts: []
+        });
+      }
+
+      let keys = Array.from(groups.keys());
+      if(keys.length===0){
+        keys = [targetKey];
+        groups.set(targetKey, {
+          meta: { exercise: ex.name, part: part || '-', equipment: ex.eq || '', attachment: normalizeDetail(ex.att, 'なし'), angle: normalizeDetail(ex.ang, 'なし'), position: normalizeDetail(ex.pos, 'なし') },
+          workouts: []
+        });
+      }
+
+      keys.sort((a,b)=>{
+        if(a === targetKey && b !== targetKey) return -1;
+        if(b === targetKey && a !== targetKey) return 1;
+        const ga = groups.get(a)?.workouts?.[0];
+        const gb = groups.get(b)?.workouts?.[0];
+        const da = ga?.date || '';
+        const db = gb?.date || '';
+        if(da !== db) return da < db ? 1 : -1;
+        return a.localeCompare(b, 'ja');
+      });
+
+      const listWrap = document.createElement('div');
+      listWrap.className = 'mt-3 space-y-3 overflow-auto flex-1';
+      listWrap.style.minHeight = '0';
+
+      keys.forEach(key => {
+        const group = groups.get(key);
+        const groupCard = document.createElement('div');
+        groupCard.className = 'rounded-xl border bg-white shadow-soft p-3 space-y-2';
+        const groupHead = document.createElement('div');
+        groupHead.className = 'text-xs font-semibold text-gray-700 flex items-center gap-2';
+        const metaSource = group?.meta || { exercise: ex.name, part: part || '-', equipment: ex.eq || '', attachment: normalizeDetail(ex.att, 'なし'), angle: normalizeDetail(ex.ang, 'なし'), position: normalizeDetail(ex.pos, 'なし') };
+        const detailText = `${normalizeDetail(metaSource.part, '-') || '-'} / ${formatDetailText(metaSource)}`;
+        const headLabel = document.createElement('span');
+        headLabel.textContent = detailText;
+        groupHead.appendChild(headLabel);
+        if(key === targetKey){
+          const badge = document.createElement('span');
+          badge.className = 'px-2 py-0.5 rounded-full bg-gray-900 text-white text-[10px]';
+          badge.textContent = '現在の設定';
+          groupHead.appendChild(badge);
+        }
+        groupCard.appendChild(groupHead);
+
+        const workoutList = document.createElement('div');
+        workoutList.className = 'space-y-2';
+
+        if((group?.workouts || []).length === 0){
+          const none = document.createElement('div');
+          none.className = 'text-xs text-gray-500';
+          none.textContent = '記録がありません。';
+          workoutList.appendChild(none);
+        } else {
+          group.workouts.slice(0, 10).forEach((wk, idx)=>{
+            const wkWrap = document.createElement('div');
+            wkWrap.className = 'space-y-1';
+            if(idx>0) wkWrap.classList.add('pt-2','border-t','border-gray-100');
+            const wkTitle = document.createElement('div');
+            wkTitle.className = 'text-sm font-semibold text-gray-800';
+            wkTitle.textContent = `${wk.date} / ${wk.part}`;
+            wkWrap.appendChild(wkTitle);
+            wk.rows.forEach(row => {
+              const line = document.createElement('div');
+              line.className = 'text-xs text-gray-600';
+              line.textContent = formatRecordLine({
+                index: row.setIndex,
+                warm: row.warmup,
+                weight: row.weight,
+                reps: row.repsSelf,
+                assist: row.repsAssist,
+                sec: row.durationSec,
+                note: row.note,
+                oneRM: row.oneRM
+              });
+              wkWrap.appendChild(line);
+            });
+            workoutList.appendChild(wkWrap);
+          });
+        }
+
+        groupCard.appendChild(workoutList);
+        listWrap.appendChild(groupCard);
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'flex justify-end gap-2 mt-3';
+      const historyBtn = document.createElement('button');
+      historyBtn.type = 'button';
+      historyBtn.className = 'px-3 py-1.5 rounded-lg border text-xs bg-white';
+      historyBtn.textContent = '履歴画面で開く';
+      historyBtn.onclick = ()=> {
+        const params = new URLSearchParams();
+        params.set('exercise', ex.name);
+        if(part) params.set('part', part);
+        if(ex.eq) params.set('equipment', ex.eq);
+        params.set('attachment', normalizeDetail(ex.att, 'なし'));
+        params.set('angle', normalizeDetail(ex.ang, 'なし'));
+        params.set('position', normalizeDetail(ex.pos, 'なし'));
+        location.hash = `${ROUTES.HISTORY}?${params.toString()}`;
+        bg.remove();
+      };
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'px-3 py-1.5 rounded-lg border text-xs bg-white';
+      closeBtn.textContent = '閉じる';
+      closeBtn.onclick = ()=> bg.remove();
+      actions.append(historyBtn, closeBtn);
+
+      card.append(header, listWrap, actions);
+      bg.appendChild(card);
+      document.body.appendChild(bg);
+      bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
     }
 
     function renderSetCard(block, set, sIdx){
@@ -929,6 +1324,7 @@
       node.querySelector('.btn-dup-set').onclick = ()=> {
         const source = block.sets[sIdx];
         const cloned = JSON.parse(JSON.stringify(source));
+        cloned.warm = false;
         block.sets.splice(sIdx+1, 0, cloned);
         persist(); renderWorkout(); afterDataChanged();
       };
@@ -955,6 +1351,7 @@
       if(copyLast && block.sets.length){
         const last = block.sets[block.sets.length-1];
         const cloned = JSON.parse(JSON.stringify(last));
+        cloned.warm = false;
         block.sets.push(cloned);
       } else {
         const items = (block.exs||[]).map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 }));
@@ -1061,9 +1458,27 @@
         applyFilter();
       };
 
+      const setSelectValue = (selector, value)=>{
+        if(!value) return;
+        const el = $(selector);
+        if(!el) return;
+        const options = Array.from(el.options || []).map(o=> o.value);
+        if(options.includes(value)) el.value = value;
+      };
+
       const params = new URLSearchParams(location.hash.split('?')[1] || '');
       const exParam = params.get('exercise');
-      if(exParam){ $('#filter-ex').value = exParam; }
+      const partParam = params.get('part');
+      const eqParam = params.get('equipment');
+      const attParam = params.get('attachment');
+      const angParam = params.get('angle');
+      const posParam = params.get('position');
+      setSelectValue('#filter-ex', exParam);
+      setSelectValue('#filter-part', partParam);
+      setSelectValue('#filter-eq', eqParam);
+      setSelectValue('#filter-att', attParam);
+      setSelectValue('#filter-ang', angParam);
+      setSelectValue('#filter-pos', posParam);
       applyFilter();
     }
 
