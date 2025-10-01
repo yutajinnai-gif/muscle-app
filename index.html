@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=TX-20251001</title>
+  <title>BUILD_TAG=CSV-YYYYMMDD</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -133,6 +133,195 @@
       return JSON.parse(JSON.stringify(obj));
     };
 
+    const CSV_SCHEMA_VERSION = 1;
+    const CSV_RECORD_TYPES = Object.freeze({
+      META: 'meta',
+      SETTINGS: 'settings',
+      CATALOG: 'catalog',
+      HISTORY_VIEW: 'history-view',
+      WORKOUT: 'workout',
+      EXERCISE: 'exercise',
+      SET: 'set'
+    });
+    const CSV_COLUMNS = Object.freeze([
+      'schemaVersion',
+      'device',
+      'exportedAt',
+      'recordType',
+      'workoutState',
+      'workoutId',
+      'workoutStartedAt',
+      'workoutCompletedAt',
+      'workoutOrder',
+      'date',
+      'part',
+      'exercise',
+      'equipment',
+      'attachment',
+      'angle',
+      'position',
+      'performedOn',
+      'intervalSeconds',
+      'exerciseId',
+      'setIndex',
+      'setType',
+      'weight',
+      'reps',
+      'oneRM',
+      'note',
+      'unit',
+      'catalogEntry'
+    ]);
+    const CSV_ALLOWED_SET_TYPES = new Set(['', 'standard']);
+    const CSV_LINE_BREAK = '\r\n';
+
+    const getDeviceName = () => {
+      try {
+        if (navigator.userAgentData && Array.isArray(navigator.userAgentData.brands)) {
+          const brands = navigator.userAgentData.brands
+            .map((brand) => brand.brand)
+            .filter(Boolean)
+            .join(' ');
+          if (brands) return brands.slice(0, 120);
+        }
+      } catch (err) {
+        // ignore detection errors
+      }
+      if (navigator.platform && navigator.platform.trim()) {
+        return navigator.platform.trim().slice(0, 120);
+      }
+      if (navigator.userAgent && navigator.userAgent.trim()) {
+        return navigator.userAgent.trim().slice(0, 120);
+      }
+      return 'unknown-device';
+    };
+
+    const createCsvRow = () => {
+      const row = {};
+      CSV_COLUMNS.forEach((col) => {
+        row[col] = '';
+      });
+      return row;
+    };
+
+    const escapeCsvValue = (value) => {
+      if (value === null || value === undefined) return '';
+      const str = String(value);
+      if (str === '') return '';
+      if (/[",\n\r]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const serializeCsvRows = (rows) => {
+      const header = CSV_COLUMNS.join(',');
+      const body = rows
+        .map((row) => CSV_COLUMNS.map((col) => escapeCsvValue(row[col])).join(','))
+        .join(CSV_LINE_BREAK);
+      return [header, body].filter(Boolean).join(CSV_LINE_BREAK) + CSV_LINE_BREAK;
+    };
+
+    const parseCsvContent = (text) => {
+      const rows = [];
+      let field = '';
+      let currentRow = [];
+      let inQuotes = false;
+      let lineNumber = 1;
+      const pushField = () => {
+        currentRow.push(field);
+        field = '';
+      };
+      const pushRow = () => {
+        if (!currentRow.length) return;
+        const isEmpty = currentRow.every((cell) => cell === '');
+        if (!isEmpty) rows.push(currentRow.slice());
+        currentRow = [];
+        lineNumber += 1;
+      };
+      for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        if (inQuotes) {
+          if (char === '"') {
+            if (text[i + 1] === '"') {
+              field += '"';
+              i += 1;
+            } else {
+              inQuotes = false;
+            }
+          } else {
+            field += char;
+          }
+          continue;
+        }
+        if (char === '"') {
+          inQuotes = true;
+          continue;
+        }
+        if (char === ',') {
+          pushField();
+          continue;
+        }
+        if (char === '\n') {
+          pushField();
+          pushRow();
+          continue;
+        }
+        if (char === '\r') {
+          if (text[i + 1] === '\n') {
+            i += 1;
+          }
+          pushField();
+          pushRow();
+          continue;
+        }
+        field += char;
+      }
+      if (field !== '' || currentRow.length) {
+        pushField();
+        pushRow();
+      }
+      if (inQuotes) {
+        rows.__unclosedQuote = true;
+        rows.__lineNumber = lineNumber;
+      }
+      return rows;
+    };
+
+    const validateCsvHeader = (header) => {
+      const issues = [];
+      if (!Array.isArray(header)) {
+        issues.push('ヘッダー行が取得できませんでした。');
+        return issues;
+      }
+      if (header.length !== CSV_COLUMNS.length) {
+        issues.push(`列数が一致しません (期待: ${CSV_COLUMNS.length} 列 / 実際: ${header.length} 列)`);
+      }
+      const max = Math.max(header.length, CSV_COLUMNS.length);
+      for (let idx = 0; idx < max; idx += 1) {
+        const expected = CSV_COLUMNS[idx] ?? '(該当なし)';
+        const actual = header[idx] ?? '(該当なし)';
+        if (expected !== actual) {
+          issues.push(`列${idx + 1}: 期待 "${expected}" / 実際 "${actual}"`);
+        }
+      }
+      return issues;
+    };
+
+    const toNumberOrNull = (value) => {
+      if (value === null || value === undefined) return null;
+      const trimmed = String(value).trim();
+      if (!trimmed) return null;
+      const num = Number(trimmed);
+      return Number.isFinite(num) ? num : null;
+    };
+
+    const toIntegerOrNull = (value) => {
+      const num = toNumberOrNull(value);
+      if (num === null) return null;
+      return Number.isInteger(num) ? num : null;
+    };
+
     /*** error banner ***/
     const errorRoot = document.getElementById('error-root');
     const errorState = { logs: [], expanded: false, rollback: null };
@@ -253,8 +442,9 @@
     });
 
     /*** storage ***/
-    const SCHEMA_VERSION = 1;
+    const SCHEMA_VERSION = CSV_SCHEMA_VERSION;
     const STORAGE_NAMESPACE = 'muscle-app-core';
+    const AUTO_BACKUP_KEY = `${STORAGE_NAMESPACE}:auto-backup`;
     class NamespacedStorage {
       constructor(namespace, version) {
         this.namespace = namespace;
@@ -292,6 +482,36 @@
     }
 
     const storage = new NamespacedStorage(STORAGE_NAMESPACE, SCHEMA_VERSION);
+
+    const readAutoBackupSnapshot = () => {
+      try {
+        const raw = localStorage.getItem(AUTO_BACKUP_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        if (parsed.schemaVersion !== SCHEMA_VERSION) {
+          return null;
+        }
+        return parsed;
+      } catch (err) {
+        return null;
+      }
+    };
+
+    const createAutoBackupSnapshot = () => {
+      if (!appData) return;
+      try {
+        const payload = {
+          schemaVersion: SCHEMA_VERSION,
+          device: getDeviceName(),
+          savedAt: new Date().toISOString(),
+          data: cloneDeep(appData)
+        };
+        localStorage.setItem(AUTO_BACKUP_KEY, JSON.stringify(payload));
+      } catch (err) {
+        console.warn('自動バックアップの保存に失敗しました', err);
+      }
+    };
 
     /*** modal api ***/
     const modalState = { activePromise: null, locked: false };
@@ -456,6 +676,45 @@
       });
     };
 
+    const showImportReport = (title, issues) => {
+      const messages = Array.isArray(issues) && issues.length ? issues : ['詳細情報が見つかりませんでした。'];
+      const backup = readAutoBackupSnapshot();
+      return openModal(({ finish }) => {
+        const header = createElem('div', { className: 'mb-3 flex items-start justify-between gap-4' });
+        const heading = createElem('p', { className: 'text-sm font-semibold text-slate-800', textContent: title });
+        const closeBtn = createElem('button', {
+          className: 'text-xl leading-none text-slate-400 hover:text-slate-700',
+          textContent: '×',
+          attrs: { type: 'button', 'aria-label': '閉じる' }
+        });
+        closeBtn.addEventListener('click', () => finish());
+        header.append(heading, closeBtn);
+
+        const list = createElem('ul', { className: 'list-disc space-y-1 pl-5 text-sm text-slate-700 max-h-56 overflow-y-auto pr-1' });
+        messages.slice(0, 50).forEach((msg) => {
+          list.append(createElem('li', { textContent: msg }));
+        });
+        if (messages.length > 50) {
+          list.append(createElem('li', { className: 'text-xs text-slate-500', textContent: `...ほか ${messages.length - 50} 件` }));
+        }
+
+        const backupInfo = backup
+          ? createElem('div', {
+              className: 'mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600',
+              textContent: `最新の自動バックアップ: schema ${backup.schemaVersion ?? '-'} / device ${backup.device || '不明'} / 保存 ${backup.savedAt ? formatDate(backup.savedAt) : '不明'}`
+            })
+          : createElem('p', { className: 'mt-3 text-xs text-slate-500', textContent: '自動バックアップ情報はまだありません。' });
+
+        const footer = createElem('div', { className: 'mt-4 flex justify-end' });
+        const okBtn = createElem('button', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold', textContent: '閉じる', attrs: { type: 'button' } });
+        okBtn.addEventListener('click', () => finish());
+        footer.append(okBtn);
+
+        const content = createElem('div', { children: [header, list, backupInfo, footer] });
+        return { content, focus: () => okBtn.focus() };
+      });
+    };
+
     /*** data model ***/
     const STORAGE_KEYS = Object.freeze({
       DATA: 'data'
@@ -484,9 +743,11 @@
     };
 
     let appData = loadData();
+    createAutoBackupSnapshot();
 
     const persist = () => {
       storage.save(STORAGE_KEYS.DATA, appData);
+      createAutoBackupSnapshot();
     };
 
     const resetData = () => {
@@ -934,27 +1195,405 @@
     };
 
     const exportData = () => {
-      const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+      const baseMeta = {
+        schemaVersion: SCHEMA_VERSION,
+        device: getDeviceName(),
+        exportedAt: new Date().toISOString()
+      };
+      const rows = [];
+      const pushRow = (data) => {
+        const row = createCsvRow();
+        Object.assign(row, baseMeta, data);
+        rows.push(row);
+      };
+
+      pushRow({ recordType: CSV_RECORD_TYPES.META });
+      pushRow({ recordType: CSV_RECORD_TYPES.SETTINGS, unit: appData.settings.unit });
+      appData.settings.exerciseCatalog.forEach((entry) => {
+        pushRow({
+          recordType: CSV_RECORD_TYPES.CATALOG,
+          catalogEntry: entry,
+          exercise: entry
+        });
+      });
+      pushRow({
+        recordType: CSV_RECORD_TYPES.HISTORY_VIEW,
+        exercise: appData.historyView.exerciseName ?? ''
+      });
+
+      const workoutDateValue = (workout, exercise) => {
+        if (exercise?.performedOn) return exercise.performedOn;
+        if (workout?.completedAt) return workout.completedAt;
+        if (workout?.startedAt) return workout.startedAt;
+        return '';
+      };
+
+      const addWorkoutRows = (workout, state, order) => {
+        if (!workout || !workout.id) return;
+        pushRow({
+          recordType: CSV_RECORD_TYPES.WORKOUT,
+          workoutState: state,
+          workoutId: workout.id,
+          workoutStartedAt: workout.startedAt ?? '',
+          workoutCompletedAt: workout.completedAt ?? '',
+          workoutOrder: order,
+          date: workoutDateValue(workout)
+        });
+        workout.exercises.forEach((exercise) => {
+          pushRow({
+            recordType: CSV_RECORD_TYPES.EXERCISE,
+            workoutState: state,
+            workoutId: workout.id,
+            exerciseId: exercise.id,
+            exercise: exercise.name ?? '',
+            equipment: exercise.equipment ?? '',
+            attachment: exercise.attachment ?? '',
+            angle: exercise.angle ?? '',
+            position: exercise.position ?? '',
+            performedOn: exercise.performedOn ?? '',
+            intervalSeconds: exercise.intervalSeconds ?? '',
+            date: workoutDateValue(workout, exercise)
+          });
+          exercise.sets.forEach((set, index) => {
+            pushRow({
+              recordType: CSV_RECORD_TYPES.SET,
+              workoutState: state,
+              workoutId: workout.id,
+              exerciseId: exercise.id,
+              setIndex: index,
+              setType: 'standard',
+              weight: set.weight ?? '',
+              reps: set.reps ?? '',
+              oneRM: set.oneRM ?? '',
+              note: set.note ?? '',
+              unit: appData.settings.unit,
+              date: workoutDateValue(workout, exercise)
+            });
+          });
+        });
+      };
+
+      appData.workouts.forEach((workout, index) => addWorkoutRows(workout, 'history', index));
+      addWorkoutRows(appData.currentWorkout, 'current', 'current');
+
+      const csv = serializeCsvRows(rows);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const timestamp = baseMeta.exportedAt.replace(/[-:]/g, '').replace(/\..*$/, '');
+      const fileName = `muscle-app-export-${timestamp || Date.now()}.csv`;
       const url = URL.createObjectURL(blob);
-      const link = createElem('a', { attrs: { href: url, download: 'muscle-app-backup.json' } });
+      const link = createElem('a', { attrs: { href: url, download: fileName } });
       document.body.append(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
     };
 
+    const restoreAppDataFromCsv = (rows) => {
+      const issues = [];
+      const group = rows.reduce((acc, row) => {
+        const type = row.recordType || '';
+        if (!acc[type]) acc[type] = [];
+        acc[type].push(row);
+        return acc;
+      }, {});
+
+      const metaRow = (group[CSV_RECORD_TYPES.META] || [])[0];
+      if (!metaRow) {
+        issues.push('meta 行が見つかりません。');
+      }
+      const schemaValue = metaRow ? toIntegerOrNull(metaRow.schemaVersion) : null;
+      if (schemaValue === null) {
+        issues.push('SCHEMA_VERSION が解釈できません。');
+      } else if (schemaValue !== SCHEMA_VERSION) {
+        issues.push(`SCHEMA_VERSION が一致しません (期待: ${SCHEMA_VERSION} / 実際: ${schemaValue}).`);
+      }
+
+      const settingsRow = (group[CSV_RECORD_TYPES.SETTINGS] || [])[0];
+      if (!settingsRow) {
+        issues.push('settings 行が不足しています。');
+      }
+      const unit = (settingsRow?.unit || '').trim();
+      const allowedUnits = new Set(['kg', 'lb']);
+      if (!unit) {
+        issues.push('単位 (unit) が指定されていません。');
+      } else if (!allowedUnits.has(unit)) {
+        issues.push(`サポートされていない単位です: ${unit}`);
+      }
+
+      const catalogEntries = (group[CSV_RECORD_TYPES.CATALOG] || []).map((row) => (row.catalogEntry || '').trim()).filter((entry) => entry);
+      const historyViewRow = (group[CSV_RECORD_TYPES.HISTORY_VIEW] || [])[0];
+      const historyExerciseName = historyViewRow && historyViewRow.exercise && historyViewRow.exercise.trim()
+        ? historyViewRow.exercise.trim()
+        : null;
+
+      const workoutContainers = new Map();
+      const exerciseContainers = new Map();
+      const historyWorkouts = [];
+      let currentWorkoutContainer = null;
+
+      const workoutRows = group[CSV_RECORD_TYPES.WORKOUT] || [];
+      workoutRows.forEach((row) => {
+        const line = row.__line || '?';
+        const state = (row.workoutState || '').trim();
+        if (!state) {
+          issues.push(`行${line}: workoutState が空です。`);
+          return;
+        }
+        if (state !== 'history' && state !== 'current') {
+          issues.push(`行${line}: 未対応の workoutState '${state}' です。`);
+          return;
+        }
+        const workoutId = (row.workoutId || '').trim();
+        if (!workoutId) {
+          issues.push(`行${line}: workoutId がありません。`);
+          return;
+        }
+        const startedAtRaw = row.workoutStartedAt;
+        const startedAt = toIntegerOrNull(startedAtRaw);
+        if (startedAt === null) {
+          issues.push(`行${line}: workoutStartedAt が数値ではありません。`);
+        }
+        const completedAtRaw = row.workoutCompletedAt;
+        let completedAt = null;
+        if (completedAtRaw && String(completedAtRaw).trim()) {
+          const parsed = toIntegerOrNull(completedAtRaw);
+          if (parsed === null) {
+            issues.push(`行${line}: workoutCompletedAt が数値ではありません。`);
+          } else {
+            completedAt = parsed;
+          }
+        }
+        const orderRaw = row.workoutOrder;
+        let orderValue = null;
+        if (state === 'history') {
+          const parsedOrder = toIntegerOrNull(orderRaw);
+          if (parsedOrder === null) {
+            issues.push(`行${line}: workoutOrder が数値ではありません。`);
+          } else {
+            orderValue = parsedOrder;
+          }
+        }
+        const key = `${state}:${workoutId}`;
+        if (workoutContainers.has(key)) {
+          issues.push(`行${line}: workoutId '${workoutId}' が重複しています。`);
+          return;
+        }
+        const workout = {
+          id: workoutId,
+          startedAt: startedAt ?? Date.now(),
+          completedAt: completedAt,
+          exercises: []
+        };
+        const container = { workout, state, order: orderValue ?? Number.MAX_SAFE_INTEGER, line };
+        workoutContainers.set(key, container);
+        if (state === 'history') {
+          historyWorkouts.push(container);
+        } else if (state === 'current') {
+          currentWorkoutContainer = container;
+        }
+      });
+
+      const exerciseRows = group[CSV_RECORD_TYPES.EXERCISE] || [];
+      exerciseRows.forEach((row) => {
+        const line = row.__line || '?';
+        const state = (row.workoutState || '').trim();
+        if (!state) {
+          issues.push(`行${line}: workoutState が空です。`);
+          return;
+        }
+        const workoutId = (row.workoutId || '').trim();
+        if (!workoutId) {
+          issues.push(`行${line}: workoutId がありません。`);
+          return;
+        }
+        const key = `${state}:${workoutId}`;
+        const workoutContainer = workoutContainers.get(key);
+        if (!workoutContainer) {
+          issues.push(`行${line}: 対応するワークアウト (${key}) が見つかりません。`);
+          return;
+        }
+        const exerciseId = (row.exerciseId || '').trim();
+        if (!exerciseId) {
+          issues.push(`行${line}: exerciseId がありません。`);
+          return;
+        }
+        const angleRaw = row.angle;
+        const angle = toNumberOrNull(angleRaw);
+        if (angleRaw && String(angleRaw).trim() && angle === null) {
+          issues.push(`行${line}: angle が数値ではありません。`);
+        }
+        const intervalRaw = row.intervalSeconds;
+        const intervalSeconds = toNumberOrNull(intervalRaw);
+        if (intervalRaw && String(intervalRaw).trim() && intervalSeconds === null) {
+          issues.push(`行${line}: intervalSeconds が数値ではありません。`);
+        }
+        const exercise = {
+          id: exerciseId,
+          name: row.exercise || '',
+          equipment: row.equipment || '',
+          attachment: row.attachment || '',
+          angle: angle === null ? null : angle,
+          position: row.position || '',
+          performedOn: row.performedOn || '',
+          intervalSeconds: intervalSeconds === null ? null : intervalSeconds,
+          sets: []
+        };
+        workoutContainer.workout.exercises.push(exercise);
+        const exerciseKey = `${key}:${exerciseId}`;
+        exerciseContainers.set(exerciseKey, { exercise, line });
+      });
+
+      const setRows = group[CSV_RECORD_TYPES.SET] || [];
+      setRows.forEach((row) => {
+        const line = row.__line || '?';
+        const state = (row.workoutState || '').trim();
+        if (!state) {
+          issues.push(`行${line}: workoutState が空です。`);
+          return;
+        }
+        const workoutId = (row.workoutId || '').trim();
+        if (!workoutId) {
+          issues.push(`行${line}: workoutId がありません。`);
+          return;
+        }
+        const exerciseId = (row.exerciseId || '').trim();
+        if (!exerciseId) {
+          issues.push(`行${line}: exerciseId がありません。`);
+          return;
+        }
+        const exerciseKey = `${state}:${workoutId}:${exerciseId}`;
+        const container = exerciseContainers.get(exerciseKey);
+        if (!container) {
+          issues.push(`行${line}: exerciseId '${exerciseId}' に対応する種目が見つかりません。`);
+          return;
+        }
+        const setIndex = toIntegerOrNull(row.setIndex);
+        if (setIndex === null || setIndex < 0) {
+          issues.push(`行${line}: setIndex が不正です。`);
+          return;
+        }
+        const setType = (row.setType || '').trim();
+        if (!CSV_ALLOWED_SET_TYPES.has(setType)) {
+          issues.push(`行${line}: 未対応の setType '${setType}' です。`);
+        }
+        if (row.unit && unit && row.unit !== unit) {
+          issues.push(`行${line}: 単位が一致しません (期待: ${unit} / 実際: ${row.unit})。`);
+        }
+        const weight = toNumberOrNull(row.weight);
+        if (row.weight && String(row.weight).trim() && weight === null) {
+          issues.push(`行${line}: weight が数値ではありません。`);
+        }
+        const reps = toNumberOrNull(row.reps);
+        if (row.reps && String(row.reps).trim()) {
+          if (reps === null) {
+            issues.push(`行${line}: reps が数値ではありません。`);
+          } else if (!Number.isInteger(reps)) {
+            issues.push(`行${line}: reps は整数である必要があります。`);
+          }
+        }
+        const oneRM = toNumberOrNull(row.oneRM);
+        if (row.oneRM && String(row.oneRM).trim() && oneRM === null) {
+          issues.push(`行${line}: oneRM が数値ではありません。`);
+        }
+        const targetSets = container.exercise.sets;
+        if (!targetSets[setIndex]) {
+          targetSets[setIndex] = {
+            weight: weight === null ? null : weight,
+            reps: reps === null ? null : reps,
+            oneRM: oneRM === null ? null : oneRM,
+            note: row.note != null ? String(row.note) : ''
+          };
+        } else {
+          issues.push(`行${line}: setIndex ${setIndex} が重複しています。`);
+        }
+      });
+
+      exerciseContainers.forEach(({ exercise, line }) => {
+        for (let idx = 0; idx < exercise.sets.length; idx += 1) {
+          if (!exercise.sets[idx]) {
+            issues.push(`行${line}: セット #${idx} のデータが不足しています。`);
+            exercise.sets.splice(idx, 1);
+            idx -= 1;
+          }
+        }
+      });
+
+      if (!currentWorkoutContainer) {
+        issues.push('現在のワークアウト情報が不足しています。');
+      }
+
+      historyWorkouts.sort((a, b) => {
+        if (a.order === b.order) return a.line - b.line;
+        return a.order - b.order;
+      });
+
+      const base = createInitialData();
+      const data = {
+        workouts: historyWorkouts.map((item) => item.workout),
+        currentWorkout: currentWorkoutContainer ? currentWorkoutContainer.workout : base.currentWorkout,
+        settings: {
+          ...base.settings,
+          unit: unit || base.settings.unit,
+          exerciseCatalog: catalogEntries.length ? catalogEntries : base.settings.exerciseCatalog
+        },
+        historyView: {
+          exerciseName: historyExerciseName
+        }
+      };
+
+      return { issues, data };
+    };
+
     const importData = async (file) => {
       if (!file) return;
-      const text = await file.text();
       try {
-        const parsed = JSON.parse(text);
-        if (!parsed || typeof parsed !== 'object') throw new Error('形式が正しくありません');
-        appData = { ...createInitialData(), ...parsed };
+        const text = await file.text();
+        const parsedRows = parseCsvContent(text);
+        if (parsedRows.__unclosedQuote) {
+          const line = parsedRows.__lineNumber || '?';
+          showImportReport('CSVの解析に失敗しました', [`行${line}: クォートが正しく閉じられていません。`]);
+          return;
+        }
+        if (!parsedRows.length) {
+          showImportReport('インポートを中止しました', ['CSVにデータが含まれていません。']);
+          return;
+        }
+        const header = parsedRows.shift();
+        const headerIssues = validateCsvHeader(header);
+        if (headerIssues.length) {
+          showImportReport('ヘッダーが一致しません', headerIssues);
+          return;
+        }
+        const rowLengthIssues = [];
+        const rows = [];
+        parsedRows.forEach((cells, index) => {
+          if (cells.length !== header.length) {
+            rowLengthIssues.push(`行${index + 2}: 列数が ${cells.length} 列です (期待: ${header.length} 列)。`);
+            return;
+          }
+          const row = createCsvRow();
+          header.forEach((col, colIndex) => {
+            row[col] = cells[colIndex] ?? '';
+          });
+          row.__line = index + 2;
+          rows.push(row);
+        });
+        if (rowLengthIssues.length) {
+          showImportReport('列数が一致しません', rowLengthIssues);
+          return;
+        }
+        const { issues, data } = restoreAppDataFromCsv(rows);
+        if (issues.length) {
+          showImportReport('インポートを中止しました', issues);
+          return;
+        }
+        oneRmMemo.clear();
+        appData = data;
         recomputeAll();
         persist();
         requestRender();
       } catch (err) {
-        pushError(`読み込みに失敗しました: ${err.message}`);
+        pushError(`読み込みに失敗しました: ${err?.message || err}`);
       }
     };
 
@@ -1223,7 +1862,7 @@
       exportBtn.addEventListener('click', exportData);
       const importLabel = createElem('label', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-2 w-fit cursor-pointer' });
       importLabel.append(createElem('span', { textContent: 'インポート' }));
-      const input = createElem('input', { attrs: { type: 'file', accept: 'application/json' } });
+      const input = createElem('input', { attrs: { type: 'file', accept: '.csv,text/csv' } });
       input.classList.add('hidden');
       input.addEventListener('change', (event) => {
         const file = event.target.files?.[0];
