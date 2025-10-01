@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=MODAL-20240509</title>
+  <title>BUILD_TAG=TX-20251001</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -201,6 +201,48 @@
     const clearRecoverableError = () => {
       errorState.rollback = null;
       renderErrorBanner();
+    };
+
+    const validationRoot = (() => {
+      const base = createElem('div', {
+        className: 'error-banner hidden',
+        attrs: { id: 'validation-banner', role: 'alert', 'aria-live': 'assertive' }
+      });
+      if (errorRoot && errorRoot.parentNode) {
+        errorRoot.insertAdjacentElement('afterend', base);
+      } else {
+        document.body.prepend(base);
+      }
+      return base;
+    })();
+
+    const validationState = { message: null };
+
+    const renderValidationBanner = () => {
+      if (!validationRoot) return;
+      if (!validationState.message) {
+        validationRoot.classList.add('hidden');
+        validationRoot.replaceChildren();
+        return;
+      }
+      validationRoot.classList.remove('hidden');
+      const container = createElem('div', {
+        className: 'bg-red-700 text-red-50 px-4 py-3 shadow-lg border-b border-red-300'
+      });
+      container.append(
+        createElem('p', { className: 'text-sm font-semibold', textContent: validationState.message })
+      );
+      validationRoot.replaceChildren(container);
+    };
+
+    const showValidationError = (message) => {
+      validationState.message = message;
+      renderValidationBanner();
+    };
+
+    const clearValidationError = () => {
+      validationState.message = null;
+      renderValidationBanner();
     };
 
     window.addEventListener('error', (event) => {
@@ -699,6 +741,127 @@
 
     const createEmptySet = () => ({ weight: null, reps: null, oneRM: null, note: '' });
 
+    const INPUT_BUFFER_DELAY = 300;
+    const bufferedMutations = new Map();
+    const bufferTimers = new Map();
+
+    const handleCommitOutcome = (key, outcome) => {
+      if (!outcome || typeof outcome !== 'object') {
+        showValidationError('入力値を保存できませんでした。');
+        return;
+      }
+      if (!outcome.success) {
+        showValidationError(outcome.message || '入力値が正しくありません。');
+        return;
+      }
+      bufferedMutations.delete(key);
+      clearValidationError();
+      if (outcome.rerender) {
+        requestRender();
+      }
+    };
+
+    const attemptBufferedCommit = (key) => {
+      const entry = bufferedMutations.get(key);
+      if (!entry) return;
+      const { executor, value } = entry;
+      try {
+        const result = executor(value);
+        if (result && typeof result.then === 'function') {
+          result.then((resolved) => handleCommitOutcome(key, resolved)).catch((err) => {
+            showValidationError(`保存処理でエラーが発生しました: ${err?.message || err}`);
+          });
+        } else {
+          handleCommitOutcome(key, result);
+        }
+      } catch (err) {
+        showValidationError(`保存処理でエラーが発生しました: ${err?.message || err}`);
+      }
+    };
+
+    const scheduleBufferedCommit = (key, value, executor) => {
+      bufferedMutations.set(key, { value, executor });
+      if (bufferTimers.has(key)) {
+        clearTimeout(bufferTimers.get(key));
+      }
+      const timer = setTimeout(() => {
+        bufferTimers.delete(key);
+        attemptBufferedCommit(key);
+      }, INPUT_BUFFER_DELAY);
+      bufferTimers.set(key, timer);
+    };
+
+    const commitSetField = (exerciseId, setIndex, field, rawValue) => {
+      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
+      if (!exercise) {
+        return { success: false, message: '対象の種目が見つかりません。' };
+      }
+      const set = exercise.sets[setIndex];
+      if (!set) {
+        return { success: false, message: '対象のセットが見つかりません。' };
+      }
+      if (field === 'weight' || field === 'reps') {
+        const num = safeNumber(rawValue);
+        if (num === null) {
+          const label = field === 'weight' ? '重量' : '回数';
+          return { success: false, message: `${label}には数値を入力してください。` };
+        }
+        set[field] = num;
+        recomputeExercise(appData.currentWorkout.id, exercise);
+        persist();
+        return { success: true, rerender: true };
+      }
+      if (field === 'note') {
+        set[field] = typeof rawValue === 'string' ? rawValue : '';
+        persist();
+        return { success: true, rerender: false };
+      }
+      return { success: false, message: '不明なフィールドです。' };
+    };
+
+    const commitExerciseField = (exerciseId, field, rawValue) => {
+      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
+      if (!exercise) {
+        return { success: false, message: '対象の種目が見つかりません。' };
+      }
+      if (field === 'angle' || field === 'intervalSeconds') {
+        if (rawValue === '' || rawValue === null || rawValue === undefined) {
+          exercise[field] = null;
+          persist();
+          return { success: true, rerender: false };
+        }
+        const num = safeNumber(rawValue);
+        if (num === null) {
+          const label = field === 'angle' ? '角度' : 'インターバル';
+          return { success: false, message: `${label}には数値を入力してください。` };
+        }
+        exercise[field] = num;
+        persist();
+        return { success: true, rerender: false };
+      }
+      if (field === 'performedOn') {
+        exercise[field] = rawValue || '';
+        persist();
+        return { success: true, rerender: false };
+      }
+      if (field === 'equipment' || field === 'attachment' || field === 'position') {
+        exercise[field] = typeof rawValue === 'string' ? rawValue : '';
+        persist();
+        return { success: true, rerender: false };
+      }
+      return { success: false, message: '不明なフィールドです。' };
+    };
+
+    const scheduleSetFieldUpdate = (exerciseId, setIndex, field, value) => {
+      const key = `set:${exerciseId}:${setIndex}:${field}`;
+      scheduleBufferedCommit(key, value, (payload) => commitSetField(exerciseId, setIndex, field, payload));
+    };
+
+    const scheduleExerciseFieldUpdate = (exerciseId, field, value) => {
+      const key = `exercise:${exerciseId}:${field}`;
+      scheduleBufferedCommit(key, value, (payload) => commitExerciseField(exerciseId, field, payload));
+    };
+
     const addSet = (exerciseId) => {
       const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
       if (!exercise) return;
@@ -706,39 +869,6 @@
       recomputeExercise(appData.currentWorkout.id, exercise);
       persist();
       requestRender();
-    };
-
-    const updateSetField = (exerciseId, setIndex, field, value) => {
-      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
-      if (!exercise) return;
-      const set = exercise.sets[setIndex];
-      if (!set) return;
-      if (field === 'weight' || field === 'reps') {
-        const num = safeNumber(value);
-        set[field] = num === null ? null : num;
-      } else if (field === 'note') {
-        set[field] = value;
-      }
-      recomputeExercise(appData.currentWorkout.id, exercise);
-      persist();
-    };
-
-    const updateExerciseField = (exerciseId, field, value) => {
-      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
-      if (!exercise) return;
-      if (field === 'angle' || field === 'intervalSeconds') {
-        if (value === '' || value === null || value === undefined) {
-          exercise[field] = null;
-        } else {
-          const num = safeNumber(value);
-          exercise[field] = num === null ? null : num;
-        }
-      } else if (field === 'performedOn') {
-        exercise[field] = value || '';
-      } else {
-        exercise[field] = value;
-      }
-      persist();
     };
 
     const duplicateSet = (exerciseId, setIndex) => {
@@ -853,30 +983,42 @@
           const metaPanel = createElem('div', { className: 'space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4' });
           const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
           const equipmentInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: バーベル' }, value: exercise.equipment ?? '' });
-          equipmentInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'equipment', event.target.value));
+          equipmentInput.addEventListener('input', (event) => {
+            scheduleExerciseFieldUpdate(exercise.id, 'equipment', event.target.value);
+          });
           const equipmentField = createFieldWrapper('器具', '使用した器具を入力します。', '使用した器具の種類を記録しましょう。', equipmentInput);
           const attachmentInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ワイドグリップ' }, value: exercise.attachment ?? '' });
-          attachmentInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'attachment', event.target.value));
+          attachmentInput.addEventListener('input', (event) => {
+            scheduleExerciseFieldUpdate(exercise.id, 'attachment', event.target.value);
+          });
           const attachmentField = createFieldWrapper('アタッチメント', '利用したアタッチメントを記録します。', 'ケーブルハンドルなどをメモできます。', attachmentInput);
           equipmentRow.append(equipmentField, attachmentField);
           metaPanel.append(equipmentRow);
 
           const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
           const angleInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'decimal', min: '0', max: '180', step: '1', placeholder: '例: 30' }, value: exercise.angle ?? '' });
-          angleInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'angle', event.target.value));
+          angleInput.addEventListener('input', (event) => {
+            scheduleExerciseFieldUpdate(exercise.id, 'angle', event.target.value);
+          });
           const angleField = createFieldWrapper('角度 (°)', 'ベンチやマシンの角度を記録します。', '角度の変化を記録してフォームを比較。', angleInput);
           const positionInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ナロー・スタンス' }, value: exercise.position ?? '' });
-          positionInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'position', event.target.value));
+          positionInput.addEventListener('input', (event) => {
+            scheduleExerciseFieldUpdate(exercise.id, 'position', event.target.value);
+          });
           const positionField = createFieldWrapper('スタンス / ポジション', '足幅やグリップ幅などを記録します。', 'スタンスやポジションの工夫を書き残しましょう。', positionInput);
           angleRow.append(angleField, positionField);
           metaPanel.append(angleRow);
 
           const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
           const performedOnInput = createElem('input', { className: 'input-base text-slate-900', attrs: { type: 'date', min: '2000-01-01', max: '2099-12-31', step: '1' }, value: exercise.performedOn ?? '' });
-          performedOnInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'performedOn', event.target.value));
+          performedOnInput.addEventListener('input', (event) => {
+            scheduleExerciseFieldUpdate(exercise.id, 'performedOn', event.target.value);
+          });
           const performedOnField = createFieldWrapper('実施日', 'トレーニングを行った日付です。', '後から見返すために日付を残せます。', performedOnInput);
           const intervalInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'numeric', min: '0', max: '600', step: '5', placeholder: '例: 90' }, value: exercise.intervalSeconds ?? '' });
-          intervalInput.addEventListener('input', (event) => updateExerciseField(exercise.id, 'intervalSeconds', event.target.value));
+          intervalInput.addEventListener('input', (event) => {
+            scheduleExerciseFieldUpdate(exercise.id, 'intervalSeconds', event.target.value);
+          });
           const intervalField = createFieldWrapper('インターバル (秒)', 'セット間の休憩秒数を記録します。', 'タイマーで計測した秒数を入力。', intervalInput);
           scheduleRow.append(performedOnField, intervalField);
           metaPanel.append(scheduleRow);
@@ -888,19 +1030,17 @@
             registerLongPress(row, () => duplicateSet(exercise.id, index));
             const weightInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' }, value: set.weight ?? '' });
             weightInput.addEventListener('input', (event) => {
-              updateSetField(exercise.id, index, 'weight', event.target.value);
-              requestRender();
+              scheduleSetFieldUpdate(exercise.id, index, 'weight', event.target.value);
             });
             const weightField = createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput);
             const repsInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'numeric', min: '0', step: '1' }, value: set.reps ?? '' });
             repsInput.addEventListener('input', (event) => {
-              updateSetField(exercise.id, index, 'reps', event.target.value);
-              requestRender();
+              scheduleSetFieldUpdate(exercise.id, index, 'reps', event.target.value);
             });
             const repsField = createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput);
             const noteInput = createElem('textarea', { className: 'input-base min-h-[3rem] text-slate-900 placeholder-slate-400', attrs: { rows: '2', placeholder: 'フォームや感覚をメモ' }, textContent: set.note || '' });
             noteInput.addEventListener('input', (event) => {
-              updateSetField(exercise.id, index, 'note', event.target.value);
+              scheduleSetFieldUpdate(exercise.id, index, 'note', event.target.value);
             });
             const noteField = createFieldWrapper('セットメモ', '気づいたことや次回の課題を記録します。', 'フォームやRPEを自由に入力。', noteInput);
             noteField.classList.add('sm:col-span-2');
