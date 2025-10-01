@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=PERF-YYYYMMDD</title>
+  <title>BUILD_TAG=SUPERSET-YYYYMMDD</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -725,7 +725,8 @@
       currentWorkout: {
         id: `current-${Date.now()}`,
         startedAt: Date.now(),
-        exercises: []
+        exercises: [],
+        supersets: []
       },
       settings: {
         unit: 'kg',
@@ -733,8 +734,107 @@
       },
       historyView: {
         exerciseName: null
-      }
+      },
+      lastSupersetBlueprint: null
     });
+
+    const SUPERSET_SLOT_ROLES = Object.freeze(['A', 'B']);
+    const DEFAULT_SUPERSET_REST = 90;
+    const generateSupersetLabel = (index) => {
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let value = Math.max(0, Number(index) || 0);
+      let label = '';
+      while (value >= 0) {
+        label = alphabet[value % alphabet.length] + label;
+        value = Math.floor(value / alphabet.length) - 1;
+      }
+      return `Superset ${label}`;
+    };
+    const createSupersetId = () => `ss-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+
+    const normalizeSupersetSlots = (superset) => {
+      if (!Array.isArray(superset.slots)) {
+        const fallback = Array.isArray(superset.exerciseIds) ? superset.exerciseIds : [];
+        superset.slots = SUPERSET_SLOT_ROLES.map((role, index) => ({
+          role,
+          exerciseId: fallback[index] || null
+        }));
+      } else {
+        const usedRoles = new Set();
+        superset.slots = superset.slots.map((slot, index) => {
+          const role = SUPERSET_SLOT_ROLES.includes(slot?.role) && !usedRoles.has(slot.role)
+            ? slot.role
+            : SUPERSET_SLOT_ROLES[index] || SUPERSET_SLOT_ROLES[0];
+          usedRoles.add(role);
+          return { role, exerciseId: slot?.exerciseId ?? null };
+        });
+        SUPERSET_SLOT_ROLES.forEach((role) => {
+          if (!superset.slots.some((slot) => slot.role === role)) {
+            superset.slots.push({ role, exerciseId: null });
+          }
+        });
+        superset.slots = superset.slots
+          .sort((a, b) => SUPERSET_SLOT_ROLES.indexOf(a.role) - SUPERSET_SLOT_ROLES.indexOf(b.role))
+          .slice(0, SUPERSET_SLOT_ROLES.length);
+      }
+    };
+
+    const normalizeWorkout = (workout) => {
+      if (!workout || typeof workout !== 'object') return;
+      if (!Array.isArray(workout.exercises)) workout.exercises = [];
+      if (!Array.isArray(workout.supersets)) {
+        workout.supersets = workout.exercises.map((exercise, index) => ({
+          id: createSupersetId(),
+          label: generateSupersetLabel(index),
+          restSeconds: DEFAULT_SUPERSET_REST,
+          collapsed: false,
+          slots: SUPERSET_SLOT_ROLES.map((role, roleIndex) => ({
+            role,
+            exerciseId: roleIndex === 0 ? exercise.id : null
+          }))
+        }));
+      }
+      const validExerciseIds = new Set(workout.exercises.map((exercise) => exercise?.id).filter(Boolean));
+      workout.supersets = workout.supersets.filter((superset) => superset && typeof superset === 'object');
+      workout.supersets.forEach((superset, index) => {
+        if (!superset.id) superset.id = createSupersetId();
+        if (typeof superset.label !== 'string' || !superset.label.trim()) superset.label = generateSupersetLabel(index);
+        const restSeconds = Number(superset.restSeconds);
+        superset.restSeconds = Number.isFinite(restSeconds) ? Math.max(10, Math.min(600, Math.round(restSeconds))) : DEFAULT_SUPERSET_REST;
+        superset.collapsed = Boolean(superset.collapsed);
+        normalizeSupersetSlots(superset);
+        superset.slots.forEach((slot) => {
+          if (slot.exerciseId && !validExerciseIds.has(slot.exerciseId)) {
+            slot.exerciseId = null;
+          }
+        });
+      });
+
+      const assigned = new Set();
+      workout.supersets.forEach((superset) => {
+        superset.slots.forEach((slot) => {
+          if (slot.exerciseId) assigned.add(slot.exerciseId);
+        });
+      });
+
+      workout.exercises.forEach((exercise) => {
+        if (!assigned.has(exercise.id)) {
+          let target = workout.supersets.find((superset) => superset.slots.some((slot) => !slot.exerciseId));
+          if (!target) {
+            target = {
+              id: createSupersetId(),
+              label: generateSupersetLabel(workout.supersets.length),
+              restSeconds: DEFAULT_SUPERSET_REST,
+              collapsed: false,
+              slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
+            };
+            workout.supersets.push(target);
+          }
+          const slot = target.slots.find((item) => !item.exerciseId);
+          if (slot) slot.exerciseId = exercise.id;
+        }
+      });
+    };
 
     const loadData = () => {
       const stored = storage.load(STORAGE_KEYS.DATA, createInitialData());
@@ -743,6 +843,9 @@
     };
 
     let appData = loadData();
+    if (!Array.isArray(appData.workouts)) appData.workouts = [];
+    normalizeWorkout(appData.currentWorkout);
+    appData.workouts.forEach((workout) => normalizeWorkout(workout));
     createAutoBackupSnapshot();
 
     const persist = () => {
@@ -998,6 +1101,8 @@
     };
 
     /*** actions ***/
+    const createEmptySet = () => ({ weight: null, reps: null, oneRM: null, note: '' });
+
     const ensureExerciseCatalog = (name) => {
       if (!name) return;
       if (!appData.settings.exerciseCatalog.includes(name)) {
@@ -1005,35 +1110,426 @@
       }
     };
 
-    const addExercise = async () => {
+    const createExerciseEntity = (name, defaults = {}) => {
+      return {
+        id: `ex-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+        name,
+        equipment: defaults.equipment ?? '',
+        attachment: defaults.attachment ?? '',
+        angle: defaults.angle ?? null,
+        position: defaults.position ?? '',
+        performedOn: defaults.performedOn ?? getTodayDateValue(),
+        intervalSeconds: defaults.intervalSeconds ?? null,
+        sets: Array.isArray(defaults.sets) && defaults.sets.length
+          ? defaults.sets.map((set) => ({ ...createEmptySet(), ...set, oneRM: null }))
+          : [createEmptySet()]
+      };
+    };
+
+    const promptExerciseName = async (title) => {
       const catalog = [...appData.settings.exerciseCatalog];
       catalog.sort((a, b) => a.localeCompare(b, 'ja'));
-      const choice = await pickFromList('種目を選択', [...catalog, '新規追加']);
-      if (!choice) return;
-      let exerciseName = choice;
+      const choice = await pickFromList(title, [...catalog, '新規追加']);
+      if (!choice) return null;
       if (choice === '新規追加') {
-        exerciseName = await promptText('新しい種目名');
-        if (!exerciseName) return;
+        const value = await promptText('新しい種目名');
+        return value || null;
       }
-      ensureExerciseCatalog(exerciseName);
-      const newExercise = {
-        id: `ex-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
-        name: exerciseName,
-        equipment: '',
-        attachment: '',
-        angle: null,
-        position: '',
-        performedOn: getTodayDateValue(),
-        intervalSeconds: null,
-        sets: [createEmptySet()]
+      return choice;
+    };
+
+    const refreshSupersetLabels = () => {
+      appData.currentWorkout.supersets.forEach((superset, index) => {
+        superset.label = generateSupersetLabel(index);
+      });
+    };
+
+    const addSuperset = async () => {
+      const index = appData.currentWorkout.supersets.length;
+      const label = generateSupersetLabel(index);
+      const selectedNames = [];
+      for (const role of SUPERSET_SLOT_ROLES) {
+        const name = await promptExerciseName(`${label} ${role} の種目`);
+        if (!name) return;
+        selectedNames.push(name);
+      }
+
+      const superset = {
+        id: createSupersetId(),
+        label,
+        restSeconds: DEFAULT_SUPERSET_REST,
+        collapsed: false,
+        slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
       };
-      appData.currentWorkout.exercises.push(newExercise);
-      recomputeExercise(appData.currentWorkout.id, newExercise);
+
+      selectedNames.forEach((exerciseName, slotIndex) => {
+        ensureExerciseCatalog(exerciseName);
+        const exercise = createExerciseEntity(exerciseName);
+        appData.currentWorkout.exercises.push(exercise);
+        superset.slots[slotIndex].exerciseId = exercise.id;
+        recomputeExercise(appData.currentWorkout.id, exercise);
+      });
+
+      appData.currentWorkout.supersets.push(superset);
+      refreshSupersetLabels();
       persist();
       requestRender();
     };
 
-    const createEmptySet = () => ({ weight: null, reps: null, oneRM: null, note: '' });
+    const getExerciseById = (exerciseId) => appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
+
+    const getSupersetById = (supersetId) => appData.currentWorkout.supersets.find((sup) => sup.id === supersetId);
+
+    const findExerciseContext = (exerciseId) => {
+      const exercise = getExerciseById(exerciseId);
+      if (!exercise) return null;
+      const superset = appData.currentWorkout.supersets.find((item) =>
+        item.slots.some((slot) => slot.exerciseId === exerciseId)
+      );
+      const slot = superset ? superset.slots.find((slot) => slot.exerciseId === exerciseId) : null;
+      return { exercise, superset, slot };
+    };
+
+    const ensureSupersetParity = (superset) => {
+      if (!superset) return false;
+      const lengths = superset.slots.map((slot) => {
+        if (!slot.exerciseId) return 0;
+        const exercise = getExerciseById(slot.exerciseId);
+        return exercise ? exercise.sets.length : 0;
+      });
+      const targetLength = Math.max(1, ...lengths);
+      let mutated = false;
+      superset.slots.forEach((slot) => {
+        if (!slot.exerciseId) return;
+        const exercise = getExerciseById(slot.exerciseId);
+        if (!exercise) return;
+        while (exercise.sets.length < targetLength) {
+          exercise.sets.push(createEmptySet());
+          mutated = true;
+        }
+      });
+      return mutated;
+    };
+
+    const addSupersetRound = (supersetId) => {
+      const superset = getSupersetById(supersetId);
+      if (!superset) return;
+      ensureSupersetParity(superset);
+      superset.slots.forEach((slot) => {
+        if (!slot.exerciseId) return;
+        const exercise = getExerciseById(slot.exerciseId);
+        if (!exercise) return;
+        exercise.sets.push(createEmptySet());
+        recomputeExercise(appData.currentWorkout.id, exercise);
+      });
+      persist();
+      requestRender();
+    };
+
+    const duplicateSupersetRound = (supersetId, setIndex) => {
+      const superset = getSupersetById(supersetId);
+      if (!superset) return;
+      ensureSupersetParity(superset);
+      superset.slots.forEach((slot) => {
+        if (!slot.exerciseId) return;
+        const exercise = getExerciseById(slot.exerciseId);
+        if (!exercise) return;
+        const baseSet = exercise.sets[setIndex];
+        if (!baseSet) return;
+        const cloned = createEmptySet();
+        cloned.weight = baseSet.weight;
+        cloned.reps = baseSet.reps;
+        cloned.note = baseSet.note;
+        exercise.sets.splice(setIndex + 1, 0, cloned);
+        recomputeExercise(appData.currentWorkout.id, exercise);
+      });
+      persist();
+      requestRender();
+    };
+
+    const removeSupersetRound = (supersetId, setIndex) => {
+      const superset = getSupersetById(supersetId);
+      if (!superset) return;
+      const remainingLengths = [];
+      superset.slots.forEach((slot) => {
+        if (!slot.exerciseId) return;
+        const exercise = getExerciseById(slot.exerciseId);
+        if (!exercise) return;
+        if (exercise.sets.length <= 1) return;
+        exercise.sets.splice(setIndex, 1);
+        recomputeExercise(appData.currentWorkout.id, exercise);
+        remainingLengths.push(exercise.sets.length);
+      });
+      if (!remainingLengths.length) return;
+      persist();
+      requestRender();
+    };
+
+    const duplicateSuperset = (supersetId) => {
+      const source = getSupersetById(supersetId);
+      if (!source) return;
+      const clone = {
+        id: createSupersetId(),
+        label: source.label,
+        restSeconds: source.restSeconds,
+        collapsed: false,
+        slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
+      };
+      source.slots.forEach((slot) => {
+        if (!slot.exerciseId) return;
+        const exercise = getExerciseById(slot.exerciseId);
+        if (!exercise) return;
+        ensureExerciseCatalog(exercise.name);
+        const newExercise = createExerciseEntity(exercise.name, {
+          equipment: exercise.equipment,
+          attachment: exercise.attachment,
+          angle: exercise.angle,
+          position: exercise.position,
+          intervalSeconds: exercise.intervalSeconds,
+          sets: exercise.sets.map((set) => ({ weight: set.weight, reps: set.reps, note: set.note }))
+        });
+        appData.currentWorkout.exercises.push(newExercise);
+        const slotIndex = clone.slots.findIndex((entry) => entry.role === slot.role);
+        if (slotIndex !== -1) {
+          clone.slots[slotIndex].exerciseId = newExercise.id;
+        }
+        recomputeExercise(appData.currentWorkout.id, newExercise);
+      });
+      const insertIndex = appData.currentWorkout.supersets.indexOf(source) + 1;
+      appData.currentWorkout.supersets.splice(insertIndex, 0, clone);
+      refreshSupersetLabels();
+      persist();
+      requestRender();
+    };
+
+    const deleteSuperset = async (supersetId) => {
+      const superset = getSupersetById(supersetId);
+      if (!superset) return;
+      if (!(await confirmAction('このスーパーセットを削除しますか？'))) return;
+      const exerciseIds = superset.slots.map((slot) => slot.exerciseId).filter(Boolean);
+      appData.currentWorkout.exercises = appData.currentWorkout.exercises.filter((exercise) => !exerciseIds.includes(exercise.id));
+      appData.currentWorkout.supersets = appData.currentWorkout.supersets.filter((item) => item.id !== supersetId);
+      stopSupersetTimer(supersetId);
+      supersetTimers.delete(supersetId);
+      refreshSupersetLabels();
+      persist();
+      requestRender();
+    };
+
+    const toggleSupersetCollapsed = (supersetId) => {
+      const superset = getSupersetById(supersetId);
+      if (!superset) return;
+      superset.collapsed = !superset.collapsed;
+      persist();
+      requestRender();
+    };
+
+    const configureSupersetSlot = async (supersetId, role) => {
+      const superset = getSupersetById(supersetId);
+      if (!superset) return;
+      const slot = superset.slots.find((item) => item.role === role);
+      if (!slot) return;
+      const name = await promptExerciseName(`${superset.label} ${role} の種目`);
+      if (!name) return;
+      ensureExerciseCatalog(name);
+      if (slot.exerciseId) {
+        appData.currentWorkout.exercises = appData.currentWorkout.exercises.filter((exercise) => exercise.id !== slot.exerciseId);
+      }
+      const exercise = createExerciseEntity(name);
+      appData.currentWorkout.exercises.push(exercise);
+      slot.exerciseId = exercise.id;
+      recomputeExercise(appData.currentWorkout.id, exercise);
+      persist();
+      requestRender();
+    };
+
+    const commitSupersetField = (supersetId, field, rawValue) => {
+      const superset = getSupersetById(supersetId);
+      if (!superset) {
+        return { success: false, message: '対象のスーパーセットが見つかりません。' };
+      }
+      if (field === 'restSeconds') {
+        const num = safeNumber(rawValue);
+        if (num === null) {
+          return { success: false, message: '休憩秒数には数値を入力してください。' };
+        }
+        const value = Math.max(10, Math.min(600, Math.round(num)));
+        superset.restSeconds = value;
+        persist();
+        return { success: true, rerender: false };
+      }
+      if (field === 'collapsed') {
+        superset.collapsed = Boolean(rawValue);
+        persist();
+        return { success: true, rerender: true };
+      }
+      return { success: false, message: '不明なフィールドです。' };
+    };
+
+    const scheduleSupersetFieldUpdate = (supersetId, field, value) => {
+      const key = `superset:${supersetId}:${field}`;
+      scheduleBufferedCommit(key, value, (payload) => commitSupersetField(supersetId, field, payload));
+    };
+
+    const removeExerciseFromSuperset = (exerciseId) => {
+      const context = findExerciseContext(exerciseId);
+      if (!context) return false;
+      const { superset, slot } = context;
+      appData.currentWorkout.exercises = appData.currentWorkout.exercises.filter((exercise) => exercise.id !== exerciseId);
+      if (superset && slot) {
+        slot.exerciseId = null;
+        const hasExercise = superset.slots.some((entry) => entry.exerciseId);
+        if (!hasExercise) {
+          appData.currentWorkout.supersets = appData.currentWorkout.supersets.filter((item) => item.id !== superset.id);
+        }
+      }
+      refreshSupersetLabels();
+      return true;
+    };
+
+    const buildSupersetBlueprint = (workout) => {
+      if (!workout || !Array.isArray(workout.supersets)) return null;
+      const exerciseMap = new Map((workout.exercises || []).map((exercise) => [exercise.id, exercise]));
+      return workout.supersets.map((superset) => ({
+        label: superset.label,
+        restSeconds: superset.restSeconds,
+        slots: superset.slots.map((slot) => {
+          const exercise = slot.exerciseId ? exerciseMap.get(slot.exerciseId) : null;
+          return {
+            role: slot.role,
+            name: exercise ? exercise.name : null,
+            equipment: exercise?.equipment ?? '',
+            attachment: exercise?.attachment ?? '',
+            angle: exercise?.angle ?? null,
+            position: exercise?.position ?? '',
+            intervalSeconds: exercise?.intervalSeconds ?? null,
+            setCount: exercise?.sets?.length ?? 1
+          };
+        })
+      }));
+    };
+
+    const restoreSupersetBlueprint = () => {
+      const blueprint = appData.lastSupersetBlueprint;
+      if (!Array.isArray(blueprint) || !blueprint.length) return;
+      blueprint.forEach((config, index) => {
+        const superset = {
+          id: createSupersetId(),
+          label: generateSupersetLabel(index),
+          restSeconds: Number.isFinite(Number(config.restSeconds))
+            ? Math.max(10, Math.min(600, Math.round(Number(config.restSeconds))))
+            : DEFAULT_SUPERSET_REST,
+          collapsed: false,
+          slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
+        };
+        config.slots.forEach((slotConfig) => {
+          if (!slotConfig || !slotConfig.name) return;
+          ensureExerciseCatalog(slotConfig.name);
+          const exercise = createExerciseEntity(slotConfig.name, {
+            equipment: slotConfig.equipment,
+            attachment: slotConfig.attachment,
+            angle: slotConfig.angle,
+            position: slotConfig.position,
+            intervalSeconds: slotConfig.intervalSeconds
+          });
+          const desiredCount = Math.max(1, Number(slotConfig.setCount) || 1);
+          while (exercise.sets.length < desiredCount) {
+            exercise.sets.push(createEmptySet());
+          }
+          appData.currentWorkout.exercises.push(exercise);
+          const slotIndex = superset.slots.findIndex((slot) => slot.role === slotConfig.role);
+          if (slotIndex !== -1) {
+            superset.slots[slotIndex].exerciseId = exercise.id;
+          }
+          recomputeExercise(appData.currentWorkout.id, exercise);
+        });
+        appData.currentWorkout.supersets.push(superset);
+      });
+      refreshSupersetLabels();
+    };
+
+    const supersetTimers = new Map();
+
+    const getSupersetTimerState = (supersetId) => {
+      let state = supersetTimers.get(supersetId);
+      if (!state) {
+        state = { active: false, remaining: 0, intervalId: null, updater: null };
+        supersetTimers.set(supersetId, state);
+      }
+      return state;
+    };
+
+    const stopSupersetTimer = (supersetId) => {
+      const state = supersetTimers.get(supersetId);
+      if (!state) return;
+      if (state.intervalId) {
+        clearInterval(state.intervalId);
+        state.intervalId = null;
+      }
+      state.active = false;
+      state.remaining = 0;
+      if (typeof state.updater === 'function') {
+        state.updater(0, false);
+      }
+    };
+
+    const startSupersetTimer = (supersetId) => {
+      const superset = getSupersetById(supersetId);
+      if (!superset) return;
+      const state = getSupersetTimerState(supersetId);
+      if (state.active) {
+        stopSupersetTimer(supersetId);
+        return;
+      }
+      const duration = Math.max(10, Number(superset.restSeconds) || DEFAULT_SUPERSET_REST);
+      state.active = true;
+      state.remaining = duration;
+      if (typeof state.updater === 'function') {
+        state.updater(state.remaining, true);
+      }
+      if (state.intervalId) {
+        clearInterval(state.intervalId);
+      }
+      state.intervalId = setInterval(() => {
+        state.remaining -= 1;
+        if (typeof state.updater === 'function') {
+          state.updater(state.remaining, state.active);
+        }
+        if (state.remaining <= 0) {
+          stopSupersetTimer(supersetId);
+        }
+      }, 1000);
+    };
+
+    const attachTimerUpdater = (supersetId, updater) => {
+      const state = getSupersetTimerState(supersetId);
+      state.updater = updater;
+      updater(state.remaining, state.active);
+    };
+
+    const supersetFocusRegistry = new Map();
+
+    const registerSupersetFocusInput = (supersetId, input) => {
+      if (!input) return;
+      if (!supersetFocusRegistry.has(supersetId)) {
+        supersetFocusRegistry.set(supersetId, []);
+      }
+      supersetFocusRegistry.get(supersetId).push(input);
+    };
+
+    const bindSupersetFocusNavigation = (supersetId, input) => {
+      input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        const list = supersetFocusRegistry.get(supersetId) || [];
+        const index = list.indexOf(input);
+        if (index === -1) return;
+        event.preventDefault();
+        const next = event.shiftKey ? list[index - 1] : list[index + 1];
+        if (next) {
+          next.focus();
+        }
+      });
+    };
 
     const INPUT_BUFFER_DELAY = 300;
     const bufferedMutations = new Map();
@@ -1086,10 +1582,11 @@
     };
 
     const commitSetField = (exerciseId, setIndex, field, rawValue) => {
-      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
-      if (!exercise) {
+      const context = findExerciseContext(exerciseId);
+      if (!context) {
         return { success: false, message: '対象の種目が見つかりません。' };
       }
+      const exercise = context.exercise;
       const set = exercise.sets[setIndex];
       if (!set) {
         return { success: false, message: '対象のセットが見つかりません。' };
@@ -1114,10 +1611,11 @@
     };
 
     const commitExerciseField = (exerciseId, field, rawValue) => {
-      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
-      if (!exercise) {
+      const context = findExerciseContext(exerciseId);
+      if (!context) {
         return { success: false, message: '対象の種目が見つかりません。' };
       }
+      const exercise = context.exercise;
       if (field === 'angle' || field === 'intervalSeconds') {
         if (rawValue === '' || rawValue === null || rawValue === undefined) {
           exercise[field] = null;
@@ -1157,32 +1655,40 @@
     };
 
     const addSet = (exerciseId) => {
-      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
-      if (!exercise) return;
-      exercise.sets.push(createEmptySet());
-      recomputeExercise(appData.currentWorkout.id, exercise);
+      const context = findExerciseContext(exerciseId);
+      if (!context) return;
+      if (context.superset) {
+        addSupersetRound(context.superset.id);
+        return;
+      }
+      context.exercise.sets.push(createEmptySet());
+      recomputeExercise(appData.currentWorkout.id, context.exercise);
       persist();
       requestRender();
     };
 
     const duplicateSet = (exerciseId, setIndex) => {
-      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
-      if (!exercise) return;
-      const baseSet = exercise.sets[setIndex];
+      const context = findExerciseContext(exerciseId);
+      if (!context) return;
+      if (context.superset) {
+        duplicateSupersetRound(context.superset.id, setIndex);
+        return;
+      }
+      const baseSet = context.exercise.sets[setIndex];
       if (!baseSet) return;
       const cloned = createEmptySet();
       cloned.weight = baseSet.weight;
       cloned.reps = baseSet.reps;
       cloned.note = baseSet.note;
-      exercise.sets.splice(setIndex + 1, 0, cloned);
-      recomputeExercise(appData.currentWorkout.id, exercise);
+      context.exercise.sets.splice(setIndex + 1, 0, cloned);
+      recomputeExercise(appData.currentWorkout.id, context.exercise);
       persist();
       requestRender();
     };
 
     const deleteExercise = async (exerciseId) => {
       if (!(await confirmAction('この種目を削除しますか？'))) return;
-      appData.currentWorkout.exercises = appData.currentWorkout.exercises.filter((ex) => ex.id !== exerciseId);
+      if (!removeExerciseFromSuperset(exerciseId)) return;
       persist();
       requestRender();
     };
@@ -1194,13 +1700,19 @@
       const workoutCopy = cloneDeep(appData.currentWorkout);
       workoutCopy.id = `wo-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
       workoutCopy.completedAt = Date.now();
+      normalizeWorkout(workoutCopy);
       workoutCopy.exercises.forEach((exercise) => recomputeExercise(workoutCopy.id, exercise));
       appData.workouts.unshift(workoutCopy);
+      appData.lastSupersetBlueprint = buildSupersetBlueprint(appData.currentWorkout);
+      supersetTimers.forEach((_, key) => stopSupersetTimer(key));
+      supersetTimers.clear();
       appData.currentWorkout = {
         id: `current-${Date.now()}`,
         startedAt: Date.now(),
-        exercises: []
+        exercises: [],
+        supersets: []
       };
+      restoreSupersetBlueprint();
       persist();
       requestRender();
     };
@@ -1812,6 +2324,81 @@
     };
 
     /*** route renderers ***/
+    const createExerciseMetaPanel = (exercise) => {
+      const metaPanel = createElem('div', { className: 'space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4' });
+
+      const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+      const equipmentInput = createElem('input', {
+        className: 'input-base text-slate-900 placeholder-slate-400',
+        attrs: { type: 'text', autocomplete: 'off', placeholder: '例: バーベル' },
+        value: exercise.equipment ?? ''
+      });
+      equipmentInput.addEventListener('input', (event) => {
+        scheduleExerciseFieldUpdate(exercise.id, 'equipment', event.target.value);
+      });
+      const equipmentField = createFieldWrapper('器具', '使用した器具を入力します。', '使用した器具の種類を記録しましょう。', equipmentInput);
+
+      const attachmentInput = createElem('input', {
+        className: 'input-base text-slate-900 placeholder-slate-400',
+        attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ワイドグリップ' },
+        value: exercise.attachment ?? ''
+      });
+      attachmentInput.addEventListener('input', (event) => {
+        scheduleExerciseFieldUpdate(exercise.id, 'attachment', event.target.value);
+      });
+      const attachmentField = createFieldWrapper('アタッチメント', '利用したアタッチメントを記録します。', 'ケーブルハンドルなどをメモできます。', attachmentInput);
+      equipmentRow.append(equipmentField, attachmentField);
+      metaPanel.append(equipmentRow);
+
+      const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+      const angleInput = createElem('input', {
+        className: 'input-base text-slate-900 placeholder-slate-400',
+        attrs: { type: 'number', inputmode: 'decimal', min: '0', max: '180', step: '1', placeholder: '例: 30' },
+        value: exercise.angle ?? ''
+      });
+      angleInput.addEventListener('input', (event) => {
+        scheduleExerciseFieldUpdate(exercise.id, 'angle', event.target.value);
+      });
+      const angleField = createFieldWrapper('角度 (°)', 'ベンチやマシンの角度を記録します。', '角度の変化を記録してフォームを比較。', angleInput);
+
+      const positionInput = createElem('input', {
+        className: 'input-base text-slate-900 placeholder-slate-400',
+        attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ナロー・スタンス' },
+        value: exercise.position ?? ''
+      });
+      positionInput.addEventListener('input', (event) => {
+        scheduleExerciseFieldUpdate(exercise.id, 'position', event.target.value);
+      });
+      const positionField = createFieldWrapper('スタンス / ポジション', '足幅やグリップ幅などを記録します。', 'スタンスやポジションの工夫を書き残しましょう。', positionInput);
+      angleRow.append(angleField, positionField);
+      metaPanel.append(angleRow);
+
+      const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+      const performedOnInput = createElem('input', {
+        className: 'input-base text-slate-900',
+        attrs: { type: 'date', min: '2000-01-01', max: '2099-12-31', step: '1' },
+        value: exercise.performedOn ?? ''
+      });
+      performedOnInput.addEventListener('input', (event) => {
+        scheduleExerciseFieldUpdate(exercise.id, 'performedOn', event.target.value);
+      });
+      const performedOnField = createFieldWrapper('実施日', 'トレーニングを行った日付です。', '後から見返すために日付を残せます。', performedOnInput);
+
+      const intervalInput = createElem('input', {
+        className: 'input-base text-slate-900 placeholder-slate-400',
+        attrs: { type: 'number', inputmode: 'numeric', min: '0', max: '600', step: '5', placeholder: '例: 90' },
+        value: exercise.intervalSeconds ?? ''
+      });
+      intervalInput.addEventListener('input', (event) => {
+        scheduleExerciseFieldUpdate(exercise.id, 'intervalSeconds', event.target.value);
+      });
+      const intervalField = createFieldWrapper('インターバル (秒)', 'セット間の休憩秒数を記録します。', 'タイマーで計測した秒数を入力。', intervalInput);
+      scheduleRow.append(performedOnField, intervalField);
+      metaPanel.append(scheduleRow);
+
+      return metaPanel;
+    };
+
     const buildHomeView = () => {
       const nodes = [];
       const workout = appData.currentWorkout;
@@ -1821,95 +2408,269 @@
         textContent: `開始: ${formatDate(workout.startedAt)}`
       });
       cardBody.append(headerInfo);
-      if (!workout.exercises.length) {
-        cardBody.append(createElem('p', { className: 'text-sm leading-relaxed text-slate-800', textContent: '種目を追加して記録を開始しましょう。' }));
+      if (!workout.supersets.length) {
+        cardBody.append(
+          createElem('p', {
+            className: 'text-sm leading-relaxed text-slate-800',
+            textContent: 'スーパーセットを追加して記録を始めましょう。'
+          })
+        );
       } else {
-        workout.exercises.forEach((exercise) => {
-          const exCard = createElem('section', { className: 'space-y-5 rounded-2xl border border-slate-300 bg-white p-5 shadow-sm' });
-          const exHeader = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between' });
-          exHeader.append(createElem('h3', { className: 'text-lg font-bold text-slate-900', textContent: exercise.name }));
-          const deleteBtn = createElem('button', { className: 'self-start text-sm font-semibold text-red-700 underline decoration-dotted hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500', textContent: '削除', attrs: { type: 'button' } });
-          deleteBtn.addEventListener('click', () => deleteExercise(exercise.id));
-          exHeader.append(deleteBtn);
-          exCard.append(exHeader);
-
-          const metaPanel = createElem('div', { className: 'space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4' });
-          const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
-          const equipmentInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: バーベル' }, value: exercise.equipment ?? '' });
-          equipmentInput.addEventListener('input', (event) => {
-            scheduleExerciseFieldUpdate(exercise.id, 'equipment', event.target.value);
-          });
-          const equipmentField = createFieldWrapper('器具', '使用した器具を入力します。', '使用した器具の種類を記録しましょう。', equipmentInput);
-          const attachmentInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ワイドグリップ' }, value: exercise.attachment ?? '' });
-          attachmentInput.addEventListener('input', (event) => {
-            scheduleExerciseFieldUpdate(exercise.id, 'attachment', event.target.value);
-          });
-          const attachmentField = createFieldWrapper('アタッチメント', '利用したアタッチメントを記録します。', 'ケーブルハンドルなどをメモできます。', attachmentInput);
-          equipmentRow.append(equipmentField, attachmentField);
-          metaPanel.append(equipmentRow);
-
-          const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
-          const angleInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'decimal', min: '0', max: '180', step: '1', placeholder: '例: 30' }, value: exercise.angle ?? '' });
-          angleInput.addEventListener('input', (event) => {
-            scheduleExerciseFieldUpdate(exercise.id, 'angle', event.target.value);
-          });
-          const angleField = createFieldWrapper('角度 (°)', 'ベンチやマシンの角度を記録します。', '角度の変化を記録してフォームを比較。', angleInput);
-          const positionInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ナロー・スタンス' }, value: exercise.position ?? '' });
-          positionInput.addEventListener('input', (event) => {
-            scheduleExerciseFieldUpdate(exercise.id, 'position', event.target.value);
-          });
-          const positionField = createFieldWrapper('スタンス / ポジション', '足幅やグリップ幅などを記録します。', 'スタンスやポジションの工夫を書き残しましょう。', positionInput);
-          angleRow.append(angleField, positionField);
-          metaPanel.append(angleRow);
-
-          const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
-          const performedOnInput = createElem('input', { className: 'input-base text-slate-900', attrs: { type: 'date', min: '2000-01-01', max: '2099-12-31', step: '1' }, value: exercise.performedOn ?? '' });
-          performedOnInput.addEventListener('input', (event) => {
-            scheduleExerciseFieldUpdate(exercise.id, 'performedOn', event.target.value);
-          });
-          const performedOnField = createFieldWrapper('実施日', 'トレーニングを行った日付です。', '後から見返すために日付を残せます。', performedOnInput);
-          const intervalInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'numeric', min: '0', max: '600', step: '5', placeholder: '例: 90' }, value: exercise.intervalSeconds ?? '' });
-          intervalInput.addEventListener('input', (event) => {
-            scheduleExerciseFieldUpdate(exercise.id, 'intervalSeconds', event.target.value);
-          });
-          const intervalField = createFieldWrapper('インターバル (秒)', 'セット間の休憩秒数を記録します。', 'タイマーで計測した秒数を入力。', intervalInput);
-          scheduleRow.append(performedOnField, intervalField);
-          metaPanel.append(scheduleRow);
-          exCard.append(metaPanel);
-
-          const table = createElem('div', { className: 'space-y-4' });
-          exercise.sets.forEach((set, index) => {
-            const row = createElem('div', { className: 'grid grid-cols-1 sm:grid-cols-4 gap-4 items-start rounded-xl border border-slate-200 bg-white p-4 shadow-sm', attrs: { title: '長押しでこのセットを複製できます' } });
-            registerLongPress(row, () => duplicateSet(exercise.id, index));
-            const weightInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' }, value: set.weight ?? '' });
-            weightInput.addEventListener('input', (event) => {
-              scheduleSetFieldUpdate(exercise.id, index, 'weight', event.target.value);
+        workout.supersets.forEach((superset) => {
+          supersetFocusRegistry.set(superset.id, []);
+          const parityMutated = ensureSupersetParity(superset);
+          if (parityMutated) {
+            superset.slots.forEach((slot) => {
+              if (!slot.exerciseId) return;
+              const exercise = getExerciseById(slot.exerciseId);
+              if (exercise) {
+                recomputeExercise(appData.currentWorkout.id, exercise);
+              }
             });
-            const weightField = createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput);
-            const repsInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'numeric', min: '0', step: '1' }, value: set.reps ?? '' });
-            repsInput.addEventListener('input', (event) => {
-              scheduleSetFieldUpdate(exercise.id, index, 'reps', event.target.value);
-            });
-            const repsField = createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput);
-            const noteInput = createElem('textarea', { className: 'input-base min-h-[3rem] text-slate-900 placeholder-slate-400', attrs: { rows: '2', placeholder: 'フォームや感覚をメモ' }, textContent: set.note || '' });
-            noteInput.addEventListener('input', (event) => {
-              scheduleSetFieldUpdate(exercise.id, index, 'note', event.target.value);
-            });
-            const noteField = createFieldWrapper('セットメモ', '気づいたことや次回の課題を記録します。', 'フォームやRPEを自由に入力。', noteInput);
-            noteField.classList.add('sm:col-span-2');
-            const oneRmLabel = createElem('p', { className: 'sm:col-span-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800', textContent: set.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -' });
-            row.append(weightField, repsField, noteField, oneRmLabel);
-            table.append(row);
+            persist();
+          }
+          const slotExercises = superset.slots.map((slot) => ({
+            slot,
+            exercise: slot.exerciseId ? getExerciseById(slot.exerciseId) : null
+          }));
+          const roundCount = Math.max(0, ...slotExercises.map(({ exercise }) => (exercise ? exercise.sets.length : 0)));
+          const supCard = createElem('section', { className: 'space-y-4 rounded-2xl border border-slate-300 bg-white p-5 shadow-sm' });
+          const headerRow = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between' });
+          const toggleBtn = createElem('button', {
+            className: 'flex items-center gap-2 text-left text-lg font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
+            attrs: { type: 'button' }
           });
-          const addSetBtn = createElem('button', { className: 'btn-muted mt-2 inline-flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100', textContent: 'セットを追加', attrs: { type: 'button' } });
-          addSetBtn.addEventListener('click', () => addSet(exercise.id));
-          exCard.append(table, addSetBtn);
-          cardBody.append(exCard);
+          const caret = createElem('span', { className: 'text-xl text-slate-600', textContent: superset.collapsed ? '▸' : '▾' });
+          const titleLabel = createElem('span', { textContent: superset.label });
+          toggleBtn.append(caret, titleLabel);
+          toggleBtn.addEventListener('click', () => toggleSupersetCollapsed(superset.id));
+          headerRow.append(toggleBtn);
+          headerRow.append(
+            createElem('span', {
+              className: 'text-sm font-semibold text-slate-700',
+              textContent: `${roundCount} ラウンド`
+            })
+          );
+          supCard.append(headerRow);
+
+          const controls = createElem('div', { className: 'flex flex-wrap items-center gap-2' });
+          const restInput = createElem('input', {
+            className: 'input-base w-24 text-sm',
+            attrs: { type: 'number', min: '10', max: '600', step: '5' },
+            value: superset.restSeconds ?? DEFAULT_SUPERSET_REST
+          });
+          const timerBtn = createElem('button', {
+            className: 'btn-primary rounded-lg px-3 py-2 text-sm font-semibold shadow-sm',
+            attrs: { type: 'button' },
+            textContent: `休憩 ${superset.restSeconds}秒`
+          });
+          attachTimerUpdater(superset.id, (remaining, active) => {
+            if (active) {
+              timerBtn.textContent = `残り ${Math.max(0, remaining)}秒`;
+              timerBtn.classList.add('animate-pulse');
+            } else {
+              const base = restInput.value || superset.restSeconds;
+              timerBtn.textContent = `休憩 ${base}秒`;
+              timerBtn.classList.remove('animate-pulse');
+            }
+          });
+          timerBtn.addEventListener('click', () => startSupersetTimer(superset.id));
+          restInput.addEventListener('input', (event) => {
+            const value = event.target.value;
+            scheduleSupersetFieldUpdate(superset.id, 'restSeconds', value);
+            const parsed = safeNumber(value);
+            if (parsed !== null) {
+              const sup = getSupersetById(superset.id);
+              if (sup) {
+                sup.restSeconds = Math.max(10, Math.min(600, Math.round(parsed)));
+              }
+            }
+            timerBtn.textContent = `休憩 ${value || superset.restSeconds}秒`;
+          });
+          const restLabel = createElem('label', { className: 'flex w-28 flex-col text-xs font-semibold text-slate-700' });
+          restLabel.append(
+            createElem('span', { className: 'mb-1 text-[0.65rem] uppercase tracking-wide text-slate-500', textContent: '休憩プリセット' }),
+            restInput
+          );
+          const addRoundBtn = createElem('button', {
+            className: 'btn-muted rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100',
+            attrs: { type: 'button' },
+            textContent: 'セット追加'
+          });
+          addRoundBtn.addEventListener('click', () => addSupersetRound(superset.id));
+          const duplicateBtn = createElem('button', {
+            className: 'btn-muted rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100',
+            attrs: { type: 'button' },
+            textContent: 'グループ複製'
+          });
+          duplicateBtn.addEventListener('click', () => duplicateSuperset(superset.id));
+          const deleteBtn = createElem('button', {
+            className: 'text-sm font-semibold text-red-700 underline decoration-dotted hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500',
+            attrs: { type: 'button' },
+            textContent: '削除'
+          });
+          deleteBtn.addEventListener('click', () => deleteSuperset(superset.id));
+          controls.append(timerBtn, restLabel, addRoundBtn, duplicateBtn, deleteBtn);
+          supCard.append(controls);
+
+          const body = createElem('div', { className: 'space-y-5' });
+          if (superset.collapsed) body.classList.add('hidden');
+          if (!slotExercises.some(({ exercise }) => exercise)) {
+            body.append(
+              createElem('p', {
+                className: 'text-sm text-slate-700',
+                textContent: 'このスーパーセットにはまだ種目が設定されていません。'
+              })
+            );
+          } else {
+            if (roundCount <= 0) {
+              body.append(
+                createElem('p', {
+                  className: 'text-sm text-slate-700',
+                  textContent: 'セットを追加して記録を開始しましょう。'
+                })
+              );
+            } else {
+              const roundsContainer = createElem('div', { className: 'space-y-4' });
+              for (let index = 0; index < roundCount; index += 1) {
+                const round = createElem('div', {
+                  className: 'space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm',
+                  attrs: { title: '長押しでこのラウンドを複製できます' }
+                });
+                registerLongPress(round, () => duplicateSupersetRound(superset.id, index));
+                const roundHeader = createElem('div', { className: 'flex items-center justify-between text-sm font-semibold text-slate-800' });
+                roundHeader.append(createElem('span', { textContent: `ラウンド ${index + 1}` }));
+                const canRemove = slotExercises.some(({ exercise }) => exercise && exercise.sets.length > 1);
+                const removeBtn = createElem('button', {
+                  className: 'text-xs font-semibold text-red-700 underline decoration-dotted hover:text-red-800',
+                  attrs: { type: 'button' },
+                  textContent: 'ラウンド削除'
+                });
+                if (!canRemove) {
+                  removeBtn.disabled = true;
+                  removeBtn.classList.add('cursor-not-allowed', 'opacity-60');
+                } else {
+                  removeBtn.addEventListener('click', () => removeSupersetRound(superset.id, index));
+                }
+                roundHeader.append(removeBtn);
+                round.append(roundHeader);
+
+                const slotGrid = createElem('div', { className: 'grid gap-4 sm:grid-cols-2' });
+                const weightInputs = [];
+                const repsInputs = [];
+                const noteInputs = [];
+                slotExercises.forEach(({ slot, exercise }) => {
+                  const slotCard = createElem('div', { className: 'space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4' });
+                  const slotHeader = createElem('div', { className: 'flex items-center justify-between' });
+                  slotHeader.append(
+                    createElem('span', {
+                      className: 'text-sm font-semibold text-slate-900',
+                      textContent: `${slot.role}: ${exercise ? exercise.name : '未設定'}`
+                    })
+                  );
+                  const changeBtn = createElem('button', {
+                    className: 'text-xs font-semibold text-blue-700 underline decoration-dotted hover:text-blue-800',
+                    attrs: { type: 'button' },
+                    textContent: exercise ? '変更' : '設定'
+                  });
+                  changeBtn.addEventListener('click', () => configureSupersetSlot(superset.id, slot.role));
+                  slotHeader.append(changeBtn);
+                  slotCard.append(slotHeader);
+                  if (!exercise) {
+                    slotCard.append(
+                      createElem('p', {
+                        className: 'text-xs text-slate-600',
+                        textContent: '種目を設定すると入力できるようになります。'
+                      })
+                    );
+                  } else {
+                    const set = exercise.sets[index];
+                    const weightInput = createElem('input', {
+                      className: 'input-base text-slate-900 placeholder-slate-400',
+                      attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' },
+                      value: set?.weight ?? ''
+                    });
+                    weightInput.addEventListener('input', (event) => {
+                      scheduleSetFieldUpdate(exercise.id, index, 'weight', event.target.value);
+                    });
+                    slotCard.append(
+                      createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput)
+                    );
+                    weightInputs.push(weightInput);
+
+                    const repsInput = createElem('input', {
+                      className: 'input-base text-slate-900 placeholder-slate-400',
+                      attrs: { type: 'number', inputmode: 'numeric', min: '0', step: '1' },
+                      value: set?.reps ?? ''
+                    });
+                    repsInput.addEventListener('input', (event) => {
+                      scheduleSetFieldUpdate(exercise.id, index, 'reps', event.target.value);
+                    });
+                    slotCard.append(createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput));
+                    repsInputs.push(repsInput);
+
+                    const noteInput = createElem('textarea', {
+                      className: 'input-base min-h-[3rem] text-slate-900 placeholder-slate-400',
+                      attrs: { rows: '2', placeholder: 'フォームや感覚をメモ' }
+                    });
+                    noteInput.value = set?.note || '';
+                    noteInput.addEventListener('input', (event) => {
+                      scheduleSetFieldUpdate(exercise.id, index, 'note', event.target.value);
+                    });
+                    slotCard.append(createFieldWrapper('セットメモ', '気づいたことや次回の課題を記録します。', 'フォームやRPEを自由に入力。', noteInput));
+                    noteInputs.push(noteInput);
+
+                    slotCard.append(
+                      createElem('p', {
+                        className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800',
+                        textContent: set?.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -'
+                      })
+                    );
+                  }
+                  slotGrid.append(slotCard);
+                });
+                weightInputs.forEach((input) => {
+                  registerSupersetFocusInput(superset.id, input);
+                  bindSupersetFocusNavigation(superset.id, input);
+                });
+                repsInputs.forEach((input) => {
+                  registerSupersetFocusInput(superset.id, input);
+                  bindSupersetFocusNavigation(superset.id, input);
+                });
+                noteInputs.forEach((input) => {
+                  registerSupersetFocusInput(superset.id, input);
+                  bindSupersetFocusNavigation(superset.id, input);
+                });
+                round.append(slotGrid);
+                roundsContainer.append(round);
+              }
+              body.append(roundsContainer);
+            }
+
+            const metaGrid = createElem('div', { className: 'grid gap-4 sm:grid-cols-2' });
+            slotExercises.forEach(({ slot, exercise }) => {
+              if (!exercise) return;
+              const wrapper = createElem('div', { className: 'space-y-3' });
+              wrapper.append(
+                createElem('h4', {
+                  className: 'text-sm font-semibold text-slate-900',
+                  textContent: `${slot.role}: ${exercise.name}`
+                })
+              );
+              wrapper.append(createExerciseMetaPanel(exercise));
+              metaGrid.append(wrapper);
+            });
+            if (metaGrid.children.length) {
+              body.append(metaGrid);
+            }
+          }
+          supCard.append(body);
+          cardBody.append(supCard);
         });
       }
       const actions = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row' });
-      const addExerciseBtn = createElem('button', { className: 'btn-primary flex-1 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500', textContent: '種目を追加', attrs: { type: 'button' } });
-      addExerciseBtn.addEventListener('click', addExercise);
+      const addExerciseBtn = createElem('button', { className: 'btn-primary flex-1 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500', textContent: 'スーパーセットを追加', attrs: { type: 'button' } });
+      addExerciseBtn.addEventListener('click', addSuperset);
       const finishBtn = createElem('button', { className: 'btn-muted flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500', textContent: '完了して履歴へ', attrs: { type: 'button' } });
       finishBtn.addEventListener('click', finishWorkout);
       actions.append(addExerciseBtn, finishBtn);
