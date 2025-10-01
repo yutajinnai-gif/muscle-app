@@ -1,2337 +1,772 @@
 <!DOCTYPE html>
-<html lang="ja" data-theme="light">
+<html lang="ja" class="bg-slate-100">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>筋トレ記録アプリ</title>
-  <meta name="color-scheme" content="light dark">
-  <!-- Tailwind の safelist 設定 -->
-  <script>
-    window.tailwind = {
-      config: {
-        darkMode: 'media',
-        safelist: [
-          { pattern: /(grid|flex|items-center|justify-between|justify-center|space-y-\d+)/ },
-          { pattern: /(grid-cols-\d+|md:grid-cols-\d+)/ },
-          { pattern: /(col-span-\d+)/ },
-          { pattern: /(p-\d+|px-\d+|py-\d+|m-\d+)/ },
-          { pattern: /(rounded(-[a-z]+)?|border(-[a-z]+)?)/ },
-          { pattern: /(bg-[a-z0-9-\/]+|text-[a-z0-9-\/]+|border-[a-z0-9-\/]+)/ }
-        ]
-      }
-    }
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script>
-    (() => {
-      if (!window.matchMedia) {
-        document.documentElement.setAttribute('data-theme', 'light');
-        return;
-      }
-      const media = window.matchMedia('(prefers-color-scheme: dark)');
-      const applyTheme = () => {
-        const theme = media.matches ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', theme);
-        const body = document.body;
-        if (body) body.setAttribute('data-theme', theme);
-      };
-      applyTheme();
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', applyTheme, { once: true });
-      }
-      if (media.addEventListener) {
-        media.addEventListener('change', applyTheme);
-      } else if (media.addListener) {
-        media.addListener(applyTheme);
-      }
-    })();
-  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>筋トレメモ | BUILD_TAG=CORE-20240309</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
-    :root {
-      --nav-h: 64px;
-      --kb: 0px;
-      --accent:#4c1d95;
-      --accent-weak:#c4b5fd;
-      --bg:#eef2ff;
-      --fg:#0f172a;
-      --card:#ffffff;
-      --muted:#334155;
-      --border:#cbd5f5;
-      --control-bg:#ffffff;
-      --control-border:#cbd5f5;
-      --control-placeholder:#475569;
-    }
-    body[data-theme="dark"] {
-      --bg:#111827;
-      --fg:#e2e8f0;
-      --card:#1f2937;
-      --muted:#94a3b8;
-      --border:#312e81;
-      --control-bg:#1f2937;
-      --control-border:#4338ca;
-      --control-placeholder:#94a3b8;
-    }
-    *,*::before,*::after{box-sizing:border-box}
-    html,body { height:100% }
-    body {
-      background:var(--bg);
-      color:var(--fg);
-      margin:0;
-    }
-    header,
-    nav,
-    .card,
-    .block-card,
-    .rounded-2xl.border,
-    .rounded-xl.border,
-    .rounded-lg.border,
-    .rounded-md.border {
-      background:var(--card) !important;
-      color:var(--fg) !important;
-      border-color:var(--border) !important;
-    }
-    header,
-    nav {
-      backdrop-filter:blur(16px);
-    }
-    header,
-    nav,
-    nav .tab-btn span {
-      color:var(--fg) !important;
-    }
-    input,select,textarea,button{font-size:16px}
-    input,
-    select,
-    textarea {
-      background:var(--control-bg) !important;
-      color:var(--fg) !important;
-      border-color:var(--control-border) !important;
-    }
-    input::placeholder,
-    textarea::placeholder {
-      color:var(--control-placeholder);
-    }
-    body[data-theme="dark"] .text-gray-500,
-    body[data-theme="dark"] .text-gray-600,
-    body[data-theme="dark"] .text-gray-700 {
-      color:var(--muted) !important;
-    }
-    main{padding-bottom:calc(var(--nav-h) + 24px + env(safe-area-inset-bottom) + var(--kb))}
-    nav{padding-bottom:calc(env(safe-area-inset-bottom));transition:transform .2s,opacity .2s}
-    body.kb-open nav{transform:translateY(100%);opacity:0;pointer-events:none}
-    .shadow-soft{box-shadow:0 10px 25px rgba(0,0,0,.08)}
-    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(2px)}
-    .modal-card{max-width:680px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:1rem}
-    .part-btn{background:var(--card) !important;color:var(--fg) !important;border-color:var(--border) !important;transition:background-color .15s ease,color .15s ease,transform .15s ease,box-shadow .15s ease}
-    .part-btn.is-active{background:var(--accent) !important;color:#fff !important;border-color:var(--accent) !important;box-shadow:0 12px 30px rgba(76,29,149,.3);transform:translateY(-2px)}
-    body[data-theme="dark"] .part-btn{background:var(--control-bg) !important;color:var(--fg) !important}
-    .detail-chip{display:inline-flex;align-items:center;gap:0.35rem;padding:0.35rem 0.6rem;border-radius:9999px;background:var(--accent-weak);color:#312e81;font-size:11px;font-weight:600;}
-    body[data-theme="dark"] .detail-chip{background:#4338ca;color:#e0e7ff}
-    #view-workout{padding-bottom:calc(var(--nav-h) + 72px + env(safe-area-inset-bottom));}
-    body[data-route="workout"] nav{transform:translateY(110%);opacity:0;pointer-events:none;}
-    .set-card{border-color:rgba(76,29,149,.25) !important;background:linear-gradient(180deg,rgba(236,233,254,.9),rgba(255,255,255,.9));}
+    body { font-size: 16px; min-height: 100vh; }
+    .scroll-lock { overflow: hidden; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; padding: 1.5rem; backdrop-filter: blur(2px); }
+    .modal-card { max-width: 22rem; width: 100%; background: white; border-radius: 1rem; padding: 1.5rem; box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25); }
+    .error-banner { position: fixed; inset-inline: 0; top: 0; z-index: 50; }
+    .tab-nav { position: fixed; bottom: 0; inset-inline: 0; background: white; border-top: 1px solid rgba(51, 65, 85, 0.2); padding: 0.5rem 0; display: flex; justify-content: space-around; }
+    .main-content { padding-bottom: 4.5rem; padding-top: 4.5rem; }
+    .btn-primary { background-color: #1f2937; color: white; }
+    .btn-primary:hover { background-color: #111827; }
+    .btn-muted { background-color: white; color: #1f2937; border: 1px solid rgba(30,41,59,0.3); }
+    .input-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.6rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; }
+    .input-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
   </style>
 </head>
-<body class="text-gray-900 dark:text-gray-100" data-theme="light">
-  <header class="sticky top-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-700">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-      <h1 class="text-lg font-bold">筋トレメモ</h1>
-      <div class="text-xs text-gray-500">Local-only / PWA</div>
-    </div>
-  </header>
-
-  <main id="app" class="max-w-3xl mx-auto px-4 py-4 space-y-4">
-    <!-- Home -->
-    <section id="view-home" class="hidden space-y-4">
-      <div class="card">
-        <label class="text-xs text-gray-500 block">日付</label>
-        <input id="inp-date" type="date" class="w-full border rounded-lg px-3 py-2 bg-white dark:bg-gray-800">
-      </div>
-      <div class="card space-y-3">
-        <div class="grid grid-cols-2 gap-3">
-          <div class="rounded-xl border bg-white dark:bg-gray-800 p-3">
-            <div class="text-xs text-gray-500">直近1週間</div>
-            <div id="stat-week" class="text-2xl font-bold" style="color:var(--accent)">0</div>
-          </div>
-          <div class="rounded-xl border bg-white dark:bg-gray-800 p-3">
-            <div class="text-xs text-gray-500">直近1ヶ月</div>
-            <div id="stat-month" class="text-2xl font-bold" style="color:var(--accent)">0</div>
-          </div>
-        </div>
-        <div>
-          <div class="text-xs text-gray-500 mb-2">部位</div>
-          <div id="part-buttons" class="flex flex-wrap gap-2"></div>
-        </div>
-        <div class="pt-1">
-          <button id="btn-start-or-resume" class="w-full px-4 py-3 rounded-xl text-white text-sm" style="background:var(--accent)">
-            今日のトレーニングを開始
-          </button>
-        </div>
-      </div>
-      <div id="last-part-summary" class="card space-y-3 hidden"></div>
-    </section>
-
-<section id="view-workout" class="hidden">
-  <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="text-sm min-w-[140px] flex-1">
-        <div class="text-[11px] text-gray-500">日付</div>
-        <div id="workout-date" class="font-semibold break-words">-</div>
-      </div>
-      <div class="text-sm min-w-[140px] flex-1">
-        <div class="text-[11px] text-gray-500">部位</div>
-        <div id="workout-part" class="font-semibold break-words">-</div>
-      </div>
-      <div class="flex gap-2 shrink-0">
-        <button id="btn-back-to-home" class="px-3 py-2 rounded-xl border text-sm">戻る</button>
-        <button id="btn-save-workout" class="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm">保存</button>
-      </div>
-    </div>
-    <div class="flex items-center justify-between">
-      <div class="text-sm text-gray-600">ブロック</div>
-      <div class="flex gap-2">
-        <button id="btn-add-block" class="px-3 py-2 rounded-xl border text-sm bg-white">ブロック追加</button>
-      </div>
-    </div>
-  </div>
-  <div id="blocks" class="space-y-4"></div>
-</section>
-
-<section id="view-history" class="hidden">
-  <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-3">
-    <div class="grid grid-cols-2 gap-2">
-      <div class="min-w-0">
-        <label class="text-xs text-gray-500 block">開始日</label>
-        <input id="filter-start" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
-      </div>
-      <div class="min-w-0">
-        <label class="text-xs text-gray-500 block">終了日</label>
-        <input id="filter-end" type="date" class="w-full narrow-date border rounded-lg px-3 py-2">
-      </div>
-      <div class="min-w-0">
-        <label class="text-xs text-gray-500">部位</label>
-        <select id="filter-part" class="w-full border rounded-lg px-3 py-2"></select>
-      </div>
-      <div class="min-w-0">
-        <label class="text-xs text-gray-500">種目名</label>
-        <select id="filter-ex" class="w-full border rounded-lg px-3 py-2"></select>
-      </div>
-      <div class="min-w-0">
-        <label class="text-xs text-gray-500">器具</label>
-        <select id="filter-eq" class="w-full border rounded-lg px-3 py-2"></select>
-      </div>
-      <div class="min-w-0">
-        <label class="text-xs text-gray-500">アタッチメント</label>
-        <select id="filter-att" class="w-full border rounded-lg px-3 py-2"></select>
-      </div>
-      <div class="min-w-0">
-        <label class="text-xs text-gray-500">角度</label>
-        <select id="filter-ang" class="w-full border rounded-lg px-3 py-2"></select>
-      </div>
-      <div class="min-w-0">
-        <label class="text-xs text-gray-500">ポジション</label>
-        <select id="filter-pos" class="w-full border rounded-lg px-3 py-2"></select>
-      </div>
-    </div>
-    <div class="flex gap-2">
-      <button id="btn-apply-filter" class="px-3 py-2 rounded-xl bg-gray-900 text-white">絞り込み</button>
-      <button id="btn-clear-filter" class="px-3 py-2 rounded-xl bg-white border">クリア</button>
-    </div>
-  </div>
-
-  <div id="history-chart-wrap" class="rounded-2xl border bg-white p-3 shadow-soft mt-3 hidden">
-    <div class="flex items-center justify-between mb-2">
-      <div class="text-sm text-gray-600">1RM推移</div>
-      <button id="btn-back-to-home-from-simple" class="px-3 py-1.5 rounded-lg border hidden">入力画面に戻る</button>
-    </div>
-    <canvas id="history-chart" height="160"></canvas>
-  </div>
-
-  <div id="history-list" class="mt-3 space-y-3"></div>
-</section>
-
-<section id="view-settings" class="hidden">
-  <div class="rounded-2xl border bg-white p-3 shadow-soft space-y-4">
-    <div>
-      <div class="text-sm font-semibold mb-1">リスト編集</div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="text-xs text-gray-500">部位（1行1項目）</label>
-          <textarea id="list-parts" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500">器具（1行1項目）</label>
-          <textarea id="list-equip" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500">アタッチメント（1行1項目／先頭は「なし」を推奨）</label>
-          <textarea id="list-attach" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500">角度（1行1項目）</label>
-          <textarea id="list-angle" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500">ポジション（1行1項目）</label>
-          <textarea id="list-position" rows="5" class="w-full border rounded-lg px-3 py-2"></textarea>
-        </div>
-      </div>
-    </div>
-
-    <div class="border-t pt-3">
-      <div class="text-sm font-semibold mb-1">種目マスタ（部位別管理）</div>
-      <p class="text-xs text-gray-500 mb-2">※ 種目名は器具名や角度名を含めない形式。表示は常にあいうえお順。削除は確認ポップアップあり。</p>
-      <div id="part-boxes" class="space-y-3"></div>
-      <div class="flex gap-2 mt-2">
-        <button id="btn-save-lists" class="px-3 py-2 rounded-xl bg-gray-900 text-white">保存</button>
-        <button id="btn-reset-defaults" class="px-3 py-2 rounded-xl bg-white border">デフォルト復元</button>
-      </div>
-    </div>
-
-    <div class="border-t pt-3">
-      <div class="text-sm font-semibold mb-1">バックアップ</div>
-      <div class="space-y-2">
-        <div class="flex items-center justify-between">
-          <label class="text-sm">自動バックアップ</label>
-          <input id="bk-auto" type="checkbox" class="w-5 h-5">
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="text-xs text-gray-500">頻度（分）</label>
-            <input id="bk-frequency" type="number" min="5" class="w-full border rounded px-2 py-1" />
-          </div>
-          <div class="text-xs text-gray-500 flex items-end">最終: <span id="bk-last" class="ml-1">-</span></div>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button id="bk-choose" class="px-3 py-2 rounded-xl border">保存先を選ぶ</button>
-          <button id="bk-now" class="px-3 py-2 rounded-xl border">今すぐバックアップ</button>
-          <button id="bk-restore" class="px-3 py-2 rounded-xl border">バックアップから復元</button>
-        </div>
-        <div class="text-xs text-gray-500">iPhoneでは「今すぐバックアップ」→共有→Files（iCloud Drive）に保存で同期可能。</div>
-      </div>
-    </div>
-
-    <div class="border-t pt-3">
-      <div class="text-sm font-semibold mb-1">データ管理</div>
-      <div class="flex flex-wrap gap-2">
-        <button id="btn-export-csv" class="px-3 py-2 rounded-xl bg-white border">CSVエクスポート</button>
-        <label class="px-3 py-2 rounded-xl bg-white border cursor-pointer">
-          CSVインポート
-          <input id="input-import-csv" type="file" accept=".csv,text/csv" class="hidden">
-        </label>
-        <button id="btn-clear-data" class="px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200">全データ削除</button>
-      </div>
-      <p class="text-xs text-gray-500 mt-2">CSV列: date,part,exercise,equipment,attachment,angle,position,setIndex,warmup,weight,repsSelf,repsAssist,durationSec,note,oneRM</p>
-    </div>
-  </div>
-</section>
-
-  </main>
-
-  <nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-700" style="height:var(--nav-h)">
-    <div class="max-w-3xl mx-auto px-6 h-full">
-      <div class="grid grid-cols-3 h-full">
-        <button data-route="#/home" class="tab-btn flex flex-col items-center justify-center gap-0.5">
-          <span class="text-base">🏠</span><span class="text-xs">ホーム</span>
-        </button>
-        <button data-route="#/history" class="tab-btn flex flex-col items-center justify-center gap-0.5">
-          <span class="text-base">🗂️</span><span class="text-xs">履歴</span>
-        </button>
-        <button data-route="#/settings" class="tab-btn flex flex-col items-center justify-center gap-0.5">
-          <span class="text-base">⚙️</span><span class="text-xs">設定</span>
-        </button>
-      </div>
-    </div>
+<body class="text-slate-900">
+  <div id="error-root" class="error-banner hidden"></div>
+  <main id="app" class="max-w-3xl mx-auto main-content"></main>
+  <nav class="tab-nav">
+    <button data-route="home" class="tab-button flex-1 text-sm font-semibold text-slate-600">ホーム</button>
+    <button data-route="history" class="tab-button flex-1 text-sm font-semibold text-slate-600">履歴</button>
+    <button data-route="workout" class="tab-button flex-1 text-sm font-semibold text-slate-600">記録</button>
+    <button data-route="settings" class="tab-button flex-1 text-sm font-semibold text-slate-600">設定</button>
   </nav>
-
-  <template id="tpl-block">
-    <div class="block-card rounded-2xl border bg-white p-3 shadow-soft space-y-3">
-      <div class="flex items-center justify-between gap-2">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="text-xs text-gray-500">ブロック</span>
-          <span class="block-index text-sm font-semibold">#1</span>
-          <span class="text-[11px] text-gray-500 block-part"></span>
-        </div>
-        <div class="flex gap-2">
-          <button class="btn-choose-ex px-2 py-1.5 rounded-lg border text-sm">種目選択/追加</button>
-          <button class="btn-del-block px-2 py-1.5 rounded-lg border border-red-200 text-red-700 text-sm">ブロック削除</button>
-        </div>
-      </div>
-      <div class="ex-config space-y-3"></div>
-      <div class="set-area space-y-2">
-        <div class="flex items-center justify-between">
-          <div class="text-sm font-semibold text-gray-700">セット</div>
-          <div class="text-[11px] text-gray-500">複製ボタンでセットを追加</div>
-        </div>
-        <div class="set-list space-y-2"></div>
-      </div>
-    </div>
-  </template>
-
-  <template id="tpl-ex-config-row">
-    <div class="ex-config-row space-y-3 rounded-xl border bg-white p-3">
-      <div class="flex items-center justify-between gap-2">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="ex-order inline-flex items-center justify-center w-6 h-6 text-[11px] font-semibold rounded-full bg-indigo-100 text-indigo-700">#1</span>
-          <div class="min-w-0">
-            <div class="text-sm font-semibold ex-name truncate">種目名</div>
-            <div class="text-[11px] text-gray-500 ex-part">部位: -</div>
-          </div>
-        </div>
-        <div class="flex items-center gap-1 text-xs">
-          <button type="button" class="ex-move-up px-2 py-1 rounded-md border bg-white">↑</button>
-          <button type="button" class="ex-move-down px-2 py-1 rounded-md border bg-white">↓</button>
-        </div>
-      </div>
-      <div class="space-y-2 text-[11px]">
-        <div class="flex flex-wrap gap-2">
-          <span class="detail-chip ex-eq">器具: -</span>
-          <span class="detail-chip ex-att">アタッチメント: -</span>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <span class="detail-chip ex-ang">角度: -</span>
-          <span class="detail-chip ex-pos">ポジション: -</span>
-        </div>
-      </div>
-      <div class="flex items-center justify-between gap-2 text-[11px] text-gray-500">
-        <div class="ex-meta flex-1 min-w-0">最高重量: - / 最高1RM: - / 前回: -</div>
-        <button type="button" class="btn-ex-history px-2 py-1 rounded-md border text-[11px] text-gray-600 bg-white">履歴</button>
-      </div>
-    </div>
-  </template>
-
-  <template id="tpl-set-card">
-    <div class="set-card rounded-xl border p-2 bg-gray-50 space-y-2">
-      <div class="flex items-center justify-between">
-        <div class="text-sm font-semibold">Set <span class="set-no">#1</span></div>
-        <div class="flex items-center gap-2">
-          <label class="inline-flex items-center gap-1 text-xs"><input type="checkbox" class="set-warm border rounded"> W-Up</label>
-          <label class="inline-flex items-center gap-1 text-xs"><input type="checkbox" class="set-one-hand border rounded"> 1hand</label>
-          <button class="btn-dup-set px-2 py-1.5 rounded-md border text-xs">複製</button>
-          <button class="btn-del-set px-2 py-1.5 rounded-md border text-xs">削除</button>
-        </div>
-      </div>
-      <div class="ex-items space-y-2"></div>
-    </div>
-  </template>
-
-  <template id="tpl-ex-item-row">
-    <div class="ex-item space-y-1">
-      <div class="space-y-0.5">
-        <div class="text-xs ex-title font-semibold">種目1</div>
-        <div class="text-[11px] text-gray-500 ex-detail">-</div>
-      </div>
-      <div class="grid grid-cols-12 gap-2 items-center">
-        <input type="number" inputmode="decimal" placeholder="重量" class="ex-weight col-span-3 border rounded px-2 py-1" />
-        <input type="number" inputmode="numeric" placeholder="自力" class="ex-reps col-span-3 border rounded px-2 py-1" />
-        <input type="number" inputmode="numeric" placeholder="補助" class="ex-assist col-span-3 border rounded px-2 py-1" />
-        <input type="number" inputmode="numeric" placeholder="時間(秒)" class="ex-sec col-span-3 border rounded px-2 py-1" />
-        <input type="text" placeholder="メモ" class="ex-note col-span-12 border rounded px-2 py-1" />
-        <div class="col-span-12 text-[11px] text-gray-500">推定1RM: <span class="ex-1rm">-</span> kg</div>
-      </div>
-    </div>
-  </template>
-
   <script>
-    const $ = (sel, root=document)=> root.querySelector(sel);
-    const $$ = (sel, root=document)=> Array.from(root.querySelectorAll(sel));
-    const debounce = (fn, ms=300)=> { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
-    const todayISO = ()=> new Date().toISOString().slice(0,10);
-    const toCSV = rows => rows.map(r=> r.map(v=>{
-      const s = v==null?'':String(v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
-    }).join(',')).join('\n');
-    const escapeHtml = s => String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
-    const sortJa = (arr)=> arr.slice().sort((a,b)=> String(a).localeCompare(String(b),'ja',{usage:'sort',sensitivity:'base'}));
-    const sortExerciseMapJa = (map)=> map.slice().sort((a,b)=> (a.name||'').localeCompare(b.name||'','ja',{usage:'sort',sensitivity:'base'}));
+  (function(){
+    'use strict';
 
+    /*** utils ***/
     const ROUTES = Object.freeze({
-      HOME: '#/home',
-      WORKOUT: '#/workout',
-      HISTORY: '#/history',
-      SETTINGS: '#/settings',
+      HOME: 'home',
+      HISTORY: 'history',
+      SETTINGS: 'settings',
+      WORKOUT: 'workout'
     });
-    const VIEWS = Object.freeze({
-      HOME: '#view-home',
-      WORKOUT: '#view-workout',
-      HISTORY: '#view-history',
-      SETTINGS: '#view-settings',
-    });
+    const ROUTE_VALUES = new Set(Object.values(ROUTES));
 
-    function orderWithNoneFirst(arr){
-      const a = Array.from(new Set(arr||[])).map(v => normalizeOption(v));
-      if(!a.includes('-')) a.unshift('-');
-      const head = a.filter(v => v === '-');
-      const rest = a.filter(v => v !== '-')
-                    .sort((x,y)=> x.localeCompare(y,'ja',{usage:'sort',sensitivity:'base'}));
-      return [...head, ...rest];
-    }
+    const createElem = (tag, opts = {}) => {
+      const el = document.createElement(tag);
+      if (opts.className) el.className = opts.className;
+      if (opts.textContent !== undefined) el.textContent = opts.textContent;
+      if (opts.html !== undefined) el.innerHTML = opts.html;
+      if (opts.attrs) Object.entries(opts.attrs).forEach(([k, v]) => el.setAttribute(k, v));
+      if (opts.value !== undefined) el.value = opts.value;
+      if (opts.children) opts.children.forEach(child => el.appendChild(child));
+      return el;
+    };
 
-    const SCHEMA_VERSION = 8;
-    const NS = 'workout-app';
-    const K_LISTS     = NS+':lists';
-    const K_WORKOUTS  = NS+':workouts';
-    const K_INPROG    = NS+':inProgress';
-    const K_BACKUPCFG = NS+':backupConfig';
-
-    const store = {
-      getRaw(key){ try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }catch{ return null; } },
-      setRaw(key, obj){ localStorage.setItem(key, JSON.stringify(obj)); },
-      get(key, fallback){
-        const obj = store.getRaw(key);
-        if(!obj) return fallback;
-        return ('data' in obj) ? obj.data : obj;
-      },
-      set(key, data){ store.setRaw(key, { v: SCHEMA_VERSION, data }); },
-      getAny(key, fallback){
-        const obj = store.getRaw(key);
-        if(!obj) return fallback;
-        return ('data' in obj) ? obj.data : obj;
+    const formatDate = (value) => {
+      try {
+        return new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+      } catch (err) {
+        return '';
       }
     };
 
-    const PREFERRED_PART_ORDER = ['胸','背中','肩','腕','脚','腹筋'];
-    const EXERCISE_PRESETS = Object.freeze({
-      'フライ': ['胸'],
-      'プレス': ['胸','脚'],
-      'ベンチプレス': ['胸'],
-      'チェストプレス': ['胸'],
-      'ディップス': ['胸'],
-      'プッシュアップ': ['胸'],
-      'チンニング': ['背中'],
-      'デッドリフト': ['背中','脚'],
-      'ラットプルダウン': ['背中'],
-      'プーリーロー': ['背中'],
-      'ベントオーバーロー': ['背中'],
-      'ローイング': ['背中'],
-      'プルオーバー': ['背中'],
-      'ショルダープレス': ['肩'],
-      'フロントレイズ': ['肩'],
-      'サイドレイズ': ['肩'],
-      'リアデルト': ['肩'],
-      'リアレイズ': ['肩'],
-      'フェイスプル': ['肩'],
-      'アーノルドプレス': ['肩'],
-      'ミリタリープレス': ['肩'],
-      'パーシャルサイドレイズ': ['肩'],
-      'アームカール': ['腕'],
-      'スカルクラッシャー': ['腕'],
-      'ハンマーカール': ['腕'],
-      'プレスダウン': ['腕'],
-      'オーバーヘッドプレス': ['腕'],
-      'キックバック': ['腕'],
-      'リバースプッシュ': ['腕'],
-      '志澤カール': ['腕'],
-      'スパイダーカール': ['腕'],
-      'ナロープレス': ['腕'],
-      'プリチャーカール': ['腕'],
-      'カール': ['脚'],
-      'エクステンション': ['脚'],
-      'スクワット': ['脚'],
-      'インナーサイ': ['脚'],
-      'アウターサイ': ['脚'],
-      'ブルガリアン': ['脚'],
-      'ヒップスラスト': ['脚'],
-      'クランチ': ['腹筋'],
-      'レッグレイズ': ['腹筋'],
-      'ベンチレッグレイズ': ['腹筋']
-    });
-    const DEFAULTS = {
-      parts: ['胸','背中','肩','腕','脚','腹筋'],
-      equip: ['-','ケーブル','ダンベル','バーベル','スミス','マシン','ペックマシン','自重','プレート','ゴムチューブ','イージーバー'],
-      attach: ['マグ(ナロー)','マグ(ワイド)','マグ(ミドル)','ロープ','Vバー','イージーバー','バンド','ワイドバー','ショートバー','パラレルバー'],
-      angle: ['-','インクライン','デクライン','フラット'],
-      position: ['ワイド','ナロー','ボックス','リバース'],
-      exerciseMap: Object.entries(EXERCISE_PRESETS).map(([name, parts])=> ({ name, parts: parts.slice() }))
+    const safeNumber = (value) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
     };
 
-    const state = { lists:null, workouts:null, inProgress:null, chart:null };
+    const cloneDeep = (obj) => structuredClone(obj);
 
-    function cleanupExercises(map){
-      const allowedNames = new Set(Object.keys(EXERCISE_PRESETS));
-      const out = [];
-      (map||[]).forEach(e=>{
-        const name = String(e?.name || '').trim();
-        if(!allowedNames.has(name)) return;
-        const allowedParts = EXERCISE_PRESETS[name];
-        const parts = Array.from(new Set((Array.isArray(e?.parts) ? e.parts : []).map(p=> String(p).trim()).filter(p=> allowedParts.includes(p))));
-        out.push({ name, parts: parts.length ? parts : allowedParts.slice() });
-      });
-      Object.entries(EXERCISE_PRESETS).forEach(([name, parts])=>{
-        if(!out.find(e=> e.name===name)) out.push({ name, parts: parts.slice() });
-      });
-      return sortExerciseMapJa(out);
-    }
+    /*** error banner ***/
+    const errorRoot = document.getElementById('error-root');
+    const errorState = { logs: [], expanded: false };
 
-    function normalizeOption(value){
-      if(value === undefined || value === null) return '-';
-      if(value === 'なし') return '-';
-      const str = String(value).trim();
-      return str === '' ? '-' : str;
-    }
-
-    async function migrateAllIfNeeded(){
-      let lists = store.getAny(K_LISTS, null);
-      if(!lists){ lists = JSON.parse(JSON.stringify(DEFAULTS)); }
-      const applyPreset = (arr, preset, includeNone=true)=>{
-        const presetNormalized = Array.from(new Set((preset||[]).map(normalizeOption)));
-        const provided = new Set((Array.isArray(arr)?arr:[]).map(normalizeOption));
-        let result = presetNormalized.filter(v=> provided.has(v));
-        if(result.length === 0) result = presetNormalized.slice();
-        if(includeNone && !result.includes('-')) result = ['-', ...result];
-        return result;
-      };
-      const ensureParts = (arr)=>{
-        const allowed = new Set(DEFAULTS.parts);
-        const cleaned = (Array.isArray(arr)?arr:[]).map(p=> String(p).trim()).filter(p=> allowed.has(p));
-        return cleaned.length ? DEFAULTS.parts.filter(p=> cleaned.includes(p)) : DEFAULTS.parts.slice();
-      };
-      lists.parts = ensureParts(lists.parts);
-      lists.equip = applyPreset(lists.equip, DEFAULTS.equip);
-      lists.attach = applyPreset(lists.attach, DEFAULTS.attach, true);
-      lists.angle = applyPreset(lists.angle, DEFAULTS.angle);
-      lists.position = applyPreset(lists.position, DEFAULTS.position, true);
-      lists.exerciseMap = cleanupExercises(lists.exerciseMap || DEFAULTS.exerciseMap);
-      store.set(K_LISTS, lists);
-
-      let workouts = store.getAny(K_WORKOUTS, []);
-      workouts.forEach(w=>{
-        (w.blocks||[]).forEach(b=>{
-          if(!Array.isArray(b.parts) || b.parts.length===0){
-            const partCandidates = [];
-            if(b.part) partCandidates.push(b.part);
-            if(w.part) partCandidates.push(w.part);
-            b.parts = Array.from(new Set(partCandidates.filter(Boolean)));
-          }else{
-            b.parts = Array.from(new Set(b.parts.map(p=> String(p))));
-          }
-          if(!b.part && b.parts && b.parts.length){ b.part = b.parts[0]; }
-          (b.exs||[]).forEach(ex=>{
-            ex.eq = normalizeOption(ex.eq ?? ex.equipment ?? '-');
-            ex.att = normalizeOption(ex.att);
-            ex.ang = normalizeOption(ex.ang);
-            ex.pos = normalizeOption(ex.pos);
-            if(!ex.part && Array.isArray(b.parts) && b.parts.length){
-              const match = (state?.lists?.exerciseMap || DEFAULTS.exerciseMap).find(e=> e.name===ex.name);
-              const candidate = (match?.parts||[]).find(p=> b.parts.includes(p));
-              ex.part = candidate || b.parts[0] || '';
-            }
-          });
-          (b.sets||[]).forEach(s=>{
-            if(s && typeof s.warm === 'undefined') s.warm = false;
-            if(s && typeof s.oneHand === 'undefined') s.oneHand = false;
-            (s.items||[]).forEach(it=>{
-              if(it.sec == null) it.sec = 0;
-              if(typeof it.oneRM !== 'number') it.oneRM = 0;
-            });
-          });
-        });
-      });
-      store.set(K_WORKOUTS, workouts);
-
-      let inProg = store.getAny(K_INPROG, { date: todayISO(), part:'胸', selectedParts:['胸'], blocks: [] });
-      if(!inProg.date) inProg.date = todayISO();
-      if(!Array.isArray(inProg.selectedParts)){
-        const arr = [];
-        if(inProg.part) arr.push(inProg.part);
-        inProg.selectedParts = Array.from(new Set(arr.filter(Boolean)));
+    const renderErrorBanner = () => {
+      if (!errorRoot) return;
+      if (!errorState.logs.length) {
+        errorRoot.classList.add('hidden');
+        errorRoot.replaceChildren();
+        return;
       }
-      if(!inProg.part && inProg.selectedParts.length){ inProg.part = inProg.selectedParts[0]; }
-      if(!Array.isArray(inProg.blocks)) inProg.blocks = [];
-      inProg.selectedParts = Array.from(new Set(inProg.selectedParts.map(p=> String(p).trim()).filter(Boolean)));
-      if(inProg.selectedParts.length > 2){ inProg.selectedParts = inProg.selectedParts.slice(0,2); }
-      store.set(K_INPROG, inProg);
-
-      let backupCfg = store.getAny(K_BACKUPCFG, null);
-      if(!backupCfg){
-        backupCfg = { auto:true, frequencyMin:120, lastAt:null, persistGranted:false };
-        store.set(K_BACKUPCFG, backupCfg);
-      }
-    }
-
-    async function requestPersistence(){
-      if(navigator.storage && navigator.storage.persist){
-        try{
-          const granted = await navigator.storage.persist();
-          const cfg = store.get(K_BACKUPCFG, {auto:true,frequencyMin:120,lastAt:null,persistGranted:false});
-          cfg.persistGranted = !!granted;
-          store.set(K_BACKUPCFG, cfg);
-        }catch{}
-      }
-    }
-
-    async function getBackupConfig(){ return store.get(K_BACKUPCFG, {auto:true,frequencyMin:120,lastAt:null,persistGranted:false}); }
-    function setBackupConfig(cfg){ store.set(K_BACKUPCFG, cfg); }
-
-    function serializeAll(){
-      return JSON.stringify({
-        version: SCHEMA_VERSION,
-        exportedAt: new Date().toISOString(),
-        lists: store.get(K_LISTS, null),
-        workouts: store.get(K_WORKOUTS, []),
-        inProgress: store.get(K_INPROG, null)
+      errorRoot.classList.remove('hidden');
+      const container = createElem('div', { className: 'bg-red-900/90 text-red-50 px-4 py-3 shadow-lg border-b border-red-300' });
+      const header = createElem('div', { className: 'flex items-center justify-between gap-2' });
+      const toggleBtn = createElem('button', {
+        className: 'text-sm underline decoration-dotted',
+        textContent: errorState.expanded ? '閉じる' : '詳細',
+        attrs: { type: 'button' }
       });
-    }
+      header.append(
+        createElem('div', { className: 'font-semibold', textContent: 'アプリでエラーが発生しました' }),
+        toggleBtn
+      );
+      const logList = createElem('pre', { className: 'mt-2 text-xs bg-red-950/40 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap' });
+      logList.textContent = errorState.logs.map((log, idx) => `#${idx + 1}\n${log}`).join('\n\n');
+      if (!errorState.expanded) logList.classList.add('hidden');
+      toggleBtn.addEventListener('click', () => {
+        errorState.expanded = !errorState.expanded;
+        renderErrorBanner();
+      });
+      container.append(header, logList);
+      errorRoot.replaceChildren(container);
+    };
 
-    async function backupNow(interactive=false){
-      const cfg = await getBackupConfig();
-      const blob = new Blob([serializeAll()], {type:'application/json'});
-      const fileName = `workout_backup_${todayISO()}.json`;
+    const pushError = (message) => {
+      errorState.logs.push(message);
+      renderErrorBanner();
+    };
 
-      const canUseOPFS = typeof window !== 'undefined'
-        && typeof navigator !== 'undefined'
-        && window.isSecureContext
-        && navigator.storage
-        && typeof navigator.storage.getDirectory === 'function';
+    window.addEventListener('error', (event) => {
+      pushError(`${event.message}\n${event.filename || ''}:${event.lineno || ''}`);
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+      pushError(`Promiseエラー: ${event.reason}`);
+    });
 
-      if (canUseOPFS) {
+    /*** storage ***/
+    const SCHEMA_VERSION = 1;
+    const STORAGE_NAMESPACE = 'muscle-app-core';
+    class NamespacedStorage {
+      constructor(namespace, version) {
+        this.namespace = namespace;
+        this.version = version;
+      }
+      _key(key) {
+        return `${this.namespace}:${key}`;
+      }
+      _safeParse(raw) {
         try {
-          const root = await navigator.storage.getDirectory();
-          const handle = await root.getFileHandle('workout_backup.json', { create:true });
-          const ws = await handle.createWritable();
-          await ws.write(blob);
-          await ws.close();
-          const c = store.get(K_BACKUPCFG, cfg); c.lastAt = new Date().toISOString(); store.set(K_BACKUPCFG, c);
-        } catch (e) {
-          console.error('Backup failed:', e);
+          return JSON.parse(raw);
+        } catch (err) {
+          return null;
         }
       }
-
-      if(navigator.share && interactive){
-        try{
-          const file = new File([blob], fileName, { type:'application/json' });
-          await navigator.share({ files:[file], title:'Workout Backup', text:'バックアップを保存' });
-          const c = store.get(K_BACKUPCFG, cfg); c.lastAt = new Date().toISOString(); store.set(K_BACKUPCFG, c);
-          return true;
-        }catch(e){
-          console.error('Backup failed:', e);
+      load(key, fallback) {
+        const raw = localStorage.getItem(this._key(key));
+        if (!raw) return cloneDeep(fallback);
+        const parsed = this._safeParse(raw);
+        if (!parsed || parsed.schema !== this.version) return cloneDeep(fallback);
+        return parsed.data;
+      }
+      save(key, data) {
+        const payload = JSON.stringify({ schema: this.version, data });
+        localStorage.setItem(this._key(key), payload);
+      }
+      clearNamespace() {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(`${this.namespace}:`)) keys.push(k);
         }
-      }
-
-      if(interactive){
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = fileName;
-        document.body.appendChild(a); a.click(); a.remove();
-        const c = store.get(K_BACKUPCFG, cfg); c.lastAt = new Date().toISOString(); store.set(K_BACKUPCFG, c);
-      }
-      return true;
-    }
-
-    async function restoreFromFile(){
-      try{
-        if(!window.showOpenFilePicker){ alert('このブラウザはファイル選択APIに未対応です。CSVインポートや共有からファイル取得をご利用ください。'); return; }
-        const [fileHandle] = await window.showOpenFilePicker({ types:[{description:'JSON', accept:{'application/json':['.json']}}] });
-        const file = await fileHandle.getFile();
-        const text = await file.text();
-        const obj = JSON.parse(text);
-        if(!obj.lists || !obj.workouts){ alert('不正なバックアップファイルです。'); return; }
-        store.set(K_LISTS, obj.lists);
-        store.set(K_WORKOUTS, obj.workouts);
-        if(obj.inProgress) store.set(K_INPROG, obj.inProgress);
-        alert('復元しました。再描画します。');
-        renderRoute();
-      }catch(e){
-        console.error('Restore failed:', e);
-        alert('復元に失敗しました');
+        keys.forEach((k) => localStorage.removeItem(k));
       }
     }
 
-    let _bkTicker = null;
-    function startAutoBackupTicker(){
-      if(_bkTicker) clearInterval(_bkTicker);
-      const cfg = store.get(K_BACKUPCFG, {auto:true,frequencyMin:120,lastAt:null,persistGranted:false});
-      if(!cfg.auto) return;
-      const ms = Math.max(5, Number(cfg.frequencyMin||120)) * 60 * 1000;
-      _bkTicker = setInterval(()=> backupNow(false), ms);
-    }
-
-    async function afterDataChanged(){
-      requestPersistence();
-      const cfg = await getBackupConfig();
-      if(cfg.auto){ try{ await backupNow(false); }catch{} }
-    }
-
-    function setActiveTab(hash){
-      $$('.tab-btn').forEach(btn=>{
-        const active = btn.getAttribute('data-route') === (hash.startsWith(ROUTES.WORKOUT) ? ROUTES.HOME : hash);
-        btn.classList.toggle('font-bold', active);
-      });
-    }
-    function renderRoute(){
-      const hash = location.hash || ROUTES.HOME;
-      Object.values(VIEWS).forEach(id => { const el = document.querySelector(id); if(el) el.classList.add('hidden'); });
-
-      let routeKey = 'home';
-      if(hash.startsWith(ROUTES.HOME))    { document.querySelector(VIEWS.HOME).classList.remove('hidden');    renderHome(); routeKey='home'; }
-      else if(hash.startsWith(ROUTES.WORKOUT)) { document.querySelector(VIEWS.WORKOUT).classList.remove('hidden'); renderWorkout(); routeKey='workout'; }
-      else if(hash.startsWith(ROUTES.HISTORY)) { document.querySelector(VIEWS.HISTORY).classList.remove('hidden'); renderHistory(); routeKey='history'; }
-      else                                  { document.querySelector(VIEWS.SETTINGS).classList.remove('hidden'); renderSettings(); routeKey='settings'; }
-      document.body.dataset.route = routeKey;
-      setActiveTab(hash);
-    }
-    window.addEventListener('hashchange', renderRoute);
-
-    function calc1RM(weight, reps){
-      const w = Number(weight||0), r = Number(reps||0);
-      if(w<=0 || r<=0) return 0;
-      return Math.round(w * (1 + r/30) * 10) / 10;
-    }
-    function computeTrainingDays(rangeDays){
-      const cutoff = Date.now() - rangeDays*24*3600*1000;
-      const days = new Set(store.get(K_WORKOUTS, []).filter(w => new Date(w.date||todayISO()).getTime() >= cutoff).map(w => w.date||todayISO()));
-      return days.size;
-    }
-
-    function normalizeDetail(value, fallback=''){
-      if(value === undefined || value === null) return fallback;
-      const str = String(value).trim();
-      if(!str) return fallback;
-      if(str === 'なし') return '-';
-      return str;
-    }
-
-    function makeExerciseKeyFromEx(ex){
-      return [
-        normalizeDetail(ex?.name || '', ''),
-        normalizeDetail(ex?.eq || '', '-'),
-        normalizeDetail(ex?.att || '-', '-'),
-        normalizeDetail(ex?.ang || '-', '-'),
-        normalizeDetail(ex?.pos || '-', '-')
-      ].join('|');
-    }
-
-    function makeExerciseKeyFromRow(row){
-      return [
-        normalizeDetail(row?.exercise || '', ''),
-        normalizeDetail(row?.equipment || '', '-'),
-        normalizeDetail(row?.attachment || '-', '-'),
-        normalizeDetail(row?.angle || '-', '-'),
-        normalizeDetail(row?.position || '-', '-')
-      ].join('|');
-    }
-
-    function formatDetailText(meta){
-      const eq = normalizeDetail(meta?.eq ?? meta?.equipment, '-') || '-';
-      const att = normalizeDetail(meta?.att ?? meta?.attachment, '-') || '-';
-      const ang = normalizeDetail(meta?.ang ?? meta?.angle, '-') || '-';
-      const pos = normalizeDetail(meta?.pos ?? meta?.position, '-') || '-';
-      return `${eq} / ${att} / ${ang} / ${pos}`;
-    }
-
-    function formatRecordLine({ index, warm, oneHand, weight, reps, assist, sec, note, oneRM }){
-      const parts = [];
-      if(warm) parts.push('W-Up');
-      if(oneHand) parts.push('1hand');
-      const w = Number(weight||0);
-      const r = Number(reps||0);
-      if(w>0 && r>0){ parts.push(`${w}kg x${r}`); }
-      else if(w>0){ parts.push(`${w}kg`); }
-      else if(r>0){ parts.push(`${r}回`); }
-      const a = Number(assist||0);
-      if(a>0) parts.push(`補${a}`);
-      const s = Number(sec||0);
-      if(s>0) parts.push(`${s}秒`);
-      const one = Number(oneRM||0);
-      if(one>0) parts.push(`1RM ${one}kg`);
-      const memo = (note && String(note).trim()) ? String(note).trim() : '';
-      if(memo) parts.push(`メモ: ${memo}`);
-      if(parts.length===0) parts.push('記録なし');
-      return `S${index}: ${parts.join(' / ')}`;
-    }
-
-    function findLatestWorkoutForPart(part){
-      if(!part) return null;
-      const workouts = (state.workouts || []).slice().sort((a,b)=>{
-        const ta = Date.parse(a?.date || '') || 0;
-        const tb = Date.parse(b?.date || '') || 0;
-        if(tb !== ta) return tb - ta;
-        const ia = Number(String(a?.id||'').split('_')[1]||0);
-        const ib = Number(String(b?.id||'').split('_')[1]||0);
-        return ib - ia;
-      });
-      for(const w of workouts){
-        const blocks = (w?.blocks || []).filter(b => normalizeDetail(b?.part || w?.part, '') === part);
-        if(blocks.length>0){
-          return { workout: w, blocks, date: w?.date || '-' };
-        }
-      }
-      return null;
-    }
-
-    function initData(){
-      state.lists = store.get(K_LISTS, JSON.parse(JSON.stringify(DEFAULTS)));
-      state.workouts = store.get(K_WORKOUTS, []);
-      state.inProgress = store.get(K_INPROG, { date: todayISO(), part: '胸', selectedParts:['胸'], blocks: [] });
-      if(!state.inProgress.date) state.inProgress.date = todayISO();
-      if(!state.inProgress.blocks) state.inProgress.blocks = [];
-      if(!Array.isArray(state.inProgress.selectedParts)){
-        state.inProgress.selectedParts = state.inProgress.part ? [state.inProgress.part] : [];
-      }
-      state.inProgress.selectedParts = Array.from(new Set((state.inProgress.selectedParts||[]).map(p=> String(p).trim()).filter(Boolean)));
-      if(state.inProgress.selectedParts.length > 2){
-        state.inProgress.selectedParts = state.inProgress.selectedParts.slice(0,2);
-      }
-    }
-    function persist(){
-      store.set(K_LISTS, state.lists);
-      store.set(K_WORKOUTS, state.workouts);
-      store.set(K_INPROG, state.inProgress);
-    }
-
-    function sortPartsForHome(parts){
-      const uniq = Array.from(new Set((parts||[]).map(p=> String(p).trim()).filter(Boolean)));
-      return uniq.sort((a,b)=>{
-        const ia = PREFERRED_PART_ORDER.indexOf(a);
-        const ib = PREFERRED_PART_ORDER.indexOf(b);
-        if(ia >= 0 && ib >= 0) return ia - ib;
-        if(ia >= 0) return -1;
-        if(ib >= 0) return 1;
-        return String(a).localeCompare(String(b),'ja',{usage:'sort',sensitivity:'base'});
-      });
-    }
-
-    function renderHome(){
-      const dateEl = $('#inp-date');
-      dateEl.value = state.inProgress.date || todayISO();
-      dateEl.onchange = (e)=> { state.inProgress.date = e.target.value || todayISO(); persist(); afterDataChanged(); };
-
-      $('#stat-week').textContent = computeTrainingDays(7);
-      $('#stat-month').textContent = computeTrainingDays(30);
-
-      const partWrap = $('#part-buttons');
-      if (partWrap) {
-        const parts = sortPartsForHome(state.lists.parts || []);
-        const selected = Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts.map(p=> String(p).trim()) : [];
-        if(selected.length === 0 && parts.length > 0){
-          state.inProgress.selectedParts = [parts[0]];
-          state.inProgress.part = parts[0];
-          persist();
-          afterDataChanged();
-        }
-        partWrap.innerHTML = '';
-        if (parts.length === 0) {
-          const emptyMsg = document.createElement('div');
-          emptyMsg.className = 'text-xs text-gray-500';
-          emptyMsg.textContent = '設定から部位を追加してください。';
-          partWrap.appendChild(emptyMsg);
-        } else {
-          parts.forEach(part => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            const cleanPart = String(part).trim();
-            btn.dataset.part = cleanPart;
-            btn.className = 'part-btn px-3 py-2 rounded-xl border text-sm flex items-center gap-2';
-            const idx = selected.indexOf(cleanPart);
-            if(idx >= 0){
-              const badge = document.createElement('span');
-              badge.className = 'inline-flex items-center justify-center w-5 h-5 text-[11px] font-semibold rounded-full bg-indigo-100 text-indigo-700';
-              badge.textContent = String(idx + 1);
-              btn.appendChild(badge);
-            }
-            const label = document.createElement('span');
-            label.textContent = cleanPart;
-            btn.appendChild(label);
-            const active = idx >= 0;
-            btn.classList.toggle('is-active', active);
-            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-            btn.onclick = ()=> {
-              const current = Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts.slice() : [];
-              const pos = current.indexOf(cleanPart);
-              if(pos >= 0){
-                current.splice(pos, 1);
-              }else{
-                if(current.length >= 2){
-                  alert('選択できる部位は2つまでです。');
-                  return;
-                }
-                current.push(cleanPart);
-              }
-              state.inProgress.selectedParts = Array.from(new Set(current.map(p=> String(p).trim()).filter(Boolean)));
-              state.inProgress.part = current[0] || '';
-              persist();
-              afterDataChanged();
-              renderHome();
-            };
-            partWrap.appendChild(btn);
-          });
-        }
-      }
-
-      const btn = $('#btn-start-or-resume');
-      if (btn) {
-        const hasBlocks = (state.inProgress.blocks||[]).length > 0;
-        const selectedCount = (state.inProgress.selectedParts||[]).length;
-        btn.textContent = hasBlocks ? 'トレーニングを再開' : '種目選択へ進む';
-        btn.disabled = selectedCount === 0;
-        btn.classList.toggle('opacity-60', selectedCount === 0);
-        btn.onclick = ()=> {
-          if((state.inProgress.selectedParts||[]).length === 0) return;
-          location.hash = ROUTES.WORKOUT;
-        };
-      }
-
-      renderLastPartSummary();
-    }
-
-    function renderLastPartSummary(){
-      const summaryCard = $('#last-part-summary');
-      if(!summaryCard) return;
-      const parts = sortJa(state.lists.parts || []);
-      const part = (state.inProgress.selectedParts||[])[0] || state.inProgress.part;
-      summaryCard.innerHTML = '';
-      if(!part || !parts.includes(part)){
-        summaryCard.classList.add('hidden');
-        return;
-      }
-      summaryCard.classList.remove('hidden');
-
-      const summary = findLatestWorkoutForPart(part);
-      const header = document.createElement('div');
-      header.className = 'flex items-center justify-between gap-2';
-      const info = document.createElement('div');
-      info.className = 'min-w-0';
-      const label = document.createElement('div');
-      label.className = 'text-xs text-gray-500';
-      label.textContent = `前回の${part}`;
-      const date = document.createElement('div');
-      date.className = 'text-sm font-semibold text-gray-800';
-      date.textContent = summary ? (summary.date || '-') : '-';
-      info.append(label, date);
-      header.appendChild(info);
-
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'px-3 py-1.5 rounded-lg border text-xs bg-white';
-      btn.textContent = '履歴を見る';
-      btn.onclick = ()=> {
-        const params = new URLSearchParams();
-        params.set('part', part);
-        location.hash = `${ROUTES.HISTORY}?${params.toString()}`;
-      };
-      header.appendChild(btn);
-
-      summaryCard.appendChild(header);
-
-      if(!summary){
-        const msg = document.createElement('div');
-        msg.className = 'text-sm text-gray-500';
-        msg.textContent = `${part}の記録はまだありません。`;
-        summaryCard.appendChild(msg);
-        return;
-      }
-
-      const rows = flattenSets().filter(r => r.id === summary.workout?.id && r.part === part);
-      if(rows.length===0){
-        const msg = document.createElement('div');
-        msg.className = 'text-sm text-gray-500';
-        msg.textContent = '該当する記録が見つかりません。';
-        summaryCard.appendChild(msg);
-        return;
-      }
-
-      const grouped = new Map();
-      rows.forEach(row => {
-        const key = makeExerciseKeyFromRow(row);
-        if(!grouped.has(key)) grouped.set(key, { meta: row, rows: [] });
-        grouped.get(key).rows.push(row);
-      });
-      grouped.forEach(entry => entry.rows.sort((a,b)=> a.setIndex - b.setIndex));
-
-      const exMetaMap = new Map();
-      summary.blocks.forEach(block => {
-        (block?.exs || []).forEach(ex => {
-          const key = makeExerciseKeyFromEx(ex);
-          if(!exMetaMap.has(key)) exMetaMap.set(key, ex);
-        });
-      });
-
-      const orderKeys = [];
-      const seen = new Set();
-      summary.blocks.forEach(block => {
-        (block?.exs || []).forEach(ex => {
-          const key = makeExerciseKeyFromEx(ex);
-          if(!seen.has(key)){
-            orderKeys.push(key);
-            seen.add(key);
-          }
-        });
-      });
-      grouped.forEach((_, key)=>{ if(!seen.has(key)){ orderKeys.push(key); seen.add(key); } });
-
-      const list = document.createElement('div');
-      list.className = 'space-y-3';
-
-      orderKeys.forEach((key, idx)=>{
-        const entry = grouped.get(key);
-        const wrap = document.createElement('div');
-        wrap.className = 'space-y-1';
-        if(idx>0) wrap.classList.add('pt-2','border-t','border-gray-100');
-
-        const metaSource = entry?.meta || exMetaMap.get(key) || {};
-        const title = document.createElement('div');
-        title.className = 'text-sm font-semibold text-gray-800';
-        title.textContent = metaSource.exercise || metaSource.name || '種目';
-        const detail = document.createElement('div');
-        detail.className = 'text-[11px] text-gray-500';
-        detail.textContent = formatDetailText(metaSource);
-        const setsWrap = document.createElement('div');
-        setsWrap.className = 'space-y-1 text-xs text-gray-600';
-
-        if(entry){
-      entry.rows.forEach(row => {
-        const line = document.createElement('div');
-        line.textContent = formatRecordLine({
-          index: row.setIndex,
-          warm: row.warmup,
-          oneHand: row.oneHand,
-          weight: row.weight,
-          reps: row.repsSelf,
-          assist: row.repsAssist,
-          sec: row.durationSec,
-          note: row.note,
-          oneRM: row.oneRM
-        });
-            setsWrap.appendChild(line);
-          });
-        }
-
-        if(setsWrap.childElementCount === 0){
-          const none = document.createElement('div');
-          none.className = 'text-xs text-gray-500';
-          none.textContent = '記録が見つかりません。';
-          setsWrap.appendChild(none);
-        }
-
-        wrap.append(title, detail, setsWrap);
-        list.appendChild(wrap);
-      });
-
-      summaryCard.appendChild(list);
-    }
-
-    function renderWorkout(){
-      $('#workout-date').textContent = state.inProgress.date || todayISO();
-      const partsLabel = (state.inProgress.selectedParts||[]).length ? state.inProgress.selectedParts.join(' × ') : (state.inProgress.part || '-');
-      $('#workout-part').textContent = partsLabel || '-';
-      $('#btn-back-to-home').onclick = ()=> { location.hash = ROUTES.HOME; };
-      $('#btn-save-workout').onclick = ()=> { saveWorkout(); location.hash = ROUTES.HOME; };
-      $('#btn-add-block').onclick = addBlock;
-      const wrap = $('#blocks');
-      wrap.innerHTML = '';
-      if((state.inProgress.blocks||[]).length === 0){
-        addBlock();
-        return;
-      }
-      (state.inProgress.blocks||[]).forEach((block, idx)=> wrap.appendChild(renderBlock(block, idx)));
-    }
-
-    function renderBlock(block, idx){
-      const frag = document.importNode($('#tpl-block').content, true);
-      frag.querySelector('.block-index').textContent = '#'+(idx+1);
-      const blockParts = (block.parts && block.parts.length) ? block.parts : (state.inProgress.selectedParts||[]);
-      const blockPartLabel = blockParts.length ? blockParts.join(' × ') : (block.part || state.inProgress.part || '-');
-      if(blockParts.length && block.part !== blockParts[0]) block.part = blockParts[0];
-      frag.querySelector('.block-part').textContent = `（${blockPartLabel}）`;
-
-      frag.querySelector('.btn-choose-ex').onclick = ()=> openExerciseChooser(idx);
-      frag.querySelector('.btn-del-block').onclick = async ()=>{
-        if(await confirmAction('ブロックを削除しますか？')){
-          state.inProgress.blocks.splice(idx,1);
-          persist(); renderWorkout(); afterDataChanged();
-        }
-      };
-
-      const cfgWrap = frag.querySelector('.ex-config');
-      (block.exs||[]).forEach(ex=> cfgWrap.appendChild(renderExConfigRow(block, ex)));
-
-      const setWrap = frag.querySelector('.set-list');
-      (block.sets||[]).forEach((set, sIdx)=> setWrap.appendChild(renderSetCard(block, set, sIdx)));
-
-      return frag;
-    }
-
-    function addBlock(){
-      const parts = (state.inProgress.selectedParts||[]).slice(0,2);
-      state.inProgress.blocks.push({ part: parts[0] || state.inProgress.part, parts, exs: [], sets: [] });
-      persist(); renderWorkout();
-      setTimeout(()=> window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 0);
-      const idx = state.inProgress.blocks.length - 1;
-      setTimeout(()=> openExerciseChooser(idx), 50);
-    }
-
-    function openExerciseChooser(blockIdx){
-      const block = state.inProgress.blocks[blockIdx];
-      const blockParts = (block.parts && block.parts.length)
-        ? block.parts
-        : ((state.inProgress.selectedParts && state.inProgress.selectedParts.length)
-            ? state.inProgress.selectedParts
-            : [block.part || state.inProgress.part].filter(Boolean));
-
-      const allowedEntries = sortExerciseMapJa(state.lists.exerciseMap || [])
-        .filter(entry => !entry.parts || entry.parts.length === 0 || entry.parts.some(p => blockParts.includes(p)));
-      const currentOrder = new Map();
-      (block.exs || []).forEach((ex, idx)=> currentOrder.set(ex.name, `0${idx}`));
-      const currentMeta = new Map((block.exs || []).map(ex => [ex.name, {
-        eq: normalizeOption(ex.eq ?? '-'),
-        att: normalizeOption(ex.att ?? '-'),
-        ang: normalizeOption(ex.ang ?? '-'),
-        pos: normalizeOption(ex.pos ?? '-'),
-        part: ex.part || (blockParts.find(p => (state.lists.exerciseMap||[]).find(e=> e.name===ex.name)?.parts?.includes(p)) || blockParts[0] || '')
-      }]));
-
-      const bg = document.createElement('div');
-      bg.className = 'modal-bg flex items-center justify-center z-50';
-      const card = document.createElement('div');
-      card.className = 'modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw] max-h-[90vh] flex flex-col gap-3';
-
-      const head = document.createElement('div');
-      head.className = 'flex flex-col gap-1';
-      const title = document.createElement('div');
-      title.className = 'text-sm font-semibold';
-      title.textContent = '種目と詳細の選択';
-      const info = document.createElement('div');
-      info.className = 'text-[11px] text-gray-500';
-      info.textContent = `対象部位: ${blockParts.length ? blockParts.join(' × ') : '-'}`;
-      const help = document.createElement('div');
-      help.className = 'text-[11px] text-gray-500 leading-relaxed space-y-1';
-      help.innerHTML = '<div>① 器具: 使用するマシンやツールを選択</div><div>② アタッチメント: ハンドルなどの付属品を選択</div><div>③ 角度 / ポジション: ベンチ角度や手幅などのセットアップ情報を選択</div>';
-      head.append(title, info, help);
-
-      const content = document.createElement('div');
-      content.className = 'flex flex-col gap-3 overflow-hidden';
-
-      const listWrap = document.createElement('div');
-      listWrap.className = 'rounded-xl border p-2 space-y-1 overflow-auto';
-      listWrap.style.maxHeight = '35vh';
-
-      if(allowedEntries.length === 0){
-        const msg=document.createElement('div');
-        msg.className='text-sm text-gray-500';
-        msg.textContent='この部位に紐づく種目がありません。設定＞種目マスタで追加してください。';
-        listWrap.appendChild(msg);
-      }else{
-        allowedEntries.forEach(entry=>{
-          const row = document.createElement('label');
-          row.className = 'flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-indigo-50 transition-colors';
-          row.dataset.name = entry.name;
-          const left = document.createElement('div');
-          left.className = 'flex items-center gap-2';
-
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.dataset.name = entry.name;
-          cb.dataset.checkedAt = '';
-          if(currentOrder.has(entry.name)){
-            cb.checked = true;
-            cb.dataset.checkedAt = currentOrder.get(entry.name) || '';
-          }
-          cb.addEventListener('change', ()=>{
-            cb.dataset.checkedAt = cb.checked ? `${Date.now()}_${Math.random()}` : '';
-            if(cb.checked && !selectionMeta.has(entry.name)){
-              const baseMeta = currentMeta.get(entry.name) || {};
-              selectionMeta.set(entry.name, {
-                eq: normalizeOption(baseMeta.eq ?? '-'),
-                att: normalizeOption(baseMeta.att ?? '-'),
-                ang: normalizeOption(baseMeta.ang ?? '-'),
-                pos: normalizeOption(baseMeta.pos ?? '-'),
-                part: baseMeta.part || (entry.parts||[]).find(p => blockParts.includes(p)) || blockParts[0] || ''
-              });
-            }
-            if(!cb.checked){ selectionMeta.delete(entry.name); }
-            updateOrderIndicators();
-            renderConfig();
-          });
-
-          const nameSpan = document.createElement('span');
-          nameSpan.textContent = entry.name;
-
-          left.append(cb, nameSpan);
-
-          const partsBadge = document.createElement('div');
-          partsBadge.className = 'flex flex-wrap gap-1 text-[10px] text-gray-500';
-          (entry.parts||[]).forEach(p=>{
-            const badge = document.createElement('span');
-            badge.className = 'px-1 py-0.5 rounded-full bg-gray-100 text-gray-600';
-            badge.textContent = p;
-            partsBadge.appendChild(badge);
-          });
-          left.appendChild(partsBadge);
-
-          const orderIndicator = document.createElement('span');
-          orderIndicator.className = 'order-indicator text-[11px] font-semibold text-indigo-600 hidden';
-          orderIndicator.textContent = '#1';
-
-          row.append(left, orderIndicator);
-          listWrap.appendChild(row);
-        });
-      }
-
-      const configWrap = document.createElement('div');
-      configWrap.className = 'rounded-xl border p-2 space-y-2 flex-1 overflow-auto';
-      configWrap.style.minHeight = '0';
-
-      const selectionMeta = new Map(currentMeta);
-
-      const actions = document.createElement('div');
-      actions.className = 'flex justify-end gap-2 pt-1';
-      const btnCancel=document.createElement('button');
-      btnCancel.className='px-3 py-2 rounded-xl bg-white border';
-      btnCancel.textContent='キャンセル';
-      const btnOk=document.createElement('button');
-      btnOk.className='px-3 py-2 rounded-xl bg-gray-900 text-white';
-      btnOk.textContent='決定';
-      actions.append(btnCancel, btnOk);
-
-      const getOrderedNames = ()=>{
-        const cbs = Array.from(listWrap.querySelectorAll('input[type=checkbox]:checked'));
-        cbs.sort((a,b)=>{
-          const ta=a.dataset.checkedAt||'';
-          const tb=b.dataset.checkedAt||'';
-          return ta.localeCompare(tb);
-        });
-        return cbs.map(cb=> cb.dataset.name);
-      };
-
-      const updateOrderIndicators = ()=>{
-        const ordered = getOrderedNames();
-        const map = new Map(ordered.map((name, idx)=> [name, idx+1]));
-        listWrap.querySelectorAll('label[data-name]').forEach(row=>{
-          const name = row.dataset.name;
-          const indicator = row.querySelector('.order-indicator');
-          if(!indicator) return;
-          if(map.has(name)){
-            indicator.textContent = `#${map.get(name)}`;
-            indicator.classList.remove('hidden');
-          }else{
-            indicator.classList.add('hidden');
-          }
-        });
-      };
-
-      const fillSelect = (select, options, value, onChange)=>{
-        select.innerHTML='';
-        orderWithNoneFirst(options).forEach(opt=>{
-          const o = document.createElement('option');
-          o.value = opt;
-          o.textContent = opt;
-          select.appendChild(o);
-        });
-        select.value = normalizeOption(value);
-        select.onchange = e=> onChange(normalizeOption(e.target.value));
-      };
-
-      const renderConfig = ()=>{
-        configWrap.innerHTML = '';
-        const ordered = getOrderedNames();
-        if(ordered.length === 0){
-          const msg = document.createElement('div');
-          msg.className = 'text-sm text-gray-500';
-          msg.textContent = 'チェックした種目がここに表示されます。順番に応じて#が表示されます。';
-          configWrap.appendChild(msg);
-          return;
-        }
-        ordered.forEach((name, idx)=>{
-          if(!selectionMeta.has(name)){
-            const entry = allowedEntries.find(e=> e.name===name) || { parts: [] };
-            selectionMeta.set(name, {
-              eq: '-',
-              att: '-',
-              ang: '-',
-              pos: '-',
-              part: (entry.parts||[]).find(p => blockParts.includes(p)) || blockParts[0] || ''
-            });
-          }
-          const meta = selectionMeta.get(name);
-          const entry = allowedEntries.find(e=> e.name===name) || { parts: [] };
-          const row = document.createElement('div');
-          row.className = 'rounded-lg border bg-gray-50 p-3 space-y-2';
-
-          const header = document.createElement('div');
-          header.className = 'flex items-center justify-between';
-          const title = document.createElement('div');
-          title.className = 'text-sm font-semibold';
-          title.textContent = `${idx+1}. ${name}`;
-          const partTag = document.createElement('span');
-          partTag.className = 'text-[11px] text-gray-500';
-          partTag.textContent = meta.part ? `部位: ${meta.part}` : '';
-          header.append(title, partTag);
-
-          const selEq = document.createElement('select'); selEq.className = 'border rounded-md px-2 py-1 text-sm';
-          const selAtt = document.createElement('select'); selAtt.className = 'border rounded-md px-2 py-1 text-sm';
-          const selAng = document.createElement('select'); selAng.className = 'border rounded-md px-2 py-1 text-sm';
-          const selPos = document.createElement('select'); selPos.className = 'border rounded-md px-2 py-1 text-sm';
-
-          fillSelect(selEq, state.lists.equip || DEFAULTS.equip, meta.eq, v=>{ meta.eq = v; });
-          fillSelect(selAtt, state.lists.attach || DEFAULTS.attach, meta.att, v=>{ meta.att = v; });
-          fillSelect(selAng, state.lists.angle || DEFAULTS.angle, meta.ang, v=>{ meta.ang = v; });
-          fillSelect(selPos, state.lists.position || DEFAULTS.position, meta.pos, v=>{ meta.pos = v; });
-
-          const wrapDetail = document.createElement('div');
-          wrapDetail.className = 'space-y-2';
-          const rowEquip = document.createElement('div');
-          rowEquip.className = 'grid grid-cols-1 sm:grid-cols-2 gap-2';
-          const rowAngle = document.createElement('div');
-          rowAngle.className = 'grid grid-cols-1 sm:grid-cols-2 gap-2';
-
-          const makeField = (label, select)=>{
-            const field = document.createElement('label');
-            field.className = 'flex flex-col gap-1 text-[11px] text-gray-500';
-            const span = document.createElement('span');
-            span.className = 'font-semibold text-gray-600';
-            span.textContent = label;
-            field.append(span, select);
-            return field;
-          };
-
-          rowEquip.append(makeField('器具', selEq), makeField('アタッチメント', selAtt));
-          rowAngle.append(makeField('角度', selAng), makeField('ポジション', selPos));
-
-          wrapDetail.append(rowEquip, rowAngle);
-
-          row.append(header, wrapDetail);
-          configWrap.appendChild(row);
-        });
-      };
-
-      updateOrderIndicators();
-      renderConfig();
-
-      content.append(listWrap, configWrap);
-
-      card.append(head, content, actions);
-      bg.appendChild(card);
-      document.body.appendChild(bg);
-
-      btnCancel.onclick = ()=> bg.remove();
-      btnOk.onclick = ()=>{
-        const names = getOrderedNames();
-        if(names.length === 0){
-          alert('少なくとも1つの種目を選択してください。');
-          return;
-        }
-        applySelectedExercises(blockIdx, names, selectionMeta);
-        bg.remove();
-      };
-      bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
-    }
-
-    function applySelectedExercises(blockIdx, names, metaMap){
-      const block = state.inProgress.blocks[blockIdx];
-      const before = block.exs || [];
-      const blockParts = (block.parts && block.parts.length) ? block.parts : (state.inProgress.selectedParts||[]);
-      const equipList = state.lists.equip || DEFAULTS.equip;
-      const attachList = state.lists.attach || DEFAULTS.attach;
-      const angleList = state.lists.angle || DEFAULTS.angle;
-      const positionList = state.lists.position || DEFAULTS.position;
-      const defMap = new Map((state.lists.exerciseMap||[]).map(e=> [e.name, e]));
-      const metaLookup = metaMap && typeof metaMap.get === 'function'
-        ? metaMap
-        : new Map(Object.entries(metaMap || {}));
-
-      block.exs = names.map(name => {
-        const prev = before.find(e=> e.name===name) || {};
-        const meta = metaLookup.get(name) || {};
-        const def = defMap.get(name);
-        const partCandidate = meta.part || prev.part || (blockParts.find(p => (def?.parts||[]).includes(p))) || (def?.parts?.[0] || blockParts[0] || '');
-        return {
-          name,
-          eq: orderWithNoneFirst(equipList).includes(normalizeOption(meta.eq ?? prev.eq)) ? normalizeOption(meta.eq ?? prev.eq) : (equipList[0] || '-'),
-          att: orderWithNoneFirst(attachList).includes(normalizeOption(meta.att ?? prev.att)) ? normalizeOption(meta.att ?? prev.att) : '-',
-          ang: orderWithNoneFirst(angleList).includes(normalizeOption(meta.ang ?? prev.ang)) ? normalizeOption(meta.ang ?? prev.ang) : '-',
-          pos: orderWithNoneFirst(positionList).includes(normalizeOption(meta.pos ?? prev.pos)) ? normalizeOption(meta.pos ?? prev.pos) : '-',
-          part: partCandidate
-        };
-      });
-
-      (block.sets||[]).forEach(s=>{
-        if(typeof s.oneHand === 'undefined') s.oneHand = false;
-        const prevItems = s.items||[];
-        s.items = names.map(name=>{
-          const prevIdx = before.findIndex(e=> e.name===name);
-          const fallback = { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
-          return (prevIdx>=0 && prevItems[prevIdx]) ? { ...fallback, ...prevItems[prevIdx] } : { ...fallback };
-        });
-      });
-
-      if(!block.sets || block.sets.length===0){
-        block.sets = [createEmptySet(block)];
-      }
-
-      persist(); renderWorkout(); afterDataChanged && afterDataChanged();
-    }
-
-    function renderExConfigRow(block, ex){
-      const node = document.importNode($('#tpl-ex-config-row').content, true);
-      const idx = block.exs.findIndex(e=> e===ex);
-      const orderEl = node.querySelector('.ex-order');
-      if(orderEl) orderEl.textContent = `#${idx+1}`;
-      const nameEl = node.querySelector('.ex-name');
-      if(nameEl) nameEl.textContent = ex.name;
-      const partEl = node.querySelector('.ex-part');
-      if(partEl) partEl.textContent = ex.part ? `部位: ${ex.part}` : '部位: -';
-
-      const up = node.querySelector('.ex-move-up');
-      const down = node.querySelector('.ex-move-down');
-      if(up) up.onclick = ()=>{
-        const idxCurrent = block.exs.findIndex(e=> e===ex);
-        if(idxCurrent<=0) return;
-        [block.exs[idxCurrent-1], block.exs[idxCurrent]] = [block.exs[idxCurrent], block.exs[idxCurrent-1]];
-        (block.sets||[]).forEach(s=> [s.items[idxCurrent-1], s.items[idxCurrent]] = [s.items[idxCurrent], s.items[idxCurrent-1]]);
-        persist(); renderWorkout();
-      };
-      if(down) down.onclick = ()=>{
-        const idxCurrent = block.exs.findIndex(e=> e===ex);
-        if(idxCurrent>=block.exs.length-1) return;
-        [block.exs[idxCurrent+1], block.exs[idxCurrent]] = [block.exs[idxCurrent], block.exs[idxCurrent+1]];
-        (block.sets||[]).forEach(s=> [s.items[idxCurrent+1], s.items[idxCurrent]] = [s.items[idxCurrent], s.items[idxCurrent+1]]);
-        persist(); renderWorkout();
-      };
-
-      const updateDetailChips = ()=>{
-        const eqEl = node.querySelector('.ex-eq');
-        const attEl = node.querySelector('.ex-att');
-        const angEl = node.querySelector('.ex-ang');
-        const posEl = node.querySelector('.ex-pos');
-        if(eqEl) eqEl.textContent = `器具: ${normalizeDetail(ex.eq, '-')}`;
-        if(attEl) attEl.textContent = `アタッチメント: ${normalizeDetail(ex.att, '-')}`;
-        if(angEl) angEl.textContent = `角度: ${normalizeDetail(ex.ang, '-')}`;
-        if(posEl) posEl.textContent = `ポジション: ${normalizeDetail(ex.pos, '-')}`;
-      };
-      updateDetailChips();
-
-      updateExMetaLine(node, ex);
-
-      const historyBtn = node.querySelector('.btn-ex-history');
-      if(historyBtn){
-        const targetPart = ex.part || block.part || (block.parts && block.parts[0]) || (state.inProgress.selectedParts||[])[0] || state.inProgress.part;
-        historyBtn.onclick = ()=> openExerciseHistory(ex, targetPart);
-      }
-      return node;
-    }
-
-    function updateExMetaLine(rowNode, ex){
-      const meta = rowNode.querySelector('.ex-meta');
-      const all = flattenSets().filter(r=> r.exercise===ex.name);
-      if(all.length===0){ meta.textContent='最高重量: - / 最高1RM: - / 前回: -'; return; }
-      const maxW = Math.max(...all.map(r=> Number(r.weight||0)));
-      const max1 = Math.max(...all.map(r=> Number(r.oneRM||0)));
-      const last = all.sort((a,b)=> a.date<b.date ? 1 : -1)[0];
-      meta.textContent = `最高重量: ${maxW||'-'} / 最高1RM: ${max1||'-'} / 前回: ${last ? last.date : '-'}`;
-    }
-
-    function openExerciseHistory(ex, part){
-      const bg = document.createElement('div');
-      bg.className = 'modal-bg flex items-center justify-center z-50';
-
-      const card = document.createElement('div');
-      card.className = 'modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw] max-h-[80vh] flex flex-col';
-
-      const header = document.createElement('div');
-      header.className = 'flex flex-col gap-1';
-      const title = document.createElement('div');
-      title.className = 'text-sm font-semibold';
-      title.textContent = ex.name;
-      const metaLine = document.createElement('div');
-      metaLine.className = 'text-[11px] text-gray-500';
-      metaLine.textContent = `${part ? `部位: ${part} / ` : ''}${formatDetailText(ex)}`;
-      header.append(title, metaLine);
-
-      const rows = flattenSets().filter(r => r.exercise === ex.name).sort((a,b)=>{
-        if(a.date !== b.date) return a.date < b.date ? 1 : -1;
-        if(a.id !== b.id) return a.id < b.id ? 1 : -1;
-        return a.setIndex - b.setIndex;
-      });
-
-      const groups = new Map();
-      rows.forEach(row => {
-        const key = [
-          normalizeDetail(row.part, ''),
-          normalizeDetail(row.equipment, ''),
-          normalizeDetail(row.attachment, '-'),
-          normalizeDetail(row.angle, '-'),
-          normalizeDetail(row.position, '-')
-        ].join('|');
-        if(!groups.has(key)) groups.set(key, { meta: row, workouts: new Map() });
-        const group = groups.get(key);
-        if(!group.workouts.has(row.id)){
-          group.workouts.set(row.id, { id: row.id, date: row.date, part: row.part, rows: [] });
-        }
-        group.workouts.get(row.id).rows.push(row);
-      });
-
-      groups.forEach(group => {
-        group.workouts = Array.from(group.workouts.values()).sort((a,b)=>{
-          if(a.date !== b.date) return a.date < b.date ? 1 : -1;
-          return b.id.localeCompare(a.id);
-        }).map(wk => {
-          wk.rows.sort((a,b)=> a.setIndex - b.setIndex);
-          return wk;
-        });
-      });
-
-      const targetKey = [
-        normalizeDetail(part, ''),
-        normalizeDetail(ex.eq, ''),
-        normalizeDetail(ex.att, '-'),
-        normalizeDetail(ex.ang, '-'),
-        normalizeDetail(ex.pos, '-')
-      ].join('|');
-
-      if(part && !groups.has(targetKey)){
-        groups.set(targetKey, {
-          meta: { exercise: ex.name, part, equipment: ex.eq || '', attachment: normalizeDetail(ex.att, '-'), angle: normalizeDetail(ex.ang, '-'), position: normalizeDetail(ex.pos, '-') },
-          workouts: []
-        });
-      }
-
-      let keys = Array.from(groups.keys());
-      if(keys.length===0){
-        keys = [targetKey];
-        groups.set(targetKey, {
-          meta: { exercise: ex.name, part: part || '-', equipment: ex.eq || '', attachment: normalizeDetail(ex.att, '-'), angle: normalizeDetail(ex.ang, '-'), position: normalizeDetail(ex.pos, '-') },
-          workouts: []
-        });
-      }
-
-      keys.sort((a,b)=>{
-        if(a === targetKey && b !== targetKey) return -1;
-        if(b === targetKey && a !== targetKey) return 1;
-        const ga = groups.get(a)?.workouts?.[0];
-        const gb = groups.get(b)?.workouts?.[0];
-        const da = ga?.date || '';
-        const db = gb?.date || '';
-        if(da !== db) return da < db ? 1 : -1;
-        return a.localeCompare(b, 'ja');
-      });
-
-      const listWrap = document.createElement('div');
-      listWrap.className = 'mt-3 space-y-3 overflow-auto flex-1';
-      listWrap.style.minHeight = '0';
-
-      keys.forEach(key => {
-        const group = groups.get(key);
-        const groupCard = document.createElement('div');
-        groupCard.className = 'rounded-xl border bg-white shadow-soft p-3 space-y-2';
-        const groupHead = document.createElement('div');
-        groupHead.className = 'text-xs font-semibold text-gray-700 flex items-center gap-2';
-        const metaSource = group?.meta || { exercise: ex.name, part: part || '-', equipment: ex.eq || '', attachment: normalizeDetail(ex.att, '-'), angle: normalizeDetail(ex.ang, '-'), position: normalizeDetail(ex.pos, '-') };
-        const detailText = `${normalizeDetail(metaSource.part, '-') || '-'} / ${formatDetailText(metaSource)}`;
-        const headLabel = document.createElement('span');
-        headLabel.textContent = detailText;
-        groupHead.appendChild(headLabel);
-        if(key === targetKey){
-          const badge = document.createElement('span');
-          badge.className = 'px-2 py-0.5 rounded-full bg-gray-900 text-white text-[10px]';
-          badge.textContent = '現在の設定';
-          groupHead.appendChild(badge);
-        }
-        groupCard.appendChild(groupHead);
-
-        const workoutList = document.createElement('div');
-        workoutList.className = 'space-y-2';
-
-        if((group?.workouts || []).length === 0){
-          const none = document.createElement('div');
-          none.className = 'text-xs text-gray-500';
-          none.textContent = '記録がありません。';
-          workoutList.appendChild(none);
-        } else {
-          group.workouts.slice(0, 10).forEach((wk, idx)=>{
-            const wkWrap = document.createElement('div');
-            wkWrap.className = 'space-y-1';
-            if(idx>0) wkWrap.classList.add('pt-2','border-t','border-gray-100');
-            const wkTitle = document.createElement('div');
-            wkTitle.className = 'text-sm font-semibold text-gray-800';
-            wkTitle.textContent = `${wk.date} / ${wk.part}`;
-            wkWrap.appendChild(wkTitle);
-            wk.rows.forEach(row => {
-              const line = document.createElement('div');
-              line.className = 'text-xs text-gray-600';
-              line.textContent = formatRecordLine({
-                index: row.setIndex,
-                warm: row.warmup,
-                oneHand: row.oneHand,
-                weight: row.weight,
-                reps: row.repsSelf,
-                assist: row.repsAssist,
-                sec: row.durationSec,
-                note: row.note,
-                oneRM: row.oneRM
-              });
-              wkWrap.appendChild(line);
-            });
-            workoutList.appendChild(wkWrap);
-          });
-        }
-
-        groupCard.appendChild(workoutList);
-        listWrap.appendChild(groupCard);
-      });
-
-      const actions = document.createElement('div');
-      actions.className = 'flex justify-end gap-2 mt-3';
-      const historyBtn = document.createElement('button');
-      historyBtn.type = 'button';
-      historyBtn.className = 'px-3 py-1.5 rounded-lg border text-xs bg-white';
-      historyBtn.textContent = '履歴画面で開く';
-      historyBtn.onclick = ()=> {
-        const params = new URLSearchParams();
-        params.set('exercise', ex.name);
-        if(part) params.set('part', part);
-        if(ex.eq) params.set('equipment', ex.eq);
-        params.set('attachment', normalizeDetail(ex.att, '-'));
-        params.set('angle', normalizeDetail(ex.ang, '-'));
-        params.set('position', normalizeDetail(ex.pos, '-'));
-        location.hash = `${ROUTES.HISTORY}?${params.toString()}`;
-        bg.remove();
-      };
-      const closeBtn = document.createElement('button');
-      closeBtn.type = 'button';
-      closeBtn.className = 'px-3 py-1.5 rounded-lg border text-xs bg-white';
-      closeBtn.textContent = '閉じる';
-      closeBtn.onclick = ()=> bg.remove();
-      actions.append(historyBtn, closeBtn);
-
-      card.append(header, listWrap, actions);
-      bg.appendChild(card);
-      document.body.appendChild(bg);
-      bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
-    }
-
-    function renderSetCard(block, set, sIdx){
-      const node = document.importNode($('#tpl-set-card').content, true);
-      node.querySelector('.set-no').textContent = '#'+(sIdx+1);
-      const warm = node.querySelector('.set-warm');
-      warm.checked = !!set.warm;
-      warm.addEventListener('input', ()=> { set.warm = warm.checked; persist(); afterDataChanged(); });
-      const oneHand = node.querySelector('.set-one-hand');
-      if(oneHand){
-        oneHand.checked = !!set.oneHand;
-        oneHand.addEventListener('input', ()=> { set.oneHand = oneHand.checked; persist(); afterDataChanged(); });
-      }
-
-      const itemsWrap = node.querySelector('.ex-items');
-      ensureSetItems(block, set);
-      (block.exs||[]).forEach((ex, i)=> itemsWrap.appendChild(renderExItemRow(block, set, i, ex)));
-
-      node.querySelector('.btn-dup-set').onclick = ()=> {
-        const source = block.sets[sIdx];
-        const cloned = JSON.parse(JSON.stringify(source));
-        cloned.warm = false;
-        if(typeof cloned.oneHand !== 'boolean') cloned.oneHand = !!source.oneHand;
-        const insertIndex = sIdx + 1;
-        const blockIdx = state.inProgress.blocks.indexOf(block);
-        block.sets.splice(insertIndex, 0, cloned);
-        persist(); renderWorkout(); afterDataChanged();
-        setTimeout(()=>{
-          const blockNodes = $$('#blocks .block-card');
-          const targetBlock = blockNodes[blockIdx];
-          if(!targetBlock) return;
-          const setCards = $$('.set-card', targetBlock);
-          const targetCard = setCards[insertIndex];
-          if(targetCard){
-            try{ targetCard.scrollIntoView({ behavior:'smooth', block:'center' }); }
-            catch{ targetCard.scrollIntoView(); }
-          }
-        }, 80);
-      };
-      node.querySelector('.btn-del-set').onclick = ()=> {
-        block.sets.splice(sIdx,1);
-        if(block.sets.length === 0){
-          block.sets.push(createEmptySet(block));
-        }
-        persist(); renderWorkout(); afterDataChanged();
-      };
-      return node;
-    }
-
-    function ensureSetItems(block, set){
-      if(!set.items) set.items = [];
-      const need = (block.exs||[]).length;
-      if(set.items.length < need){
-        const last = set.items[set.items.length-1] || { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
-        for(let i=set.items.length; i<need; i++){ set.items[i] = { ...last }; }
-      } else if(set.items.length > need){
-        set.items = set.items.slice(0, need);
-      }
-    }
-
-    function createEmptySet(block){
-      const items = (block.exs||[]).map(()=> ({ w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 }));
-      return { warm:false, oneHand:false, items };
-    }
-
-    function renderExItemRow(block, set, idx, ex){
-      const node = document.importNode($('#tpl-ex-item-row').content, true);
-      const item = set.items[idx] ||= { w:0, reps:0, assist:0, note:'', oneRM:0, sec:0 };
-
-      const titleEl = node.querySelector('.ex-title');
-      if(titleEl) titleEl.textContent = `${idx+1}. ${ex.name}`;
-      const detailEl = node.querySelector('.ex-detail');
-      if(detailEl) detailEl.textContent = formatDetailText(ex);
-
-      const elW = node.querySelector('.ex-weight');
-      const elR = node.querySelector('.ex-reps');
-      const elA = node.querySelector('.ex-assist');
-      const elN = node.querySelector('.ex-note');
-      const elOne = node.querySelector('.ex-1rm');
-      const elSec = node.querySelector('.ex-sec');
-
-      elW.value = item.w || '';
-      elR.value = item.reps || '';
-      elA.value = item.assist || '';
-      elN.value = item.note || '';
-      if(elSec) elSec.value = item.sec || '';
-
-      const recalc = debounce(()=>{
-        const w = Number(elW.value||0), r = Number(elR.value||0);
-        item.w = w; item.reps = r; item.assist = Number(elA.value||0); item.note = elN.value || '';
-        if(elSec){ item.sec = Number(elSec.value||0); }
-        item.oneRM = (w>0 && r>0) ? Math.round(w * (1 + r/30) * 10)/10 : 0;
-        elOne.textContent = item.oneRM || '-';
-        persist();
+    const storage = new NamespacedStorage(STORAGE_NAMESPACE, SCHEMA_VERSION);
+
+    /*** modal api ***/
+    const modalState = { locked: false };
+
+    const closeModal = (backdrop, outerResolve, value) => {
+      if (!backdrop) return;
+      backdrop.classList.add('opacity-0');
+      setTimeout(() => {
+        backdrop.remove();
+        document.body.classList.remove('scroll-lock');
+        modalState.locked = false;
+        outerResolve(value);
       }, 120);
+    };
 
-      [elW, elR, elA, elN].forEach(el => el && el.addEventListener('input', recalc));
-      if(elSec) elSec.addEventListener('input', recalc);
-
-      elOne.textContent = item.oneRM || '-';
-      return node;
-    }
-
-    function saveWorkout(){
-      const copy = JSON.parse(JSON.stringify(state.inProgress));
-      copy.blocks.forEach(b=>{
-        b.sets = (b.sets||[]).map(s=>{
-          s.items = (s.items||[]).filter(it=>{
-            return (Number(it.sec)>0) || (Number(it.w)>0 && Number(it.reps)>0) || it.note;
-          });
-          return s;
-        }).filter(s=> s.items.length>0);
-      });
-      copy.blocks = copy.blocks.filter(b=> (b.exs||[]).length>0 && (b.sets||[]).length>0);
-      if(copy.blocks.length===0){ alert('記録が空です。セットを入力してください。'); return; }
-      copy.id = 'w_'+Date.now();
-      state.workouts.push(copy);
-      state.inProgress = {
-        date: state.inProgress.date || todayISO(),
-        part: state.inProgress.part,
-        selectedParts: Array.isArray(state.inProgress.selectedParts) ? state.inProgress.selectedParts.slice(0,2) : [],
-        blocks: []
-      };
-      persist(); alert('保存しました'); afterDataChanged();
-    }
-
-    function flattenSets(){
-      const rows = [];
-      (store.get(K_WORKOUTS, [])).forEach(w=>{
-        (w.blocks||[]).forEach(b=>{
-          (b.sets||[]).forEach((s, sIdx)=>{
-            (b.exs||[]).forEach((ex, exIdx)=>{
-              const it = (s.items||[])[exIdx] || {};
-              rows.push({
-                id: w.id,
-                date: w.date || state.inProgress.date || todayISO(),
-                part: ex.part || (Array.isArray(b.parts) && b.parts.length ? b.parts[0] : (b.part || '不明')),
-                exercise: ex.name,
-                equipment: normalizeOption(ex.eq || ''),
-                attachment: normalizeOption(ex.att || '-'),
-                angle: normalizeOption(ex.ang || '-'),
-                position: normalizeOption(ex.pos || '-'),
-                setIndex: sIdx+1,
-                warmup: !!s.warm,
-                oneHand: !!s.oneHand,
-                weight: Number(it.w||0),
-                repsSelf: Number(it.reps||0),
-                repsAssist: Number(it.assist||0),
-                durationSec: Number(it.sec||0),
-                note: it.note||'',
-                oneRM: Number(it.oneRM||0)
-              });
-            });
-          });
-        });
-      });
-      return rows.sort((a,b)=> a.date<b.date ? -1 : 1);
-    }
-
-    function renderHistory(){
-      const parts = ['(指定なし)', ...sortJa(state.lists.parts)];
-      const exs   = ['(指定なし)', ...sortJa(Array.from(new Set(flattenSets().map(r=> r.exercise))))];
-      const eqs   = ['(指定なし)', ...orderWithNoneFirst(state.lists.equip)];
-      const atts  = ['(指定なし)', ...orderWithNoneFirst(state.lists.attach)];
-      const angs  = ['(指定なし)', ...orderWithNoneFirst(state.lists.angle)];
-      const poss  = ['(指定なし)', ...orderWithNoneFirst(state.lists.position)];
-      const fillSel=(id,arr)=>{ const el=$(id); if(!el) return; el.innerHTML=''; arr.forEach(v=>{ const o=document.createElement('option'); o.value=v;o.textContent=v; el.appendChild(o); }); };
-      fillSel('#filter-part',parts); fillSel('#filter-ex',exs); fillSel('#filter-eq',eqs);
-      fillSel('#filter-att',atts);   fillSel('#filter-ang',angs); fillSel('#filter-pos',poss);
-
-      $('#btn-apply-filter').onclick = ()=> applyFilter();
-      $('#btn-clear-filter').onclick = ()=> {
-        $('#filter-start').value=''; $('#filter-end').value='';
-        ['part','ex','eq','att','ang','pos'].forEach(id=> $('#filter-'+id).value='(指定なし)');
-        applyFilter();
-      };
-
-      const setSelectValue = (selector, value)=>{
-        if(!value) return;
-        const el = $(selector);
-        if(!el) return;
-        const options = Array.from(el.options || []).map(o=> o.value);
-        if(options.includes(value)) el.value = value;
-      };
-
-      const params = new URLSearchParams(location.hash.split('?')[1] || '');
-      const exParam = params.get('exercise');
-      const partParam = params.get('part');
-      const eqParam = params.get('equipment');
-      const attParam = params.get('attachment');
-      const angParam = params.get('angle');
-      const posParam = params.get('position');
-      setSelectValue('#filter-ex', exParam);
-      setSelectValue('#filter-part', partParam);
-      setSelectValue('#filter-eq', eqParam);
-      setSelectValue('#filter-att', attParam);
-      setSelectValue('#filter-ang', angParam);
-      setSelectValue('#filter-pos', posParam);
-      applyFilter();
-    }
-
-    function applyFilter(){
-      const start = $('#filter-start').value;
-      const end = $('#filter-end').value;
-      const part = $('#filter-part').value;
-      const ex = $('#filter-ex').value;
-      const eq = $('#filter-eq').value;
-      const att = $('#filter-att').value;
-      const ang = $('#filter-ang').value;
-      const pos = $('#filter-pos').value;
-
-      let rows = flattenSets();
-      if(start) rows = rows.filter(r => r.date >= start);
-      if(end) rows = rows.filter(r => r.date <= end);
-      if(part && part!=='(指定なし)') rows = rows.filter(r => r.part===part);
-      if(ex && ex!=='(指定なし)') rows = rows.filter(r => r.exercise===ex);
-      if(eq && eq!=='(指定なし)') rows = rows.filter(r => r.equipment===eq);
-      if(att && att!=='(指定なし)') rows = rows.filter(r => r.attachment===att);
-      if(ang && ang!=='(指定なし)') rows = rows.filter(r => r.angle===ang);
-      if(pos && pos!=='(指定なし)') rows = rows.filter(r => r.position===pos);
-
-      renderHistoryList(rows);
-      if(ex && ex!=='(指定なし)'){
-        const dailyMax = aggregateDailyMax1RM(rows);
-        renderChart(dailyMax.labels, dailyMax.values, true);
-      } else { renderChart([], [], false); }
-    }
-
-    function aggregateDailyMax1RM(rows){
-      const map = new Map();
-      rows.forEach(r=>{
-        const key = r.date;
-        const prev = map.get(key) || 0;
-        map.set(key, Math.max(prev, r.oneRM||0));
-      });
-      const labels = Array.from(map.keys()).sort();
-      const values = labels.map(d => map.get(d));
-      return { labels, values };
-    }
-
-    function renderHistoryList(rows){
-      const list = $('#history-list');
-      list.innerHTML = '';
-      if(rows.length===0){ list.innerHTML = '<div class="text-sm text-gray-500">データがありません。</div>'; return; }
-
-      const byWorkout = rows.reduce((acc, r)=> { (acc[r.id] ||= []).push(r); return acc; }, {});
-      Object.values(byWorkout).forEach(items=>{
-        const w = items[0];
-        const card = document.createElement('div');
-        card.className = 'rounded-2xl border bg-white p-3 shadow-soft';
-        const partsInWorkout = Array.from(new Set(items.map(i=>i.part))).join(' / ');
-        const title = document.createElement('div');
-        title.className = 'flex items-center justify-between';
-        title.innerHTML = `<div class="text-sm font-semibold">${w.date} / ${partsInWorkout}</div>`;
-        card.appendChild(title);
-        items.forEach(r=>{
-          const timeLabel = r.durationSec ? ` / 時間 ${r.durationSec}s` : '';
-          const row = document.createElement('div');
-          row.className = 'mt-2 text-sm grid grid-cols-12 gap-1';
-          row.innerHTML = `
-            <div class="col-span-6 truncate-2">${r.exercise} <span class="text-xs text-gray-500">(${r.equipment} / ${r.attachment} / ${r.angle} / ${r.position})</span></div>
-            <div class="col-span-3">重量 ${r.weight}kg</div>
-            <div class="col-span-1">自 ${r.repsSelf}</div>
-            <div class="col-span-2">補 ${r.repsAssist}</div>
-            <div class="col-span-12 text-[11px] text-gray-500">部位:${r.part}${timeLabel} / 1RM:${r.oneRM || '-'}kg / S${r.setIndex} ${r.note ? ' / '+escapeHtml(r.note) : ''}</div>
-          `;
-          card.appendChild(row);
-        });
-        list.appendChild(card);
-      });
-
-      const params = new URLSearchParams(location.hash.split('?')[1] || '');
-      const exParam = params.get('exercise');
-      const backBtn = $('#btn-back-to-home-from-simple');
-      if(backBtn){ backBtn.classList.toggle('hidden', !exParam); backBtn.onclick = ()=> { location.hash = '#/workout'; }; }
-    }
-
-    function renderChart(labels, values, show){
-      const wrap = $('#history-chart-wrap');
-      wrap.classList.toggle('hidden', !show);
-      if(!show){ if(state.chart){ state.chart.destroy(); state.chart=null; } return; }
-      const ctx = $('#history-chart').getContext('2d');
-      if(state.chart) state.chart.destroy();
-      state.chart = new Chart(ctx, {
-        type: 'line',
-        data: { labels, datasets: [{ label: '1RM (kg)', data: values, tension: 0.25, pointRadius: 3 }] },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-      });
-    }
-
-    function renderSettings(){
-      $('#list-parts').value = sortJa(state.lists.parts).join('\n');
-      $('#list-equip').value = orderWithNoneFirst(state.lists.equip).join('\n');
-      $('#list-attach').value = orderWithNoneFirst(state.lists.attach).join('\n');
-      $('#list-angle').value = orderWithNoneFirst(state.lists.angle).join('\n');
-      $('#list-position').value = orderWithNoneFirst(state.lists.position).join('\n');
-
-      const boxes = $('#part-boxes');
-      boxes.innerHTML = '';
-      const parts = sortJa(state.lists.parts);
-
-      parts.forEach(part=>{
-        const card = document.createElement('div');
-        card.className = 'rounded-xl border p-3 bg-white shadow-soft';
-        const head = document.createElement('div');
-        head.className = 'flex items-center justify-between mb-2';
-        head.innerHTML = `<div class="text-sm font-semibold">${part} の種目</div>`;
-        const addBtn = document.createElement('button');
-        addBtn.className = 'px-2 py-1.5 rounded-md border text-xs';
-        addBtn.textContent = '追加';
-        head.appendChild(addBtn);
-        card.appendChild(head);
-
-        const list = document.createElement('div');
-        list.className = 'space-y-1';
-        card.appendChild(list);
-
-        function refreshList(){
-          list.innerHTML = '';
-          const rows = sortExerciseMapJa(state.lists.exerciseMap).filter(e=> (e.parts||[]).includes(part));
-          if(rows.length===0){
-            list.innerHTML = `<div class="text-xs text-gray-500">まだありません。</div>`;
-          }else{
-            rows.forEach(row=> list.appendChild(renderExerciseRowByPart(row, part, refreshList)));
-          }
-        }
-
-        addBtn.onclick = async ()=>{
-          const name = await promptModal('新しい種目名を入力（器具名・角度名は含めない）');
-          if(!name) return;
-          const clean = cleanupExercises([{name, parts:[part]}])[0];
-          if(!clean) return;
-          const idx = state.lists.exerciseMap.findIndex(e=> e.name===clean.name);
-          if(idx>=0){
-            const pset = new Set(state.lists.exerciseMap[idx].parts||[]);
-            pset.add(part);
-            state.lists.exerciseMap[idx].parts = Array.from(pset);
-          }else{
-            state.lists.exerciseMap.push({ name: clean.name, parts:[part] });
-          }
-          state.lists.exerciseMap = sortExerciseMapJa(state.lists.exerciseMap);
-          persist(); refreshList(); afterDataChanged();
+    const openModal = (buildContent) => {
+      if (modalState.locked) return Promise.resolve(null);
+      modalState.locked = true;
+      document.body.classList.add('scroll-lock');
+      const backdrop = createElem('div', { className: 'modal-backdrop' });
+      const card = createElem('div', { className: 'modal-card' });
+      backdrop.append(card);
+      document.body.append(backdrop);
+      return new Promise((outerResolve) => {
+        const finish = (value) => {
+          document.removeEventListener('keydown', keyHandler);
+          closeModal(backdrop, outerResolve, value);
         };
-
-        refreshList();
-        boxes.appendChild(card);
+        const keyHandler = (event) => {
+          if (event.key === 'Escape') finish(null);
+        };
+        document.addEventListener('keydown', keyHandler);
+        backdrop.addEventListener('click', (event) => {
+          if (event.target === backdrop) finish(null);
+        });
+        const { content, focus } = buildContent(finish);
+        card.append(content);
+        if (typeof focus === 'function') focus();
       });
+    };
 
-      $('#btn-save-lists').onclick = ()=> { saveLists(); };
-      $('#btn-reset-defaults').onclick = ()=> { resetDefaults(); };
+    const confirmAction = (message) => {
+      return openModal((finish) => {
+        const text = createElem('p', { className: 'text-sm text-slate-700 mb-4', textContent: message });
+        const btnWrap = createElem('div', { className: 'flex justify-end gap-2' });
+        const cancelBtn = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
+        const okBtn = createElem('button', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'OK', attrs: { type: 'button' } });
+        cancelBtn.addEventListener('click', () => finish(false));
+        okBtn.addEventListener('click', () => finish(true));
+        btnWrap.append(cancelBtn, okBtn);
+        return { content: createElem('div', { children: [text, btnWrap] }), focus: () => okBtn.focus() };
+      }).then((value) => Boolean(value));
+    };
 
-      const cfg = store.get(K_BACKUPCFG, {auto:true,frequencyMin:120,lastAt:null,persistGranted:false});
-      const elAuto = document.getElementById('bk-auto');
-      const elFreq = document.getElementById('bk-frequency');
-      const elLast = document.getElementById('bk-last');
-      if(elAuto){ elAuto.checked = !!cfg.auto; elAuto.onchange = ()=> { const c=store.get(K_BACKUPCFG,cfg); c.auto = elAuto.checked; store.set(K_BACKUPCFG,c); startAutoBackupTicker(); }; }
-      if(elFreq){ elFreq.value = cfg.frequencyMin || 120; elFreq.oninput = ()=> { const c=store.get(K_BACKUPCFG,cfg); c.frequencyMin = Math.max(5, Number(elFreq.value||120)); store.set(K_BACKUPCFG,c); startAutoBackupTicker(); }; }
-      if(elLast){ elLast.textContent = cfg.lastAt ? new Date(cfg.lastAt).toLocaleString() : '-'; }
-      const chooseBtn = document.getElementById('bk-choose');
-      if(chooseBtn){ chooseBtn.onclick = ()=> alert('OPFSに自動保存します。iCloudへは「今すぐバックアップ」を使い、共有シートからFiles(iCloud Drive)に保存してください。'); }
-      const nowBtn = document.getElementById('bk-now');
-      if(nowBtn){ nowBtn.onclick = async ()=> { await backupNow(true); const c=store.get(K_BACKUPCFG, {}); const elLast=document.getElementById('bk-last'); if(elLast){ elLast.textContent = c.lastAt ? new Date(c.lastAt).toLocaleString() : '-'; } }; }
-      const restoreBtn = document.getElementById('bk-restore');
-      if(restoreBtn){ restoreBtn.onclick = async ()=> { await restoreFromFile(); }; }
-    }
+    const pickFromList = (title, options) => {
+      return openModal((finish) => {
+        const header = createElem('div', { className: 'mb-3' });
+        header.append(createElem('p', { className: 'text-sm font-semibold text-slate-800', textContent: title }));
+        const list = createElem('div', { className: 'max-h-64 overflow-y-auto space-y-2' });
+        options.forEach((opt) => {
+          const btn = createElem('button', { className: 'w-full text-left px-3 py-2 rounded-lg border border-slate-200 hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500', textContent: opt, attrs: { type: 'button' } });
+          btn.addEventListener('click', () => finish(opt));
+          list.append(btn);
+        });
+        const cancel = createElem('button', { className: 'mt-4 btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
+        cancel.addEventListener('click', () => finish(null));
+        const firstButton = () => list.querySelector('button');
+        const content = createElem('div', { children: [header, list, cancel] });
+        return { content, focus: () => { const btn = firstButton(); if (btn) btn.focus(); else cancel.focus(); } };
+      });
+    };
 
-    function renderExerciseRowByPart(row, part, refresh){
-      const wrap = document.createElement('div');
-      wrap.className = 'grid grid-cols-12 gap-1 items-center';
-      const nameCol = document.createElement('div');
-      nameCol.className = 'col-span-7';
-      const ipt = document.createElement('input');
-      ipt.type = 'text';
-      ipt.className = 'w-full border rounded px-2 py-1 text-sm';
-      ipt.value = row.name;
-      nameCol.appendChild(ipt);
+    const promptText = (title) => {
+      return openModal((finish) => {
+        const label = createElem('label', { className: 'flex flex-col gap-2' });
+        label.append(
+          createElem('span', { className: 'text-sm font-semibold text-slate-800', textContent: title }),
+          createElem('input', { className: 'input-base', attrs: { type: 'text' } })
+        );
+        const actions = createElem('div', { className: 'flex justify-end gap-2 mt-4' });
+        const cancel = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'キャンセル', attrs: { type: 'button' } });
+        const ok = createElem('button', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold', textContent: '決定', attrs: { type: 'button' } });
+        cancel.addEventListener('click', () => finish(null));
+        const input = label.querySelector('input');
+        ok.addEventListener('click', () => finish(input.value.trim() || null));
+        actions.append(cancel, ok);
+        const content = createElem('div', { children: [label, actions] });
+        return { content, focus: () => input.focus() };
+      });
+    };
 
-      const btns = document.createElement('div');
-      btns.className = 'col-span-5 flex justify-end gap-2';
-      const btnSave = document.createElement('button');
-      btnSave.className = 'px-2 py-1.5 rounded-md border text-xs';
-      btnSave.textContent = '名称更新';
-      const btnDel = document.createElement('button');
-      btnDel.className = 'px-2 py-1.5 rounded-md border text-xs text-red-700 border-red-200';
-      btnDel.textContent = '削除';
+    /*** data model ***/
+    const STORAGE_KEYS = Object.freeze({
+      DATA: 'data'
+    });
 
-      btns.appendChild(btnSave);
-      btns.appendChild(btnDel);
+    const createInitialData = () => ({
+      workouts: [],
+      currentWorkout: {
+        id: `current-${Date.now()}`,
+        startedAt: Date.now(),
+        exercises: []
+      },
+      settings: {
+        unit: 'kg',
+        exerciseCatalog: ['ベンチプレス', 'スクワット', 'デッドリフト']
+      },
+      historyView: {
+        exerciseName: null
+      }
+    });
 
-      btnSave.onclick = ()=>{
-        const newNameRaw = ipt.value.trim();
-        if(!newNameRaw) return;
-        const cleaned = cleanupExercises([{name:newNameRaw, parts:row.parts}])[0];
-        if(!cleaned) return;
-        const idxOther = state.lists.exerciseMap.findIndex(e=> e.name===cleaned.name);
-        const idxSelf  = state.lists.exerciseMap.findIndex(e=> e.name===row.name);
-        if(idxOther>=0 && idxOther!==idxSelf){
-          const merged = Array.from(new Set([...(state.lists.exerciseMap[idxOther].parts||[]), ...(state.lists.exerciseMap[idxSelf].parts||[])]));
-          state.lists.exerciseMap[idxOther].parts = merged;
-          state.lists.exerciseMap.splice(idxSelf,1);
-        }else{
-          state.lists.exerciseMap[idxSelf].name = cleaned.name;
-        }
-        state.lists.exerciseMap = sortExerciseMapJa(state.lists.exerciseMap);
-        persist(); refresh(); afterDataChanged();
-      };
+    const loadData = () => {
+      const stored = storage.load(STORAGE_KEYS.DATA, createInitialData());
+      const base = createInitialData();
+      return { ...base, ...stored };
+    };
 
-      btnDel.onclick = async ()=>{
-        const ok = await confirmAction(`「${row.name}」を${part}から削除します。よろしいですか？（他の部位に属していない場合は種目自体が削除されます）`);
-        if(!ok) return;
-        const idx = state.lists.exerciseMap.findIndex(e=> e.name===row.name);
-        if(idx<0) return;
-        const p = new Set(state.lists.exerciseMap[idx].parts||[]);
-        p.delete(part);
-        const newParts = Array.from(p);
-        if(newParts.length===0){
-          const ok2 = await confirmAction(`「${row.name}」はどの部位にも属さなくなります。種目自体を削除します。よろしいですか？`);
-          if(!ok2) return;
-          state.lists.exerciseMap.splice(idx,1);
-        }else{
-          state.lists.exerciseMap[idx].parts = newParts;
-        }
-        persist(); refresh(); afterDataChanged();
-      };
+    let appData = loadData();
 
-      wrap.appendChild(nameCol);
-      wrap.appendChild(btns);
-      return wrap;
-    }
+    const persist = () => {
+      storage.save(STORAGE_KEYS.DATA, appData);
+    };
 
-    function saveLists(){
-      const parseLines = v => v.split('\n').map(s=>s.trim()).filter(Boolean);
-      state.lists.parts = sortJa(parseLines($('#list-parts').value));
-      state.lists.equip = orderWithNoneFirst(parseLines($('#list-equip').value));
-      state.lists.attach = orderWithNoneFirst(parseLines($('#list-attach').value));
-      state.lists.angle = orderWithNoneFirst(parseLines($('#list-angle').value));
-      state.lists.position = orderWithNoneFirst(parseLines($('#list-position').value));
-
-      state.lists.exerciseMap = cleanupExercises(sortExerciseMapJa(
-        state.lists.exerciseMap.filter(r=> (r.name && r.name.trim().length>0))
-      ));
-
+    const resetData = () => {
+      appData = createInitialData();
+      oneRmMemo.clear();
       persist();
-      alert('保存しました');
-      if(location.hash.startsWith(ROUTES.HOME)) renderHome();
-      afterDataChanged();
-    }
+    };
 
-    function resetDefaults(){
-      state.lists = JSON.parse(JSON.stringify(DEFAULTS));
-      state.lists.parts = sortJa(state.lists.parts);
-      state.lists.equip = orderWithNoneFirst(state.lists.equip);
-      state.lists.attach = orderWithNoneFirst(state.lists.attach);
-      state.lists.angle = orderWithNoneFirst(state.lists.angle);
-      state.lists.position = orderWithNoneFirst(state.lists.position);
-      state.lists.exerciseMap = cleanupExercises(sortExerciseMapJa(state.lists.exerciseMap));
-      persist(); renderSettings(); alert('デフォルトに復元しました'); afterDataChanged();
-    }
+    /*** 1RM memoization ***/
+    const oneRmMemo = new Map();
+    const compute1RM = (weight, reps) => {
+      const w = safeNumber(weight);
+      const r = safeNumber(reps);
+      if (w === null || r === null || r <= 0 || w <= 0) return null;
+      return Number((w * (1 + r / 30)).toFixed(2));
+    };
 
-    function exportCSV(){
-      const rows = flattenSets().map(r=>[
-        r.date, r.part, r.exercise, r.equipment, r.attachment, r.angle, r.position,
-        r.setIndex, r.warmup ? 1 : 0, r.weight, r.repsSelf, r.repsAssist, r.durationSec, r.note, r.oneRM
-      ]);
-      rows.unshift(['date','part','exercise','equipment','attachment','angle','position','setIndex','warmup','weight','repsSelf','repsAssist','durationSec','note','oneRM']);
-      const blob = new Blob([toCSV(rows)], {type:'text/csv;charset=utf-8;'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `workouts_${todayISO()}.csv`;
-      document.body.appendChild(a); a.click(); a.remove();
-    }
+    const getExerciseKey = (workoutId, exerciseId) => `${workoutId}:${exerciseId}`;
 
-    function importCSV(file){
-      const reader = new FileReader();
-      reader.onload = ()=>{
-        const text = reader.result;
-        const rows = parseCSV(text);
-        const header = rows.shift() || [];
-        const idx = name => header.indexOf(name);
-        const dateI=idx('date'), partI=idx('part'), exI=idx('exercise'), eqI=idx('equipment'), attI=idx('attachment'), angI=idx('angle'), posI=idx('position'),
-              sI=idx('setIndex'), warmI=idx('warmup'), wI=idx('weight'), rsI=idx('repsSelf'), raI=idx('repsAssist'), durI=idx('durationSec'), noteI=idx('note'), oneI=idx('oneRM');
-        if(dateI<0 || partI<0 || exI<0){ alert('CSVヘッダが不正です'); return; }
-
-        const groups = {};
-        rows.forEach(r=>{
-          const date = r[dateI]; if(!date) return;
-          const part = r[partI] || '不明';
-          const key = date+'|'+part;
-          (groups[key] ||= []).push({
-            exercise: r[exI]||'', equipment: normalizeOption(r[eqI]||''), attachment: normalizeOption(r[attI]||'-'),
-            angle: normalizeOption(r[angI]||'-'), position: normalizeOption(r[posI]||'-'), setIndex: Number(r[sI]||1),
-            warmup: Number(r[warmI]||0)>0, weight: Number(r[wI]||0), repsSelf: Number(r[rsI]||0),
-            repsAssist: Number(r[raI]||0), durationSec: Number(r[durI]||0), note: r[noteI]||'',
-            oneRM: Number(r[oneI]||0)
-          });
+    const recomputeExercise = (workoutId, exercise) => {
+      const key = getExerciseKey(workoutId, exercise.id);
+      const signature = exercise.sets.map((set) => `${set.weight ?? ''}|${set.reps ?? ''}`).join('::');
+      const cached = oneRmMemo.get(key);
+      if (cached && cached.signature === signature) {
+        cached.values.forEach((val, idx) => {
+          exercise.sets[idx].oneRM = val;
         });
-
-        Object.entries(groups).forEach(([key, items])=>{
-          const [date, part] = key.split('|');
-          const exNames = Array.from(new Set(items.map(it=> it.exercise)));
-          const maxSet = Math.max(0, ...items.map(it=> it.setIndex||0));
-          const exs = exNames.map(name=>{
-            const any = items.find(it=> it.exercise===name) || {};
-            const cleanedName = cleanupExercises([{name, parts:[]}])[0]?.name || name;
-            return { name: cleanedName, eq:any.equipment||'', att:any.attachment||'-', ang:any.angle||'-', pos:any.position||'-' };
-          });
-          const sets = [];
-          for(let s=1; s<=Math.max(1, maxSet); s++){
-            const set = { warm:false, oneHand:false, items: exNames.map(()=> ({ w:0,reps:0,assist:0,sec:0,note:'',oneRM:0 })) };
-            exNames.forEach((name, i)=>{
-              const it = items.find(it=> it.exercise===name && it.setIndex===s);
-              if(it){
-                set.warm = set.warm || !!it.warmup;
-                set.items[i] = { w:it.weight, reps:it.repsSelf, assist:it.repsAssist, sec:it.durationSec||0, note:it.note, oneRM: it.durationSec>0?0:(it.oneRM||calc1RM(it.weight,it.repsSelf)) };
-              }
-            });
-            sets.push(set);
-          }
-          state.workouts.push({ id:'w_'+Date.now()+Math.random(), date, blocks:[{ part, exs, sets }] });
-        });
-
-        persist(); alert('インポート完了'); if(location.hash.startsWith(ROUTES.HISTORY)) renderHistory(); afterDataChanged();
-      };
-      reader.readAsText(file);
-    }
-
-    function parseCSV(text){
-      const rows = []; let i=0, field='', row=[], inQ=false;
-      while(i<text.length){
-        const c=text[i++];
-        if(inQ){ if(c=== '"'){ if(text[i]==='"'){ field+='"'; i++; } else { inQ=false; } } else { field+=c; } }
-        else { if(c===','){ row.push(field); field=''; } else if(c==='"'){ inQ=true; } else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; } else if(c!=='\r'){ field+=c; } }
+        return;
       }
-      if(field.length || row.length){ row.push(field); rows.push(row); }
-      return rows;
-    }
+      const values = exercise.sets.map((set) => compute1RM(set.weight, set.reps));
+      values.forEach((val, idx) => {
+        exercise.sets[idx].oneRM = val;
+      });
+      oneRmMemo.set(key, { signature, values });
+    };
 
-    (function setupKeyboardSafe(){
-      if (window.visualViewport) {
-        const vv = window.visualViewport;
-        const update = ()=>{
-          const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-          document.documentElement.style.setProperty('--kb', kb + 'px');
-          document.body.classList.toggle('kb-open', kb > 80);
-        };
-        vv.addEventListener('resize', update);
-        vv.addEventListener('scroll', update);
-        window.addEventListener('orientationchange', ()=> setTimeout(update, 300));
-        update();
-      }
-      const ensureVisible = (el)=>{
-        try { el.scrollIntoView({ block:'center', behavior:'smooth' }); } catch {}
-      };
-      document.addEventListener('focusin', (e)=>{
-        const el = e.target;
-        if (el.matches('input, textarea, select')) {
-          ensureVisible(el);
-          setTimeout(()=> ensureVisible(el), 220);
-        }
+    const recomputeAll = () => {
+      appData.workouts.forEach((workout) => {
+        workout.exercises.forEach((exercise) => recomputeExercise(workout.id, exercise));
       });
-    })();
+      appData.currentWorkout.exercises.forEach((exercise) => recomputeExercise(appData.currentWorkout.id, exercise));
+    };
+    recomputeAll();
 
-    async function confirmAction(message){
-      const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
-      const card = document.createElement('div'); card.className='modal-card bg-white rounded-2xl p-4 shadow-soft border';
-      card.innerHTML = `
-        <div class="text-sm text-gray-700 mb-3">${escapeHtml(message)}</div>
-        <div class="flex justify-end gap-2">
-          <button class="px-3 py-2 rounded-xl bg-white border">キャンセル</button>
-          <button class="px-3 py-2 rounded-xl bg-gray-900 text-white">OK</button>
-        </div>`;
-      bg.appendChild(card); document.body.appendChild(bg);
-      return new Promise(resolve=>{
-        const [btnCancel, btnOk] = card.querySelectorAll('button');
-        const cleanup = ()=> bg.remove();
-        btnCancel.onclick = ()=> { cleanup(); resolve(false); };
-        btnOk.onclick = ()=> { cleanup(); resolve(true); };
-        bg.addEventListener('click', e=> { if(e.target===bg){ cleanup(); resolve(false); } });
-      });
-    }
-    async function promptModal(message){
-      const bg = document.createElement('div'); bg.className='modal-bg flex items-center justify-center z-50';
-      const card = document.createElement('div'); card.className='modal-card bg-white rounded-2xl p-4 shadow-soft border w-[92vw] max-w-md';
-      card.innerHTML = `
-        <div class="text-sm text-gray-700 mb-2">${escapeHtml(message)}</div>
-        <input type="text" class="w-full border rounded px-3 py-2 mb-3" />
-        <div class="flex justify-end gap-2">
-          <button class="px-3 py-2 rounded-xl bg-white border">キャンセル</button>
-          <button class="px-3 py-2 rounded-xl bg-gray-900 text-white">OK</button>
-        </div>`;
-      bg.appendChild(card); document.body.appendChild(bg);
-      const [ipt] = card.getElementsByTagName('input');
-      ipt.focus();
-      return new Promise(resolve=>{
-        const [btnCancel, btnOk] = card.querySelectorAll('button');
-        const cleanup = ()=> bg.remove();
-        btnCancel.onclick = ()=> { cleanup(); resolve(null); };
-        btnOk.onclick = ()=> { const v = ipt.value.trim(); cleanup(); resolve(v||null); };
-      });
-    }
-    function bindGlobalUI(){
-      $$('.tab-btn').forEach(btn=> btn.onclick = ()=> { location.hash = btn.getAttribute('data-route'); });
-      const exportBtn = $('#btn-export-csv');
-      if(exportBtn) exportBtn.onclick = exportCSV;
-      const importInp = $('#input-import-csv');
-      if(importInp) importInp.addEventListener('change', e=> {
-        const f = e.target.files && e.target.files[0]; if(f) importCSV(f); e.target.value='';
-      });
-      const clearBtn = $('#btn-clear-data');
-      if(clearBtn) clearBtn.onclick = async ()=>{
-        if(await confirmAction('本当に全データを削除しますか？（元に戻せません）')){
-          localStorage.removeItem(K_LISTS);
-          localStorage.removeItem(K_WORKOUTS);
-          localStorage.removeItem(K_INPROG);
-          initData(); persist(); renderRoute(); afterDataChanged();
-        }
-      };
-      const chooseBtn = $('#bk-choose');
-      if(chooseBtn){ chooseBtn.onclick = ()=> alert('OPFSに自動保存します。iCloudへは「今すぐバックアップ」を使い、共有シートからFiles(iCloud Drive)に保存してください。'); }
-      const nowBtn = $('#bk-now');
-      if(nowBtn){ nowBtn.onclick = async ()=> { await backupNow(true); const c=store.get(K_BACKUPCFG, {}); const elLast=document.getElementById('bk-last'); if(elLast){ elLast.textContent = c.lastAt ? new Date(c.lastAt).toLocaleString() : '-'; } }; }
-      const restoreBtn = $('#bk-restore');
-      if(restoreBtn){ restoreBtn.onclick = async ()=> { await restoreFromFile(); }; }
-    }
+    /*** router ***/
+    let currentRoute = ROUTES.HOME;
 
-    (async function boot(){
-      await migrateAllIfNeeded();
-      await requestPersistence();
-      initData();
-      bindGlobalUI();
-      startAutoBackupTicker();
-      if(!location.hash) location.hash = ROUTES.HOME;
+    const parseHash = (hash) => {
+      const normalized = (hash || '').replace(/^#/, '').trim().toLowerCase();
+      if (!normalized) return ROUTES.HOME;
+      if (!ROUTE_VALUES.has(normalized)) return ROUTES.HOME;
+      return normalized;
+    };
+
+    const navigate = (route) => {
+      currentRoute = route;
       renderRoute();
-    })();
+      updateTabState();
+    };
+
+    window.addEventListener('hashchange', () => {
+      const route = parseHash(location.hash);
+      navigate(route);
+    });
+
+    /*** chart manager ***/
+    const createChartManager = (canvas) => {
+      const chart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '推定1RM',
+            data: [],
+            borderColor: '#1d4ed8',
+            backgroundColor: 'rgba(29, 78, 216, 0.15)',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { ticks: { color: '#1f2937' } },
+            y: {
+              ticks: { color: '#1f2937' },
+              beginAtZero: true
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#1f2937', font: { weight: '600' } } }
+          }
+        }
+      });
+      return {
+        update(labels, values) {
+          chart.data.labels = labels;
+          chart.data.datasets[0].data = values;
+          chart.update();
+        }
+      };
+    };
+
+    let historyChartCanvas = null;
+    let historyChartManager = null;
+
+    /*** render helpers ***/
+    const appRoot = document.getElementById('app');
+
+    const updateTabState = () => {
+      document.querySelectorAll('.tab-button').forEach((tab) => {
+        const route = tab.getAttribute('data-route');
+        if (route === currentRoute) {
+          tab.classList.add('text-blue-600');
+        } else {
+          tab.classList.remove('text-blue-600');
+        }
+      });
+    };
+
+    const setHash = (route) => {
+      if (location.hash.replace('#', '') !== route) {
+        location.hash = route;
+      } else {
+        navigate(route);
+      }
+    };
+
+    const bindTabs = () => {
+      document.querySelectorAll('.tab-button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const route = btn.getAttribute('data-route');
+          if (ROUTE_VALUES.has(route)) setHash(route);
+        });
+      });
+    };
+
+    const renderRoute = () => {
+      if (!appRoot) return;
+      appRoot.replaceChildren();
+      if (currentRoute === ROUTES.HOME) renderHome();
+      else if (currentRoute === ROUTES.HISTORY) renderHistory();
+      else if (currentRoute === ROUTES.SETTINGS) renderSettings();
+      else if (currentRoute === ROUTES.WORKOUT) renderWorkout();
+      else renderHome();
+    };
+
+    const createCard = (titleText, body) => {
+      return createElem('section', {
+        className: 'bg-white rounded-2xl shadow-sm border border-slate-200/70 p-5 mb-6',
+        children: [
+          createElem('header', { className: 'flex items-center justify-between mb-4', children: [
+            createElem('h2', { className: 'text-lg font-bold text-slate-800', textContent: titleText })
+          ] }),
+          body
+        ]
+      });
+    };
+
+    /*** actions ***/
+    const ensureExerciseCatalog = (name) => {
+      if (!name) return;
+      if (!appData.settings.exerciseCatalog.includes(name)) {
+        appData.settings.exerciseCatalog.push(name);
+      }
+    };
+
+    const addExercise = async () => {
+      const catalog = [...appData.settings.exerciseCatalog];
+      catalog.sort((a, b) => a.localeCompare(b, 'ja'));
+      const choice = await pickFromList('種目を選択', [...catalog, '新規追加']);
+      if (!choice) return;
+      let exerciseName = choice;
+      if (choice === '新規追加') {
+        exerciseName = await promptText('新しい種目名');
+        if (!exerciseName) return;
+      }
+      ensureExerciseCatalog(exerciseName);
+      const newExercise = {
+        id: `ex-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+        name: exerciseName,
+        sets: [createEmptySet()]
+      };
+      appData.currentWorkout.exercises.push(newExercise);
+      recomputeExercise(appData.currentWorkout.id, newExercise);
+      persist();
+      renderRoute();
+    };
+
+    const createEmptySet = () => ({ weight: null, reps: null, oneRM: null, note: '' });
+
+    const addSet = (exerciseId) => {
+      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
+      if (!exercise) return;
+      exercise.sets.push(createEmptySet());
+      recomputeExercise(appData.currentWorkout.id, exercise);
+      persist();
+      renderRoute();
+    };
+
+    const updateSetField = (exerciseId, setIndex, field, value) => {
+      const exercise = appData.currentWorkout.exercises.find((ex) => ex.id === exerciseId);
+      if (!exercise) return;
+      const set = exercise.sets[setIndex];
+      if (!set) return;
+      if (field === 'weight' || field === 'reps') {
+        const num = safeNumber(value);
+        set[field] = num === null ? null : num;
+      } else if (field === 'note') {
+        set[field] = value;
+      }
+      recomputeExercise(appData.currentWorkout.id, exercise);
+      persist();
+    };
+
+    const deleteExercise = async (exerciseId) => {
+      if (!(await confirmAction('この種目を削除しますか？'))) return;
+      appData.currentWorkout.exercises = appData.currentWorkout.exercises.filter((ex) => ex.id !== exerciseId);
+      persist();
+      renderRoute();
+    };
+
+    const finishWorkout = async () => {
+      if (!appData.currentWorkout.exercises.length) return;
+      const confirmed = await confirmAction('現在のワークアウトを完了として保存しますか？');
+      if (!confirmed) return;
+      const workoutCopy = cloneDeep(appData.currentWorkout);
+      workoutCopy.id = `wo-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+      workoutCopy.completedAt = Date.now();
+      workoutCopy.exercises.forEach((exercise) => recomputeExercise(workoutCopy.id, exercise));
+      appData.workouts.unshift(workoutCopy);
+      appData.currentWorkout = {
+        id: `current-${Date.now()}`,
+        startedAt: Date.now(),
+        exercises: []
+      };
+      persist();
+      renderRoute();
+    };
+
+    const deleteWorkout = async (workoutId) => {
+      const ok = await confirmAction('選択した履歴を削除しますか？');
+      if (!ok) return;
+      appData.workouts = appData.workouts.filter((wk) => wk.id !== workoutId);
+      persist();
+      renderRoute();
+    };
+
+    const clearAllData = async () => {
+      const ok = await confirmAction('すべてのデータを初期化します。よろしいですか？');
+      if (!ok) return;
+      storage.clearNamespace();
+      resetData();
+      renderRoute();
+    };
+
+    const changeUnit = (unit) => {
+      appData.settings.unit = unit;
+      persist();
+      renderRoute();
+    };
+
+    const exportData = () => {
+      const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = createElem('a', { attrs: { href: url, download: 'muscle-app-backup.json' } });
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    };
+
+    const importData = async (file) => {
+      if (!file) return;
+      const text = await file.text();
+      try {
+        const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== 'object') throw new Error('形式が正しくありません');
+        appData = { ...createInitialData(), ...parsed };
+        recomputeAll();
+        persist();
+        renderRoute();
+      } catch (err) {
+        pushError(`読み込みに失敗しました: ${err.message}`);
+      }
+    };
+
+    /*** route renderers ***/
+    const renderHome = () => {
+      const workout = appData.currentWorkout;
+      const cardBody = createElem('div');
+      const headerInfo = createElem('div', { className: 'text-sm text-slate-600 mb-4', textContent: `開始: ${formatDate(workout.startedAt)}` });
+      cardBody.append(headerInfo);
+      if (!workout.exercises.length) {
+        cardBody.append(createElem('p', { className: 'text-slate-600 text-sm', textContent: '種目を追加して記録を開始しましょう。' }));
+      } else {
+        workout.exercises.forEach((exercise) => {
+          const exCard = createElem('div', { className: 'border border-slate-200 rounded-xl p-4 mb-4 bg-slate-50/60' });
+          const exHeader = createElem('div', { className: 'flex items-center justify-between mb-3' });
+          const deleteBtn = createElem('button', { className: 'text-xs font-semibold text-red-600 underline decoration-dotted', textContent: '削除', attrs: { type: 'button' } });
+          deleteBtn.addEventListener('click', () => deleteExercise(exercise.id));
+          exHeader.append(
+            createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: exercise.name }),
+            deleteBtn
+          );
+          exCard.append(exHeader);
+          const table = createElem('div', { className: 'space-y-3' });
+          exercise.sets.forEach((set, index) => {
+            const row = createElem('div', { className: 'grid grid-cols-1 sm:grid-cols-4 gap-3 items-end' });
+            const weightWrap = createElem('label', { className: 'flex flex-col text-sm font-semibold text-slate-700 gap-1' });
+            const weightInput = createElem('input', { className: 'input-base', attrs: { type: 'number', inputmode: 'decimal', min: '0' }, value: set.weight ?? '' });
+            weightInput.addEventListener('input', (event) => {
+              updateSetField(exercise.id, index, 'weight', event.target.value);
+              renderRoute();
+            });
+            weightWrap.append(createElem('span', { textContent: `重量 (${appData.settings.unit})` }), weightInput);
+            const repsWrap = createElem('label', { className: 'flex flex-col text-sm font-semibold text-slate-700 gap-1' });
+            const repsInput = createElem('input', { className: 'input-base', attrs: { type: 'number', inputmode: 'numeric', min: '0' }, value: set.reps ?? '' });
+            repsInput.addEventListener('input', (event) => {
+              updateSetField(exercise.id, index, 'reps', event.target.value);
+              renderRoute();
+            });
+            repsWrap.append(createElem('span', { textContent: '回数' }), repsInput);
+            const noteWrap = createElem('label', { className: 'flex flex-col text-sm font-semibold text-slate-700 gap-1 sm:col-span-2' });
+            const noteInput = createElem('textarea', { className: 'input-base min-h-[2.5rem]', attrs: { rows: '2' }, textContent: set.note || '' });
+            noteInput.addEventListener('input', (event) => {
+              updateSetField(exercise.id, index, 'note', event.target.value);
+            });
+            noteWrap.append(createElem('span', { textContent: 'メモ' }), noteInput);
+            const oneRmLabel = createElem('p', { className: 'text-sm text-slate-600 sm:col-span-4', textContent: set.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -' });
+            row.append(weightWrap, repsWrap, noteWrap, oneRmLabel);
+            table.append(row);
+          });
+          const addSetBtn = createElem('button', { className: 'btn-muted mt-3 px-3 py-2 rounded-lg text-sm font-semibold', textContent: 'セットを追加', attrs: { type: 'button' } });
+          addSetBtn.addEventListener('click', () => addSet(exercise.id));
+          exCard.append(table, addSetBtn);
+          cardBody.append(exCard);
+        });
+      }
+      const actions = createElem('div', { className: 'flex flex-col sm:flex-row gap-3 mt-4' });
+      const addExerciseBtn = createElem('button', { className: 'btn-primary px-4 py-3 rounded-xl text-sm font-semibold flex-1', textContent: '種目を追加', attrs: { type: 'button' } });
+      addExerciseBtn.addEventListener('click', addExercise);
+      const finishBtn = createElem('button', { className: 'btn-muted px-4 py-3 rounded-xl text-sm font-semibold flex-1', textContent: '完了して履歴へ', attrs: { type: 'button' } });
+      finishBtn.addEventListener('click', finishWorkout);
+      actions.append(addExerciseBtn, finishBtn);
+      cardBody.append(actions);
+      appRoot.append(createCard('現在のワークアウト', cardBody));
+    };
+
+    const renderHistory = () => {
+      const cardBody = createElem('div');
+      if (!appData.workouts.length) {
+        cardBody.append(createElem('p', { className: 'text-sm text-slate-600', textContent: '履歴はまだありません。' }));
+      } else {
+        const list = createElem('div', { className: 'space-y-4' });
+        appData.workouts.forEach((workout) => {
+          const item = createElem('article', { className: 'border border-slate-200 rounded-xl p-4 bg-white/60' });
+          const header = createElem('div', { className: 'flex items-center justify-between mb-3' });
+          const deleteBtn = createElem('button', { className: 'text-xs text-red-600 font-semibold underline decoration-dotted', textContent: '削除', attrs: { type: 'button' } });
+          deleteBtn.addEventListener('click', () => deleteWorkout(workout.id));
+          header.append(
+            createElem('div', { className: 'text-sm text-slate-700', textContent: formatDate(workout.completedAt || workout.startedAt) }),
+            deleteBtn
+          );
+          item.append(header);
+          workout.exercises.forEach((exercise) => {
+            const exerciseBlock = createElem('div', { className: 'mb-3' });
+            exerciseBlock.append(createElem('h4', { className: 'text-base font-semibold text-slate-800', textContent: exercise.name }));
+            const setsList = createElem('ul', { className: 'mt-2 space-y-2' });
+            exercise.sets.forEach((set, index) => {
+              const info = `#${index + 1} 重量: ${set.weight ?? '-'}${appData.settings.unit} / 回数: ${set.reps ?? '-'} / 推定1RM: ${set.oneRM ?? '-'}${set.note ? ' / ' + set.note : ''}`;
+              setsList.append(createElem('li', { className: 'text-sm text-slate-700 bg-slate-100 rounded-lg px-3 py-2', textContent: info }));
+            });
+            const trendBtn = createElem('button', { className: 'mt-1 text-xs text-blue-700 underline decoration-dotted', textContent: '推移を表示', attrs: { type: 'button' } });
+            trendBtn.addEventListener('click', () => {
+              appData.historyView.exerciseName = exercise.name;
+              renderRoute();
+            });
+            exerciseBlock.append(setsList, trendBtn);
+            item.append(exerciseBlock);
+          });
+          list.append(item);
+        });
+        cardBody.append(list);
+      }
+      if (!historyChartCanvas) {
+        historyChartCanvas = createElem('canvas');
+        historyChartManager = createChartManager(historyChartCanvas);
+      }
+      const chartContainer = createElem('div', { className: 'mt-6 h-64 relative' });
+      chartContainer.append(historyChartCanvas);
+      cardBody.append(chartContainer);
+      appRoot.append(createCard('ワークアウト履歴', cardBody));
+      const exerciseName = appData.historyView.exerciseName;
+      if (exerciseName) {
+        const dataset = [];
+        appData.workouts.slice().reverse().forEach((workout) => {
+          workout.exercises.filter((ex) => ex.name === exerciseName).forEach((exercise) => {
+            const best = Math.max(...exercise.sets.map((set) => Number(set.oneRM) || 0));
+            dataset.push({ date: workout.completedAt || workout.startedAt, value: best });
+          });
+        });
+        const labels = dataset.map((d) => formatDate(d.date));
+        const values = dataset.map((d) => d.value);
+        historyChartManager.update(labels, values);
+      } else {
+        historyChartManager.update([], []);
+      }
+    };
+
+    const renderWorkout = () => {
+      const cardBody = createElem('div');
+      if (!appData.workouts.length) {
+        cardBody.append(createElem('p', { className: 'text-sm text-slate-600', textContent: '保存済みのワークアウトはありません。' }));
+      } else {
+        const latest = appData.workouts[0];
+        cardBody.append(createElem('p', { className: 'text-sm text-slate-600 mb-3', textContent: `最新の完了日時: ${formatDate(latest.completedAt || latest.startedAt)}` }));
+        latest.exercises.forEach((exercise) => {
+          const block = createElem('div', { className: 'border border-slate-200 rounded-xl p-4 mb-3 bg-slate-50/60' });
+          block.append(createElem('h3', { className: 'text-base font-semibold text-slate-800 mb-2', textContent: exercise.name }));
+          const list = createElem('ul', { className: 'space-y-2' });
+          exercise.sets.forEach((set, idx) => {
+            list.append(createElem('li', { className: 'text-sm text-slate-700 bg-white rounded-lg px-3 py-2 border border-slate-200', textContent: `#${idx + 1} 重量:${set.weight ?? '-'}${appData.settings.unit} / 回数:${set.reps ?? '-'} / 推定1RM:${set.oneRM ?? '-'}` }));
+          });
+          block.append(list);
+          cardBody.append(block);
+        });
+      }
+      appRoot.append(createCard('最新のワークアウト', cardBody));
+    };
+
+    const renderSettings = () => {
+      const cardBody = createElem('div', { className: 'space-y-6' });
+      const unitSection = createElem('div', { className: 'space-y-3' });
+      unitSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '単位設定' }));
+      const unitOptions = ['kg', 'lb'];
+      const unitWrap = createElem('div', { className: 'flex gap-3' });
+      unitOptions.forEach((unit) => {
+        const label = createElem('label', { className: 'inline-flex items-center gap-2 text-sm text-slate-700 font-semibold' });
+        const input = createElem('input', { attrs: { type: 'radio', name: 'unit', value: unit } });
+        if (appData.settings.unit === unit) input.checked = true;
+        input.addEventListener('change', () => changeUnit(unit));
+        label.append(input, createElem('span', { textContent: unit }));
+        unitWrap.append(label);
+      });
+      unitSection.append(unitWrap);
+      cardBody.append(unitSection);
+
+      const catalogSection = createElem('div', { className: 'space-y-3' });
+      catalogSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '登録済み種目' }));
+      const list = createElem('ul', { className: 'space-y-2' });
+      appData.settings.exerciseCatalog.forEach((name) => {
+        list.append(createElem('li', { className: 'text-sm text-slate-700 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200', textContent: name }));
+      });
+      catalogSection.append(list);
+      cardBody.append(catalogSection);
+
+      const importExportSection = createElem('div', { className: 'space-y-3' });
+      importExportSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: 'バックアップ' }));
+      const exportBtn = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'エクスポート', attrs: { type: 'button' } });
+      exportBtn.addEventListener('click', exportData);
+      const importLabel = createElem('label', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-2 w-fit cursor-pointer' });
+      importLabel.append(createElem('span', { textContent: 'インポート' }));
+      const input = createElem('input', { attrs: { type: 'file', accept: 'application/json' } });
+      input.classList.add('hidden');
+      input.addEventListener('change', (event) => {
+        const file = event.target.files?.[0];
+        importData(file);
+        event.target.value = '';
+      });
+      importLabel.append(input);
+      importExportSection.append(createElem('div', { className: 'flex gap-3', children: [exportBtn, importLabel] }));
+      cardBody.append(importExportSection);
+
+      const dangerSection = createElem('div', { className: 'space-y-3' });
+      dangerSection.append(createElem('h3', { className: 'text-base font-semibold text-red-700', textContent: 'データ初期化' }));
+      const clearBtn = createElem('button', { className: 'bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'すべて削除', attrs: { type: 'button' } });
+      clearBtn.addEventListener('click', clearAllData);
+      dangerSection.append(clearBtn);
+      cardBody.append(dangerSection);
+
+      appRoot.append(createCard('設定', cardBody));
+    };
+
+    /*** bootstrap ***/
+    bindTabs();
+    setHash(parseHash(location.hash));
+  })();
   </script>
 </body>
 </html>
