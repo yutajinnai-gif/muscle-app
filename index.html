@@ -679,17 +679,23 @@
       const blob = new Blob([serializeAll()], {type:'application/json'});
       const fileName = `workout_backup_${todayISO()}.json`;
 
-      try{
-        if (navigator.storage && navigator.storage.getDirectory){
+      const canUseOPFS = typeof window !== 'undefined'
+        && typeof navigator !== 'undefined'
+        && window.isSecureContext
+        && navigator.storage
+        && typeof navigator.storage.getDirectory === 'function';
+
+      if (canUseOPFS) {
+        try {
           const root = await navigator.storage.getDirectory();
           const handle = await root.getFileHandle('workout_backup.json', { create:true });
           const ws = await handle.createWritable();
           await ws.write(blob);
           await ws.close();
           const c = store.get(K_BACKUPCFG, cfg); c.lastAt = new Date().toISOString(); store.set(K_BACKUPCFG, c);
+        } catch (e) {
+          console.error('Backup failed:', e);
         }
-      }catch(e){
-        console.error('Backup failed:', e);
       }
 
       if(navigator.share && interactive){
