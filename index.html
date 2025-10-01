@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>筋トレメモ | BUILD_TAG=UI-20251001</title>
+  <title>筋トレメモ | BUILD_TAG=FIX-20251001-REGRESSION</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -120,6 +120,8 @@
     };
 
     const safeNumber = (value) => {
+      if (value === null || value === undefined) return null;
+      if (typeof value === 'string' && value.trim() === '') return null;
       const num = Number(value);
       return Number.isFinite(num) ? num : null;
     };
