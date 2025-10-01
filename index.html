@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20240502-MODAL</title>
+  <title>BUILD_TAG=RENDER-20240509</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -135,7 +135,7 @@
 
     /*** error banner ***/
     const errorRoot = document.getElementById('error-root');
-    const errorState = { logs: [], expanded: false };
+    const errorState = { logs: [], expanded: false, rollback: null };
 
     const renderErrorBanner = () => {
       if (!errorRoot) return;
@@ -146,16 +146,36 @@
       }
       errorRoot.classList.remove('hidden');
       const container = createElem('div', { className: 'bg-red-900/90 text-red-50 px-4 py-3 shadow-lg border-b border-red-300' });
-      const header = createElem('div', { className: 'flex items-center justify-between gap-2' });
+      const header = createElem('div', { className: 'flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between' });
+      const title = createElem('div', { className: 'font-semibold', textContent: 'アプリでエラーが発生しました' });
+      const actionWrap = createElem('div', { className: 'flex items-center gap-3' });
       const toggleBtn = createElem('button', {
         className: 'text-sm underline decoration-dotted',
         textContent: errorState.expanded ? '閉じる' : '詳細',
         attrs: { type: 'button' }
       });
-      header.append(
-        createElem('div', { className: 'font-semibold', textContent: 'アプリでエラーが発生しました' }),
-        toggleBtn
-      );
+      actionWrap.append(toggleBtn);
+      if (typeof errorState.rollback === 'function') {
+        const rollbackBtn = createElem('button', {
+          className: 'text-sm font-semibold underline decoration-dotted text-red-100 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-200',
+          textContent: '直前操作を取り消す',
+          attrs: { type: 'button' }
+        });
+        rollbackBtn.addEventListener('click', () => {
+          const handler = errorState.rollback;
+          errorState.rollback = null;
+          renderErrorBanner();
+          if (handler) {
+            try {
+              handler();
+            } catch (err) {
+              pushError(`ロールバックに失敗しました: ${err.message || err}`);
+            }
+          }
+        });
+        actionWrap.append(rollbackBtn);
+      }
+      header.append(title, actionWrap);
       const logList = createElem('pre', { className: 'mt-2 text-xs bg-red-950/40 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap' });
       logList.textContent = errorState.logs.map((log, idx) => `#${idx + 1}\n${log}`).join('\n\n');
       if (!errorState.expanded) logList.classList.add('hidden');
@@ -169,6 +189,17 @@
 
     const pushError = (message) => {
       errorState.logs.push(message);
+      renderErrorBanner();
+    };
+
+    const showRecoverableError = (message, rollback) => {
+      errorState.logs.push(message);
+      errorState.rollback = typeof rollback === 'function' ? rollback : null;
+      renderErrorBanner();
+    };
+
+    const clearRecoverableError = () => {
+      errorState.rollback = null;
       renderErrorBanner();
     };
 
@@ -421,25 +452,80 @@
     };
     recomputeAll();
 
-    /*** router ***/
-    let currentRoute = ROUTES.HOME;
-
-    const parseHash = (hash) => {
-      const normalized = (hash || '').replace(/^#/, '').trim().toLowerCase();
+    /*** router & state ***/
+    const parseRoute = (hash) => {
+      const normalized = (hash || '').trim();
       if (!normalized) return ROUTES.HOME;
-      if (!ROUTE_VALUES.has(normalized)) return ROUTES.HOME;
-      return normalized;
+      const matched = normalized.match(/^#\/?([a-z0-9_-]+)$/i);
+      const route = matched ? matched[1].toLowerCase() : '';
+      if (!route) return ROUTES.HOME;
+      if (!ROUTE_VALUES.has(route)) return ROUTES.HOME;
+      return route;
     };
 
-    const navigate = (route) => {
-      currentRoute = route;
-      renderRoute();
-      updateTabState();
+    const buildHash = (route) => `#/${route}`;
+
+    let appState = { route: parseRoute(location.hash) };
+    let lastStableState = { ...appState };
+    let suppressHashEvent = false;
+    let renderQueued = false;
+
+    const requestRender = () => {
+      if (renderQueued) return;
+      renderQueued = true;
+      queueMicrotask(() => {
+        renderQueued = false;
+        render(appState);
+      });
+    };
+
+    const syncHashToRoute = (route) => {
+      const target = buildHash(route);
+      if (location.hash !== target) {
+        suppressHashEvent = true;
+        location.hash = target;
+      }
+    };
+
+    const applyRoute = (route) => {
+      const normalized = ROUTE_VALUES.has(route) ? route : ROUTES.HOME;
+      const previousState = { ...appState };
+      const nextState = { ...appState, route: normalized };
+      try {
+        appState = nextState;
+        render(appState);
+        lastStableState = { ...appState };
+        clearRecoverableError();
+      } catch (err) {
+        appState = previousState;
+        syncHashToRoute(previousState.route);
+        showRecoverableError(`画面の更新に失敗しました: ${err.message || err}`, () => {
+          appState = { ...lastStableState };
+          syncHashToRoute(lastStableState.route);
+          render(appState);
+        });
+      }
+    };
+
+    const setHash = (route) => {
+      const normalized = ROUTE_VALUES.has(route) ? route : ROUTES.HOME;
+      const target = buildHash(normalized);
+      if (location.hash === target) {
+        applyRoute(normalized);
+        return;
+      }
+      suppressHashEvent = true;
+      location.hash = target;
+      applyRoute(normalized);
     };
 
     window.addEventListener('hashchange', () => {
-      const route = parseHash(location.hash);
-      navigate(route);
+      if (suppressHashEvent) {
+        suppressHashEvent = false;
+        return;
+      }
+      const route = parseRoute(location.hash);
+      applyRoute(route);
     });
 
     /*** chart manager ***/
@@ -488,10 +574,26 @@
     /*** render helpers ***/
     const appRoot = document.getElementById('app');
 
-    const updateTabState = () => {
+    const heading = createElem('h1', { className: 'mb-6 text-2xl font-bold text-slate-900', textContent: '筋トレメモ' });
+    const viewContainer = createElem('div', { className: 'space-y-6' });
+    const viewHosts = {
+      [ROUTES.HOME]: createElem('div', { className: 'space-y-6', attrs: { 'data-view': ROUTES.HOME } }),
+      [ROUTES.HISTORY]: createElem('div', { className: 'space-y-6', attrs: { 'data-view': ROUTES.HISTORY } }),
+      [ROUTES.SETTINGS]: createElem('div', { className: 'space-y-6', attrs: { 'data-view': ROUTES.SETTINGS } }),
+      [ROUTES.WORKOUT]: createElem('div', { className: 'space-y-6', attrs: { 'data-view': ROUTES.WORKOUT } })
+    };
+    Object.values(viewHosts).forEach((host) => {
+      host.classList.add('hidden');
+      viewContainer.append(host);
+    });
+    if (appRoot) {
+      appRoot.append(heading, viewContainer);
+    }
+
+    const updateTabState = (activeRoute) => {
       document.querySelectorAll('.tab-button').forEach((tab) => {
         const route = tab.getAttribute('data-route');
-        if (route === currentRoute) {
+        if (route === activeRoute) {
           tab.classList.add('text-blue-600', 'font-bold');
           tab.classList.remove('text-slate-800');
         } else {
@@ -501,14 +603,6 @@
       });
     };
 
-    const setHash = (route) => {
-      if (location.hash.replace('#', '') !== route) {
-        location.hash = route;
-      } else {
-        navigate(route);
-      }
-    };
-
     const bindTabs = () => {
       document.querySelectorAll('.tab-button').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -516,18 +610,6 @@
           if (ROUTE_VALUES.has(route)) setHash(route);
         });
       });
-    };
-
-    const renderRoute = () => {
-      if (!appRoot) return;
-      appRoot.replaceChildren();
-      const heading = createElem('h1', { className: 'mb-6 text-2xl font-bold text-slate-900', textContent: '筋トレメモ' });
-      appRoot.append(heading);
-      if (currentRoute === ROUTES.HOME) renderHome();
-      else if (currentRoute === ROUTES.HISTORY) renderHistory();
-      else if (currentRoute === ROUTES.SETTINGS) renderSettings();
-      else if (currentRoute === ROUTES.WORKOUT) renderWorkout();
-      else renderHome();
     };
 
     const createCard = (titleText, body) => {
@@ -575,7 +657,7 @@
       appData.currentWorkout.exercises.push(newExercise);
       recomputeExercise(appData.currentWorkout.id, newExercise);
       persist();
-      renderRoute();
+      requestRender();
     };
 
     const createEmptySet = () => ({ weight: null, reps: null, oneRM: null, note: '' });
@@ -586,7 +668,7 @@
       exercise.sets.push(createEmptySet());
       recomputeExercise(appData.currentWorkout.id, exercise);
       persist();
-      renderRoute();
+      requestRender();
     };
 
     const updateSetField = (exerciseId, setIndex, field, value) => {
@@ -634,14 +716,14 @@
       exercise.sets.splice(setIndex + 1, 0, cloned);
       recomputeExercise(appData.currentWorkout.id, exercise);
       persist();
-      renderRoute();
+      requestRender();
     };
 
     const deleteExercise = async (exerciseId) => {
       if (!(await confirmAction('この種目を削除しますか？'))) return;
       appData.currentWorkout.exercises = appData.currentWorkout.exercises.filter((ex) => ex.id !== exerciseId);
       persist();
-      renderRoute();
+      requestRender();
     };
 
     const finishWorkout = async () => {
@@ -659,7 +741,7 @@
         exercises: []
       };
       persist();
-      renderRoute();
+      requestRender();
     };
 
     const deleteWorkout = async (workoutId) => {
@@ -667,7 +749,7 @@
       if (!ok) return;
       appData.workouts = appData.workouts.filter((wk) => wk.id !== workoutId);
       persist();
-      renderRoute();
+      requestRender();
     };
 
     const clearAllData = async () => {
@@ -675,13 +757,13 @@
       if (!ok) return;
       storage.clearNamespace();
       resetData();
-      renderRoute();
+      requestRender();
     };
 
     const changeUnit = (unit) => {
       appData.settings.unit = unit;
       persist();
-      renderRoute();
+      requestRender();
     };
 
     const exportData = () => {
@@ -703,14 +785,15 @@
         appData = { ...createInitialData(), ...parsed };
         recomputeAll();
         persist();
-        renderRoute();
+        requestRender();
       } catch (err) {
         pushError(`読み込みに失敗しました: ${err.message}`);
       }
     };
 
     /*** route renderers ***/
-    const renderHome = () => {
+    const buildHomeView = () => {
+      const nodes = [];
       const workout = appData.currentWorkout;
       const cardBody = createElem('div', { className: 'space-y-6' });
       const headerInfo = createElem('p', {
@@ -769,13 +852,13 @@
             const weightInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' }, value: set.weight ?? '' });
             weightInput.addEventListener('input', (event) => {
               updateSetField(exercise.id, index, 'weight', event.target.value);
-              renderRoute();
+              requestRender();
             });
             const weightField = createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput);
             const repsInput = createElem('input', { className: 'input-base text-slate-900 placeholder-slate-400', attrs: { type: 'number', inputmode: 'numeric', min: '0', step: '1' }, value: set.reps ?? '' });
             repsInput.addEventListener('input', (event) => {
               updateSetField(exercise.id, index, 'reps', event.target.value);
-              renderRoute();
+              requestRender();
             });
             const repsField = createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput);
             const noteInput = createElem('textarea', { className: 'input-base min-h-[3rem] text-slate-900 placeholder-slate-400', attrs: { rows: '2', placeholder: 'フォームや感覚をメモ' }, textContent: set.note || '' });
@@ -801,10 +884,12 @@
       finishBtn.addEventListener('click', finishWorkout);
       actions.append(addExerciseBtn, finishBtn);
       cardBody.append(actions);
-      appRoot.append(createCard('現在のワークアウト', cardBody));
+      nodes.push(createCard('現在のワークアウト', cardBody));
+      return nodes;
     };
 
-    const renderHistory = () => {
+    const buildHistoryView = () => {
+      const nodes = [];
       const cardBody = createElem('div', { className: 'space-y-6' });
       if (!appData.workouts.length) {
         cardBody.append(createElem('p', { className: 'text-sm text-slate-800', textContent: '履歴はまだありません。' }));
@@ -850,7 +935,7 @@
             const trendBtn = createElem('button', { className: 'text-xs font-semibold text-blue-700 underline decoration-dotted hover:text-blue-800', textContent: '推移を表示', attrs: { type: 'button' } });
             trendBtn.addEventListener('click', () => {
               appData.historyView.exerciseName = exercise.name;
-              renderRoute();
+              requestRender();
             });
             exerciseBlock.append(setsList, trendBtn);
             item.append(exerciseBlock);
@@ -866,7 +951,6 @@
       const chartContainer = createElem('div', { className: 'mt-6 h-64 relative' });
       chartContainer.append(historyChartCanvas);
       cardBody.append(chartContainer);
-      appRoot.append(createCard('ワークアウト履歴', cardBody));
       const exerciseName = appData.historyView.exerciseName;
       if (exerciseName) {
         const dataset = [];
@@ -882,9 +966,12 @@
       } else {
         historyChartManager.update([], []);
       }
+      nodes.push(createCard('ワークアウト履歴', cardBody));
+      return nodes;
     };
 
-    const renderWorkout = () => {
+    const buildWorkoutView = () => {
+      const nodes = [];
       const cardBody = createElem('div', { className: 'space-y-6' });
       if (!appData.workouts.length) {
         cardBody.append(createElem('p', { className: 'text-sm text-slate-800', textContent: '保存済みのワークアウトはありません。' }));
@@ -922,10 +1009,12 @@
           cardBody.append(block);
         });
       }
-      appRoot.append(createCard('最新のワークアウト', cardBody));
+      nodes.push(createCard('最新のワークアウト', cardBody));
+      return nodes;
     };
 
-    const renderSettings = () => {
+    const buildSettingsView = () => {
+      const nodes = [];
       const cardBody = createElem('div', { className: 'space-y-6' });
       const unitSection = createElem('div', { className: 'space-y-3' });
       unitSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '単位設定' }));
@@ -975,12 +1064,44 @@
       dangerSection.append(clearBtn);
       cardBody.append(dangerSection);
 
-      appRoot.append(createCard('設定', cardBody));
+      nodes.push(createCard('設定', cardBody));
+      return nodes;
+    };
+
+    const viewBuilders = {
+      [ROUTES.HOME]: buildHomeView,
+      [ROUTES.HISTORY]: buildHistoryView,
+      [ROUTES.SETTINGS]: buildSettingsView,
+      [ROUTES.WORKOUT]: buildWorkoutView
+    };
+
+    const render = (state) => {
+      if (!appRoot) return;
+      const route = ROUTE_VALUES.has(state.route) ? state.route : ROUTES.HOME;
+      updateTabState(route);
+      Object.entries(viewHosts).forEach(([key, host]) => {
+        if (key === route) {
+          host.classList.remove('hidden');
+        } else {
+          host.classList.add('hidden');
+        }
+      });
+      const builder = viewBuilders[route] || viewBuilders[ROUTES.HOME];
+      const result = builder ? builder() : [];
+      const nodes = Array.isArray(result) ? result : (result ? [result] : []);
+      const host = viewHosts[route] || viewHosts[ROUTES.HOME];
+      host.replaceChildren(...nodes);
     };
 
     /*** bootstrap ***/
     bindTabs();
-    setHash(parseHash(location.hash));
+    syncHashToRoute(appState.route);
+    try {
+      render(appState);
+      lastStableState = { ...appState };
+    } catch (err) {
+      pushError(`初期化に失敗しました: ${err.message || err}`);
+    }
   })();
   </script>
 </body>
