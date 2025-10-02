@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20240523-SELF-CHECK-EXT</title>
+  <title>BUILD_TAG=UI-DENSE-20240527</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -15,13 +15,13 @@
     .modal-card { max-width: 22rem; width: 100%; background: white; border-radius: 1rem; padding: 1.5rem; box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25); }
     .error-banner { position: fixed; inset-inline: 0; top: 0; z-index: 50; }
     .tab-nav { position: fixed; bottom: 0; inset-inline: 0; background: white; border-top: 1px solid rgba(51, 65, 85, 0.2); padding: 0.5rem 0; display: flex; justify-content: space-around; }
-    .main-content { padding-bottom: 4.5rem; padding-top: 4.5rem; }
+    .main-content { padding-bottom: 7.5rem; padding-top: 4.5rem; }
     .btn-primary { background-color: #1f2937; color: white; }
     .btn-primary:hover { background-color: #111827; }
     .btn-muted { background-color: white; color: #1f2937; border: 1px solid rgba(30,41,59,0.3); }
-    .input-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.6rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; min-height: 44px; }
+    .input-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.45rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; min-height: 40px; }
     .input-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
-    .select-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.6rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; min-height: 44px; }
+    .select-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.45rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; min-height: 40px; }
     .select-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
     #pwa-toast-root { position: fixed; inset-inline: 0; bottom: 4.5rem; display: flex; justify-content: center; padding: 0 1rem 1.25rem; pointer-events: none; z-index: 60; }
     #pwa-toast-root.hidden { display: none; }
@@ -29,11 +29,18 @@
     .pwa-toast-card button { background: white; color: #111827; font-weight: 700; border-radius: 9999px; padding: 0.4rem 0.95rem; font-size: 0.9rem; }
     .provisional-highlight { background-color: #fef3c7 !important; border-color: #fbbf24 !important; }
     .provisional-warning { background-color: #fef3c7; border: 1px solid #fbbf24; color: #78350f; }
+    .action-bar-root { position: fixed; inset-inline: 0; bottom: 4.75rem; z-index: 45; pointer-events: none; }
+    .action-bar-host { pointer-events: auto; }
+    details summary { list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
   </style>
 </head>
 <body class="text-slate-900 overflow-x-hidden">
   <div id="error-root" class="error-banner hidden"></div>
   <div id="pwa-toast-root" class="hidden"></div>
+  <div id="action-bar-root" class="action-bar-root hidden px-4 sm:px-6">
+    <div id="action-bar-host" class="action-bar-host mx-auto max-w-3xl"></div>
+  </div>
   <main id="app" class="max-w-3xl mx-auto main-content px-4 sm:px-6"></main>
   <nav class="tab-nav">
     <button data-route="home" class="tab-button flex-1 text-sm font-semibold text-slate-800">ホーム</button>
@@ -227,6 +234,31 @@
       return el;
     };
 
+    const actionBarRoot = document.getElementById('action-bar-root');
+    const actionBarHost = document.getElementById('action-bar-host');
+    let scheduledActionBarContent = null;
+    const scheduleActionBar = (nodes) => {
+      if (!Array.isArray(nodes) || !nodes.length) {
+        scheduledActionBarContent = null;
+        return;
+      }
+      scheduledActionBarContent = nodes;
+    };
+    const applyScheduledActionBar = (route) => {
+      if (!actionBarRoot || !actionBarHost) {
+        scheduledActionBarContent = null;
+        return;
+      }
+      if (route === ROUTES.WORKOUT && scheduledActionBarContent && scheduledActionBarContent.length) {
+        actionBarHost.replaceChildren(...scheduledActionBarContent);
+        actionBarRoot.classList.remove('hidden');
+      } else {
+        actionBarHost.replaceChildren();
+        actionBarRoot.classList.add('hidden');
+      }
+      scheduledActionBarContent = null;
+    };
+
     const createInfoIcon = (tooltip) => {
       return createElem('span', {
         className: 'inline-flex items-center justify-center w-5 h-5 rounded-full border border-blue-600 text-[0.625rem] font-bold text-blue-700 cursor-help',
@@ -236,15 +268,15 @@
     };
 
     const createFieldWrapper = (labelText, tooltip, description, inputEl) => {
-      const wrapper = createElem('label', { className: 'flex flex-col gap-2 text-sm font-semibold text-slate-900' });
-      const header = createElem('div', { className: 'flex items-center gap-2' });
+      const wrapper = createElem('label', { className: 'flex flex-col gap-1 text-sm font-semibold leading-snug text-slate-900' });
+      const header = createElem('div', { className: 'flex items-center gap-1 text-sm font-semibold leading-snug' });
       header.append(
         createElem('span', { textContent: labelText }),
         createInfoIcon(tooltip)
       );
       wrapper.append(header);
       if (description) {
-        wrapper.append(createElem('span', { className: 'text-xs font-normal text-slate-800', textContent: description }));
+        wrapper.append(createElem('span', { className: 'text-xs font-normal leading-snug text-slate-600', textContent: description }));
       }
       wrapper.append(inputEl);
       return wrapper;
@@ -3030,6 +3062,17 @@
     };
 
     const supersetFocusRegistry = new Map();
+    const setCollapseMemory = new Map();
+    const buildSetCollapseKey = (supersetId, groupId, index) => `${supersetId}:${groupId ?? 'solo'}:${index}`;
+    const getSetCollapsedState = (key, defaultValue = false) => {
+      if (!setCollapseMemory.has(key)) {
+        setCollapseMemory.set(key, Boolean(defaultValue));
+      }
+      return Boolean(setCollapseMemory.get(key));
+    };
+    const setSetCollapsedState = (key, collapsed) => {
+      setCollapseMemory.set(key, Boolean(collapsed));
+    };
 
     const registerSupersetFocusInput = (supersetId, input) => {
       if (!input) return;
@@ -3275,7 +3318,7 @@
         if (rawValue === '' || rawValue === null || rawValue === undefined) {
           exercise[field] = null;
           persist();
-          return { success: true, rerender: false };
+          return { success: true, rerender: field === 'intervalSeconds' };
         }
         const num = safeNumber(rawValue);
         if (num === null) {
@@ -3284,7 +3327,7 @@
         }
         exercise[field] = num;
         persist();
-        return { success: true, rerender: false };
+        return { success: true, rerender: field === 'intervalSeconds' };
       }
       if (field === 'performedOn') {
         exercise[field] = rawValue || '';
@@ -4128,9 +4171,9 @@
     };
 
     const createExerciseMetaPanel = (exercise) => {
-      const metaPanel = createElem('div', { className: 'space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4' });
+      const metaPanel = createElem('div', { className: 'space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4' });
 
-      const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+      const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2' });
       const equipmentControl = createOptionControl({
         field: 'equipment',
         valueKey: exercise.equipmentKey,
@@ -4149,7 +4192,7 @@
       equipmentRow.append(equipmentField, attachmentField);
       metaPanel.append(equipmentRow);
 
-      const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+      const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2' });
       const angleInput = createElem('input', {
         className: 'input-base text-slate-900 placeholder-slate-400',
         attrs: { type: 'number', inputmode: 'decimal', min: '0', max: '180', step: '1', placeholder: '例: 30' },
@@ -4177,7 +4220,7 @@
       angleRow.append(angleField, positionField);
       metaPanel.append(angleRow);
 
-      const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
+      const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2' });
       const performedOnInput = createElem('input', {
         className: 'input-base text-slate-900',
         attrs: { type: 'date', min: '2000-01-01', max: '2099-12-31', step: '1' },
@@ -4331,7 +4374,7 @@
       nodes.push(createCard('クイックスタート', quickBody));
 
       const workout = appData.currentWorkout;
-      const cardBody = createElem('div', { className: 'space-y-6' });
+      const cardBody = createElem('div', { className: 'space-y-5' });
       const partSelector = (() => {
         const section = createElem('section', { className: 'space-y-2' });
         section.append(
@@ -4425,10 +4468,10 @@
             exercise: slot.exerciseId ? getExerciseById(slot.exerciseId) : null
           }));
           const roundCount = Math.max(0, ...slotExercises.map(({ exercise }) => (exercise ? exercise.sets.length : 0)));
-          const supCard = createElem('section', { className: 'space-y-4 rounded-2xl border border-slate-300 bg-white p-5 shadow-sm' });
-          const headerRow = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between' });
+          const supCard = createElem('section', { className: 'space-y-3 rounded-2xl border border-slate-300 bg-white p-4 shadow-sm' });
+          const headerRow = createElem('div', { className: 'flex flex-col gap-2 md:flex-row md:items-center md:justify-between' });
           const toggleBtn = createElem('button', {
-            className: 'flex items-center gap-2 text-left text-lg font-bold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
+            className: 'flex items-center gap-2 text-left text-lg font-bold leading-snug text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
             attrs: { type: 'button' }
           });
           const caret = createElem('span', { className: 'text-xl text-slate-600', textContent: superset.collapsed ? '▸' : '▾' });
@@ -4444,7 +4487,7 @@
           );
           supCard.append(headerRow);
 
-          const controls = createElem('div', { className: 'flex flex-wrap items-center gap-2' });
+          const controls = createElem('div', { className: 'flex flex-wrap items-center gap-2 text-sm leading-snug' });
           const restInput = createElem('input', {
             className: 'input-base w-24 text-sm',
             attrs: { type: 'number', min: '10', max: '600', step: '5' },
@@ -4491,9 +4534,9 @@
               timerBtn.textContent = `休憩 ${display}秒`;
             }
           });
-          const restLabel = createElem('label', { className: 'flex w-28 flex-col text-xs font-semibold text-slate-700' });
+          const restLabel = createElem('label', { className: 'flex w-28 flex-col gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500 leading-snug' });
           restLabel.append(
-            createElem('span', { className: 'mb-1 text-[0.65rem] uppercase tracking-wide text-slate-500', textContent: '休憩プリセット' }),
+            createElem('span', { className: 'text-slate-600', textContent: '休憩プリセット' }),
             restInput
           );
           const addRoundBtn = createElem('button', {
@@ -4517,12 +4560,12 @@
           controls.append(timerBtn, restLabel, addRoundBtn, duplicateBtn, deleteBtn);
           supCard.append(controls);
 
-          const body = createElem('div', { className: 'space-y-5' });
+          const body = createElem('div', { className: 'space-y-3' });
           if (superset.collapsed) body.classList.add('hidden');
           if (!slotExercises.some(({ exercise }) => exercise)) {
             body.append(
               createElem('p', {
-                className: 'text-sm text-slate-700',
+                className: 'text-sm leading-snug text-slate-700',
                 textContent: 'このスーパーセットにはまだ種目が設定されていません。'
               })
             );
@@ -4530,23 +4573,23 @@
             if (roundCount <= 0) {
               body.append(
                 createElem('p', {
-                  className: 'text-sm text-slate-700',
+                  className: 'text-sm leading-snug text-slate-700',
                   textContent: 'セットを追加して記録を開始しましょう。'
                 })
               );
             } else {
-              const roundsContainer = createElem('div', { className: 'space-y-4' });
+              const roundsContainer = createElem('div', { className: 'space-y-3' });
               for (let index = 0; index < roundCount; index += 1) {
                 const round = createElem('div', {
-                  className: 'space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm',
+                  className: 'space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm',
                   attrs: { title: '長押しでこのラウンドを複製できます' }
                 });
                 registerLongPress(round, () => duplicateSupersetRound(superset.id, index));
-                const roundHeader = createElem('div', { className: 'flex items-center justify-between text-sm font-semibold text-slate-800' });
+                const roundHeader = createElem('div', { className: 'flex items-center justify-between text-sm font-semibold leading-snug text-slate-800' });
                 roundHeader.append(createElem('span', { textContent: `ラウンド ${index + 1}` }));
                 const canRemove = slotExercises.some(({ exercise }) => exercise && exercise.sets.length > 1);
                 const removeBtn = createElem('button', {
-                  className: 'text-xs font-semibold text-red-700 underline decoration-dotted hover:text-red-800',
+                  className: 'text-xs font-semibold leading-snug text-red-700 underline decoration-dotted hover:text-red-800',
                   attrs: { type: 'button' },
                   textContent: 'ラウンド削除'
                 });
@@ -4560,7 +4603,7 @@
                 round.append(roundHeader);
 
                 const slotGrid = createElem('div', {
-                  className: superset.mode === WORKOUT_ENTRY_MODES.single ? 'space-y-4' : 'grid gap-4 sm:grid-cols-2'
+                  className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2'
                 });
                 const weightInputs = [];
                 const repsInputs = [];
@@ -4569,22 +4612,41 @@
                   const slotCard = createElem('div', {
                     className:
                       superset.mode === WORKOUT_ENTRY_MODES.single
-                        ? 'space-y-3 rounded-xl border border-slate-200 bg-white p-4'
-                        : 'space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4'
+                        ? 'rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden'
+                        : 'rounded-2xl border border-slate-200 bg-slate-50 shadow-sm overflow-hidden'
                   });
-                  const slotHeader = createElem('div', { className: 'flex items-center justify-between' });
                   const slotTitle = superset.mode === WORKOUT_ENTRY_MODES.single
                     ? exercise
                       ? exercise.name
                       : '未設定'
                     : `${slot.groupId ?? '種目'}: ${exercise ? exercise.name : '未設定'}`;
-                  slotHeader.append(
-                    createElem('span', {
-                      className: 'text-sm font-semibold text-slate-900',
-                      textContent: slotTitle
-                    })
-                  );
-                  slotCard.append(slotHeader);
+                  const collapseKey = buildSetCollapseKey(superset.id, slot.groupId, index);
+                  const baseSet = exercise?.sets?.[index];
+                  const hasWeightValue = baseSet && baseSet.weight !== null && baseSet.weight !== undefined && baseSet.weight !== '';
+                  const hasRepsValue = baseSet && baseSet.reps !== null && baseSet.reps !== undefined && baseSet.reps !== '';
+                  const defaultCollapsed = Boolean(hasWeightValue || hasRepsValue);
+                  const isCollapsed = getSetCollapsedState(collapseKey, defaultCollapsed);
+                  const details = createElem('details', { className: 'group' });
+                  if (!isCollapsed) {
+                    details.setAttribute('open', '');
+                  }
+                  const summary = createElem('summary', {
+                    className: 'flex items-center justify-between gap-3 px-3 py-2 text-sm font-semibold leading-snug text-slate-900 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500'
+                  });
+                  const summaryContent = createElem('div', { className: 'flex flex-col gap-0.5 leading-snug' });
+                  const summaryTitle = createElem('span', { textContent: slotTitle });
+                  const summaryStats = createElem('span', {
+                    className: 'text-xs font-medium leading-snug text-slate-500',
+                    textContent: exercise ? '' : '未設定'
+                  });
+                  summaryContent.append(summaryTitle, summaryStats);
+                  const summaryCaret = createElem('span', {
+                    className: 'text-lg text-slate-500 transition-transform duration-150',
+                    textContent: isCollapsed ? '▸' : '▾'
+                  });
+                  summary.append(summaryContent, summaryCaret);
+                  details.append(summary);
+                  const detailBody = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 px-3 pb-3 pt-2 md:grid-cols-2' });
                   const exerciseControl = createOptionControl({
                     field: 'exercise',
                     valueKey: exercise?.nameKey ?? null,
@@ -4592,23 +4654,26 @@
                     placeholder: '種目を選択',
                     onCommit: (value) => setSupersetSlotExercise(superset.id, slot.groupId, value)
                   });
-                  slotCard.append(
-                    createFieldWrapper('種目', 'この枠で記録する種目を選択します。', '自由入力を有効にすると候補にない名称も追加できます。', exerciseControl)
-                  );
+                  const exerciseField = createFieldWrapper('種目', 'この枠で記録する種目を選択します。', '自由入力を有効にすると候補にない名称も追加できます。', exerciseControl);
+                  exerciseField.classList.add('md:col-span-2');
+                  detailBody.append(exerciseField);
                   if (!exercise) {
-                    slotCard.append(
-                      createElem('p', {
-                        className: 'text-xs text-slate-600',
-                        textContent: '種目を設定すると入力できるようになります。'
-                      })
-                    );
+                    const helper = createElem('p', {
+                      className: 'md:col-span-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold leading-snug text-slate-600',
+                      textContent: '種目を設定すると入力できるようになります。'
+                    });
+                    detailBody.append(helper);
                   } else {
                     const set = exercise.sets[index];
                     let oneRmLabel = null;
                     const provisionalWarning = createElem('p', {
-                      className: 'provisional-warning hidden rounded-lg px-3 py-2 text-xs font-semibold',
+                      className: 'provisional-warning hidden rounded-lg px-3 py-2 text-xs font-semibold leading-snug md:col-span-2',
                       textContent: '暫定値のため集計と推定1RMには含まれません。'
                     });
+                    const formatSummaryPart = (value, suffix = '') => {
+                      if (value === null || value === undefined || value === '') return '--';
+                      return `${value}${suffix}`;
+                    };
                     const syncProvisionalVisuals = () => {
                       const context = findExerciseContext(exercise.id);
                       const currentSet = context?.exercise?.sets?.[index] || set;
@@ -4617,9 +4682,18 @@
                       applyProvisionalHighlight(repsInput, status.missingReps);
                       if (status.isProvisional) {
                         provisionalWarning.classList.remove('hidden');
+                        summaryStats.classList.add('text-amber-600');
                       } else {
                         provisionalWarning.classList.add('hidden');
+                        summaryStats.classList.remove('text-amber-600');
                       }
+                      const contextForSummary = context?.exercise?.sets?.[index] || set;
+                      const summaryParts = [
+                        formatSummaryPart(contextForSummary?.weight, appData.settings.unit),
+                        formatSummaryPart(contextForSummary?.reps, '回'),
+                        formatSummaryPart(exercise.intervalSeconds, '秒')
+                      ];
+                      summaryStats.textContent = summaryParts.join(' / ');
                     };
                     const updateOneRmLabel = () => {
                       if (!oneRmLabel) return;
@@ -4649,9 +4723,8 @@
                       apply: (el, value) => applyInputValue(el, value),
                       sync: syncDerivedState
                     });
-                    slotCard.append(
-                      createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput)
-                    );
+                    const weightField = createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput);
+                    detailBody.append(weightField);
                     weightInputs.push(weightInput);
 
                     const repsInput = createElem('input', {
@@ -4671,7 +4744,8 @@
                       apply: (el, value) => applyInputValue(el, value),
                       sync: syncDerivedState
                     });
-                    slotCard.append(createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput));
+                    const repsField = createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput);
+                    detailBody.append(repsField);
                     repsInputs.push(repsInput);
 
                     const noteInput = createElem('textarea', {
@@ -4691,17 +4765,33 @@
                       apply: (el, value) => applyInputValue(el, value),
                       sync: updateOneRmLabel
                     });
-                    slotCard.append(createFieldWrapper('セットメモ', '気づいたことや次回の課題を記録します。', 'フォームやRPEを自由に入力。', noteInput));
+                    const noteField = createFieldWrapper('セットメモ', '気づいたことや次回の課題を記録します。', 'フォームやRPEを自由に入力。', noteInput);
+                    noteField.classList.add('md:col-span-2');
+                    detailBody.append(noteField);
                     noteInputs.push(noteInput);
 
                     oneRmLabel = createElem('p', {
-                      className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800',
+                      className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium leading-snug text-slate-800 md:col-span-2',
                       textContent: set?.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -'
                     });
                     syncDerivedState();
-                    slotCard.append(oneRmLabel);
-                    slotCard.append(provisionalWarning);
+                    detailBody.append(oneRmLabel);
+                    detailBody.append(provisionalWarning);
                   }
+                  details.append(detailBody);
+                  details.addEventListener('toggle', () => {
+                    const collapsedNow = !details.open;
+                    setSetCollapsedState(collapseKey, collapsedNow);
+                    summaryCaret.textContent = collapsedNow ? '▸' : '▾';
+                  });
+                  details.addEventListener('focusin', () => {
+                    if (!details.open) {
+                      details.open = true;
+                      summaryCaret.textContent = '▾';
+                      setSetCollapsedState(collapseKey, false);
+                    }
+                  });
+                  slotCard.append(details);
                   slotGrid.append(slotCard);
                 });
                 weightInputs.forEach((input) => {
@@ -4723,14 +4813,14 @@
             }
 
             const metaGrid = createElem('div', {
-              className: superset.mode === WORKOUT_ENTRY_MODES.single ? 'space-y-4' : 'grid gap-4 sm:grid-cols-2'
+              className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2'
             });
             slotExercises.forEach(({ slot, exercise }) => {
               if (!exercise) return;
-              const wrapper = createElem('div', { className: 'space-y-3' });
+              const wrapper = createElem('div', { className: 'space-y-2 leading-snug' });
               wrapper.append(
                 createElem('h4', {
-                  className: 'text-sm font-semibold text-slate-900',
+                  className: 'text-sm font-semibold leading-snug text-slate-900',
                   textContent:
                     superset.mode === WORKOUT_ENTRY_MODES.single
                       ? exercise.name
@@ -4748,18 +4838,41 @@
           cardBody.append(supCard);
         });
       }
-      const actions = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row' });
       const addExerciseLabel = workout.entryMode === WORKOUT_ENTRY_MODES.single ? '種目を追加' : 'スーパーセットを追加';
-      const addExerciseBtn = createElem('button', {
-        className: 'btn-primary flex-1 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
-        textContent: addExerciseLabel,
-        attrs: { type: 'button' }
+      const latestSuperset = workout.supersets[workout.supersets.length - 1] || null;
+      const actionBarContainer = createElem('div', { className: 'pointer-events-auto mx-auto max-w-3xl' });
+      const actionBar = createElem('div', {
+        className: 'grid grid-cols-1 gap-2 rounded-2xl border border-slate-300 bg-white/95 p-2 shadow-xl backdrop-blur-sm sm:grid-cols-3'
       });
-      addExerciseBtn.addEventListener('click', addSuperset);
-      const finishBtn = createElem('button', { className: 'btn-muted flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500', textContent: '完了して履歴へ', attrs: { type: 'button' } });
-      finishBtn.addEventListener('click', finishWorkout);
-      actions.append(addExerciseBtn, finishBtn);
-      cardBody.append(actions);
+      const saveBtn = createElem('button', {
+        className: 'btn-primary w-full rounded-xl px-3 py-2 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
+        textContent: '保存',
+        attrs: { type: 'button', title: '完了して履歴へ' }
+      });
+      saveBtn.addEventListener('click', finishWorkout);
+      const addBtn = createElem('button', {
+        className: 'btn-muted w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
+        textContent: '追加',
+        attrs: { type: 'button', title: addExerciseLabel }
+      });
+      addBtn.addEventListener('click', addSuperset);
+      const duplicateBtn = createElem('button', {
+        className: 'btn-muted w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
+        textContent: '複製',
+        attrs: {
+          type: 'button',
+          title: latestSuperset ? `${latestSuperset.label} を複製` : '複製できるスーパーセットがありません。'
+        }
+      });
+      if (latestSuperset) {
+        duplicateBtn.addEventListener('click', () => duplicateSuperset(latestSuperset.id));
+      } else {
+        duplicateBtn.disabled = true;
+        duplicateBtn.classList.add('cursor-not-allowed', 'opacity-60');
+      }
+      actionBar.append(saveBtn, addBtn, duplicateBtn);
+      actionBarContainer.append(actionBar);
+      scheduleActionBar([actionBarContainer]);
       nodes.push(createCard('現在のワークアウト', cardBody, { headerNodes: [toggleContainer] }));
       return nodes;
     };
@@ -5232,6 +5345,7 @@
 
     const render = (state) => {
       optionControlSequence = 0;
+      scheduledActionBarContent = null;
       if (!appRoot) return;
       const route = ROUTE_VALUES.has(state.route) ? state.route : ROUTES.HOME;
       updateTabState(route);
@@ -5271,6 +5385,7 @@
       const result = builder ? builder() : [];
       const nodes = Array.isArray(result) ? result : (result ? [result] : []);
       host.replaceChildren(...nodes);
+      applyScheduledActionBar(route);
     };
 
     /*** bootstrap ***/
