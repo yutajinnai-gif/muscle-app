@@ -6,6 +6,85 @@
   <title>BUILD_TAG=FIX-UI-SINGLE-NO-AB-20240530</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
+  <script>
+    (function initErrorBanner() {
+      'use strict';
+      const BAR_ID = 'errbar';
+      const queue = [];
+
+      function ensureHost() {
+        const el = document.getElementById(BAR_ID);
+        if (!el) return null;
+        if (!el.dataset.ready) {
+          el.dataset.ready = '1';
+          el.classList.add('block');
+        }
+        return el;
+      }
+
+      function render(bar, payload) {
+        if (!bar) return;
+        const card = document.createElement('div');
+        card.className = 'pointer-events-auto bg-red-600 text-white shadow-lg shadow-red-900/40';
+        card.innerHTML = `
+          <div class="max-w-3xl mx-auto px-4 sm:px-6 py-3 text-sm font-semibold leading-snug flex flex-col gap-1">
+            <div>${payload.message}</div>
+            ${payload.detail ? `<pre class="text-xs font-mono whitespace-pre-wrap break-words text-red-100/90">${payload.detail}</pre>` : ''}
+          </div>
+        `;
+        bar.replaceChildren(card);
+      }
+
+      function flush() {
+        const bar = ensureHost();
+        if (!bar) return;
+        while (queue.length) {
+          render(bar, queue.shift());
+        }
+      }
+
+      window.showError = function showError(message, detail) {
+        const payload = {
+          message: typeof message === 'string' ? message : String(message ?? 'エラーが発生しました'),
+          detail: detail ? (typeof detail === 'string' ? detail : String(detail)) : ''
+        };
+        const bar = ensureHost();
+        if (!bar) {
+          queue.push(payload);
+          return;
+        }
+        render(bar, payload);
+      };
+
+      window.onerror = function onWindowError(message, source, lineno, colno, error) {
+        const parts = [];
+        if (source) parts.push(`${source}:${lineno ?? 0}:${colno ?? 0}`);
+        if (error && error.stack) {
+          parts.push(error.stack);
+        } else if (message) {
+          parts.push(String(message));
+        }
+        showError('予期しないエラーが発生しました', parts.join('\n'));
+        return false;
+      };
+
+      window.addEventListener('unhandledrejection', (event) => {
+        const reason = event?.reason;
+        const detail = typeof reason === 'string'
+          ? reason
+          : reason?.stack
+            ? reason.stack
+            : reason ? JSON.stringify(reason) : '';
+        showError('処理されていないPromise例外を検出しました', detail);
+      });
+
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        flush();
+      } else {
+        document.addEventListener('DOMContentLoaded', flush, { once: true });
+      }
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -23,6 +102,7 @@
     .input-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
     .select-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.45rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; min-height: 40px; }
     .select-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
+    #errbar { min-height: 0.25rem; }
     #pwa-toast-root { position: fixed; inset-inline: 0; bottom: 4.5rem; display: flex; justify-content: center; padding: 0 1rem 1.25rem; pointer-events: none; z-index: 60; }
     #pwa-toast-root.hidden { display: none; }
     .pwa-toast-card { pointer-events: auto; display: inline-flex; align-items: center; gap: 0.75rem; background: #111827; color: white; border-radius: 9999px; padding: 0.75rem 1.15rem; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.32); font-size: 0.95rem; font-weight: 600; }
@@ -36,6 +116,7 @@
   </style>
 </head>
 <body class="text-slate-900 overflow-x-hidden">
+  <div id="errbar" class="error-banner"></div>
   <div id="error-root" class="error-banner hidden"></div>
   <div id="pwa-toast-root" class="hidden"></div>
   <div id="action-bar-root" class="action-bar-root hidden px-4 sm:px-6">
@@ -53,6 +134,10 @@
     'use strict';
 
       const BUILD_TAG = 'FIX-UI-SINGLE-NO-AB-20240530';
+      const SAFE_MODE = true;
+      const SAFE_STORAGE_KEY = 'muscle-app.safe-mode.workout';
+      const SAFE_BOOT_TIMEOUT = 2000;
+      let safeModeServiceWorkerCleared = false;
 
     const IS_DEV = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(window.location.hostname);
     let initializationWarningCount = 0;
@@ -212,7 +297,23 @@
       });
     };
 
-    registerPwaFeatures();
+    const disableServiceWorkerOnce = () => {
+      if (safeModeServiceWorkerCleared || !SAFE_MODE || !('serviceWorker' in navigator)) {
+        return;
+      }
+      safeModeServiceWorkerCleared = true;
+      navigator.serviceWorker.getRegistrations?.().then((registrations) => {
+        registrations.forEach((registration) => {
+          registration.unregister().catch(() => {});
+        });
+      }).catch(() => {});
+    };
+
+    if (SAFE_MODE) {
+      disableServiceWorkerOnce();
+    } else {
+      registerPwaFeatures();
+    }
 
     /*** utils ***/
     const ROUTES = Object.freeze({
@@ -232,6 +333,406 @@
       if (opts.value !== undefined) el.value = opts.value;
       if (opts.children) opts.children.forEach(child => el.appendChild(child));
       return el;
+    };
+
+    const createSafeModeController = () => {
+      if (!SAFE_MODE) {
+        return {
+          mount() {},
+          onRenderSuccess() {},
+          onRenderFailure(error) {
+            if (error && typeof window.showError === 'function') {
+              window.showError('初期化に失敗しました', error.stack || String(error));
+            }
+          }
+        };
+      }
+
+      const createEmptySet = () => ({ weight: '', reps: '', seconds: '', rpe: '' });
+      const createDefaultState = () => ({
+        exerciseId: '',
+        equipment: '',
+        attachment: '',
+        angle: '',
+        position: '',
+        sets: [createEmptySet(), createEmptySet(), createEmptySet()]
+      });
+
+      const loadState = () => {
+        try {
+          const raw = localStorage.getItem(SAFE_STORAGE_KEY);
+          if (!raw) return createDefaultState();
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== 'object') return createDefaultState();
+          const base = createDefaultState();
+          return {
+            exerciseId: typeof parsed.exerciseId === 'string' ? parsed.exerciseId : base.exerciseId,
+            equipment: typeof parsed.equipment === 'string' ? parsed.equipment : base.equipment,
+            attachment: typeof parsed.attachment === 'string' ? parsed.attachment : base.attachment,
+            angle: typeof parsed.angle === 'string' ? parsed.angle : base.angle,
+            position: typeof parsed.position === 'string' ? parsed.position : base.position,
+            sets: Array.isArray(parsed.sets) && parsed.sets.length
+              ? parsed.sets.map((set) => ({
+                  weight: typeof set?.weight === 'string' ? set.weight : '',
+                  reps: typeof set?.reps === 'string' ? set.reps : '',
+                  seconds: typeof set?.seconds === 'string' ? set.seconds : '',
+                  rpe: typeof set?.rpe === 'string' ? set.rpe : ''
+                }))
+              : base.sets
+          };
+        } catch (error) {
+          if (typeof window.showError === 'function') {
+            window.showError('安全モードデータの読み込みに失敗しました', error?.stack || String(error));
+          }
+          return createDefaultState();
+        }
+      };
+
+      let state = null;
+      let root = null;
+      let shell = null;
+      let setHost = null;
+      let watchdog = null;
+      let fallbackShown = false;
+
+      const refs = {
+        exercise: null,
+        equipment: null,
+        attachment: null,
+        angle: null,
+        position: null,
+        addButton: null
+      };
+
+      const ensureState = () => {
+        if (!state) state = loadState();
+        return state;
+      };
+
+      const persist = () => {
+        try {
+          localStorage.setItem(SAFE_STORAGE_KEY, JSON.stringify(ensureState()));
+        } catch (error) {
+          if (typeof window.showError === 'function') {
+            window.showError('安全モードデータの保存に失敗しました', error?.stack || String(error));
+          }
+        }
+      };
+
+      const renderSets = () => {
+        if (!setHost) return;
+        const current = ensureState();
+        const rows = current.sets.map((set, index) => {
+          const row = createElem('div', {
+            className: 'rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-5 sm:py-4 flex flex-col gap-3'
+          });
+          const header = createElem('div', { className: 'flex items-center justify-between gap-3' });
+          const labelWrap = createElem('div', { className: 'flex items-center gap-2 text-sm font-semibold text-slate-700' });
+          labelWrap.append(
+            createElem('span', {
+              className: 'inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-800 text-white text-xs',
+              textContent: String(index + 1)
+            }),
+            createElem('span', { textContent: 'Set' })
+          );
+          const actionWrap = createElem('div', { className: 'flex items-center gap-2' });
+          const duplicateBtn = createElem('button', {
+            className: 'text-xs font-semibold text-slate-600 hover:text-slate-900 underline',
+            textContent: '複製',
+            attrs: { type: 'button', 'data-action': 'duplicate', 'data-index': String(index) }
+          });
+          const removeBtn = createElem('button', {
+            className: 'text-xs font-semibold text-red-600 hover:text-red-700',
+            textContent: '削除',
+            attrs: { type: 'button', 'data-action': 'remove', 'data-index': String(index) }
+          });
+          actionWrap.append(duplicateBtn, removeBtn);
+          header.append(labelWrap, actionWrap);
+
+          const grid = createElem('div', { className: 'grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm' });
+          const fields = [
+            { key: 'weight', label: '重量 (kg)', type: 'number', step: '0.5', placeholder: '0' },
+            { key: 'reps', label: '回数', type: 'number', step: '1', placeholder: '0' },
+            { key: 'seconds', label: '秒', type: 'number', step: '1', placeholder: '0' },
+            { key: 'rpe', label: 'RPE', type: 'number', step: '0.5', placeholder: '' }
+          ];
+          fields.forEach((field) => {
+            const label = createElem('label', { className: 'flex flex-col gap-1 text-sm font-semibold leading-snug text-slate-900' });
+            label.append(
+              createElem('span', { textContent: field.label }),
+              createElem('input', {
+                className: 'input-base',
+                attrs: {
+                  type: field.type,
+                  step: field.step,
+                  inputmode: field.type === 'number' ? 'decimal' : undefined,
+                  'data-field': field.key,
+                  'data-index': String(index),
+                  placeholder: field.placeholder
+                },
+                value: set[field.key] ?? ''
+              })
+            );
+            grid.append(label);
+          });
+          row.append(header, grid);
+          return row;
+        });
+        setHost.replaceChildren(...rows);
+      };
+
+      const addSet = () => {
+        const current = ensureState();
+        current.sets.push(createEmptySet());
+        renderSets();
+        persist();
+      };
+
+      const duplicateSet = (index) => {
+        const current = ensureState();
+        const source = current.sets[index];
+        if (!source) return;
+        current.sets.splice(index + 1, 0, { ...source });
+        renderSets();
+        persist();
+      };
+
+      const removeSet = (index) => {
+        const current = ensureState();
+        if (current.sets.length <= 1) {
+          current.sets[0] = createEmptySet();
+        } else {
+          current.sets.splice(index, 1);
+        }
+        renderSets();
+        persist();
+      };
+
+      const bindSetHost = () => {
+        if (!setHost) return;
+        setHost.addEventListener('click', (event) => {
+          const action = event.target?.dataset?.action;
+          const index = Number(event.target?.dataset?.index);
+          if (!Number.isInteger(index)) return;
+          if (action === 'duplicate') {
+            duplicateSet(index);
+          } else if (action === 'remove') {
+            removeSet(index);
+          }
+        });
+        setHost.addEventListener('input', (event) => {
+          const field = event.target?.dataset?.field;
+          const index = Number(event.target?.dataset?.index);
+          if (!field || !Number.isInteger(index)) return;
+          const current = ensureState();
+          if (!current.sets[index]) return;
+          current.sets[index][field] = event.target.value;
+          persist();
+        });
+      };
+
+      const syncField = (element, key) => {
+        if (!element) return;
+        element.value = ensureState()[key] ?? '';
+        const handler = (event) => {
+          ensureState()[key] = event.target.value;
+          persist();
+        };
+        const type = element.tagName === 'SELECT' ? 'change' : 'input';
+        element.addEventListener(type, handler);
+      };
+
+      const renderFallback = () => {
+        if (!shell || fallbackShown) return;
+        fallbackShown = true;
+        const fallback = createElem('div', {
+          className: 'safe-fallback bg-white rounded-2xl shadow-sm p-4 sm:p-6 flex flex-col gap-3'
+        });
+        fallback.append(
+          createElem('div', { className: 'text-lg font-bold text-slate-900', textContent: '安全モードで起動' }),
+          createElem('p', {
+            className: 'text-sm text-slate-600',
+            textContent: '初期化に失敗したため、安全モードのフォールバックUIを表示しています。'
+          }),
+          createElem('div', { className: 'flex flex-col sm:flex-row gap-2', children: [
+            createElem('a', {
+              className: 'btn-muted rounded-full px-4 py-2 text-center text-sm font-semibold',
+              textContent: '設定へ',
+              attrs: { href: '#/settings' }
+            }),
+            createElem('a', {
+              className: 'btn-muted rounded-full px-4 py-2 text-center text-sm font-semibold',
+              textContent: '履歴へ',
+              attrs: { href: '#/history' }
+            })
+          ] })
+        );
+        shell.append(fallback);
+      };
+
+      const startWatchdog = () => {
+        if (watchdog || !root) return;
+        watchdog = window.setTimeout(() => {
+          if (!root.dataset.fullAppReady) {
+            if (typeof window.showError === 'function') {
+              window.showError('Boot timeout', 'UIの描画が2秒以内に完了しませんでした');
+            }
+            renderFallback();
+          }
+        }, SAFE_BOOT_TIMEOUT);
+      };
+
+      const clearWatchdog = () => {
+        if (!watchdog) return;
+        window.clearTimeout(watchdog);
+        watchdog = null;
+      };
+
+      const highlightWorkoutTab = () => {
+        document.querySelectorAll('.tab-button').forEach((button) => {
+          if (button.dataset.route === 'workout') {
+            button.classList.add('text-blue-600', 'font-bold');
+            button.classList.remove('text-slate-800');
+          } else {
+            button.classList.remove('text-blue-600', 'font-bold');
+            button.classList.add('text-slate-800');
+          }
+        });
+      };
+
+      return {
+        mount(target) {
+          if (!target) {
+            if (typeof window.showError === 'function') {
+              window.showError('アプリのルート要素が見つかりません', 'id="app" が存在しないため安全モードを表示できません');
+            }
+            return;
+          }
+          if (shell) return;
+          root = target;
+          highlightWorkoutTab();
+          state = loadState();
+          shell = createElem('div', { className: 'safe-mode-shell flex flex-col gap-6 py-6 md:py-8' });
+
+          const headline = createElem('div', {
+            className: 'bg-white rounded-2xl shadow-sm px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between'
+          });
+          headline.append(
+            createElem('div', {
+              className: 'flex flex-col',
+              children: [
+                createElem('span', { className: 'text-xs font-semibold uppercase tracking-wide text-slate-500', textContent: '安全モード' }),
+                createElem('h1', { className: 'text-xl font-bold text-slate-900', textContent: 'ワークアウト記録' })
+              ]
+            }),
+            createElem('span', { className: 'text-xs text-slate-500', textContent: `BUILD: ${BUILD_TAG}` })
+          );
+
+          const exerciseSection = createElem('section', {
+            className: 'bg-white rounded-2xl shadow-sm p-4 sm:p-5 flex flex-col gap-4'
+          });
+          const exerciseLabel = createElem('label', {
+            className: 'flex flex-col gap-2 text-sm font-semibold leading-snug text-slate-900'
+          });
+          exerciseLabel.append(
+            createElem('span', { textContent: '種目を選択' }),
+            (() => {
+              const select = createElem('select', { className: 'select-base', attrs: { id: 'safe-exercise-select' } });
+              [
+                { value: '', label: '選択してください' },
+                { value: 'bench_press', label: 'ベンチプレス' },
+                { value: 'squat', label: 'スクワット' },
+                { value: 'deadlift', label: 'デッドリフト' },
+                { value: 'lat_pulldown', label: 'ラットプルダウン' },
+                { value: 'shoulder_press', label: 'ショルダープレス' }
+              ].forEach((option) => {
+                select.append(createElem('option', { attrs: { value: option.value }, textContent: option.label }));
+              });
+              refs.exercise = select;
+              return select;
+            })()
+          );
+          exerciseSection.append(exerciseLabel);
+
+          const metaSection = createElem('section', {
+            className: 'bg-white rounded-2xl shadow-sm p-4 sm:p-5 flex flex-col gap-4'
+          });
+          metaSection.append(
+            createElem('div', { className: 'text-sm font-semibold leading-snug text-slate-900', textContent: 'メタ情報' })
+          );
+          const metaGrid = createElem('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-3' });
+          const metaFields = [
+            { key: 'equipment', label: '器具', placeholder: '例：バーベル' },
+            { key: 'attachment', label: 'アタッチメント', placeholder: '例：ストレートバー' },
+            { key: 'angle', label: '角度', placeholder: '例：フラット' },
+            { key: 'position', label: 'ポジション', placeholder: '例：ラック1' }
+          ];
+          metaFields.forEach((field) => {
+            const label = createElem('label', { className: 'flex flex-col gap-1 text-sm font-semibold leading-snug text-slate-900' });
+            const input = createElem('input', {
+              className: 'input-base',
+              attrs: { id: `safe-${field.key}`, type: 'text', autocomplete: 'off', placeholder: field.placeholder }
+            });
+            refs[field.key] = input;
+            label.append(createElem('span', { textContent: field.label }), input);
+            metaGrid.append(label);
+          });
+          metaSection.append(metaGrid);
+
+          const setSection = createElem('section', {
+            className: 'bg-white rounded-2xl shadow-sm p-4 sm:p-5 flex flex-col gap-4'
+          });
+          const setHeader = createElem('div', { className: 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3' });
+          setHeader.append(
+            createElem('div', { className: 'text-sm font-semibold leading-snug text-slate-900', textContent: 'セットリスト' }),
+            (() => {
+              const wrap = createElem('div', { className: 'flex items-center gap-2' });
+              const button = createElem('button', {
+                className: 'btn-primary rounded-full px-4 py-2 text-sm font-semibold shadow-sm',
+                textContent: 'セットを追加',
+                attrs: { type: 'button', id: 'safe-add-set' }
+              });
+              refs.addButton = button;
+              wrap.append(button);
+              return wrap;
+            })()
+          );
+          setSection.append(setHeader);
+          setHost = createElem('div', { className: 'flex flex-col gap-3', attrs: { id: 'safe-set-host' } });
+          setSection.append(setHost);
+
+          shell.append(headline, exerciseSection, metaSection, setSection);
+          target.append(shell);
+
+          renderSets();
+          bindSetHost();
+          syncField(refs.exercise, 'exerciseId');
+          syncField(refs.equipment, 'equipment');
+          syncField(refs.attachment, 'attachment');
+          syncField(refs.angle, 'angle');
+          syncField(refs.position, 'position');
+          if (refs.addButton) {
+            refs.addButton.addEventListener('click', addSet);
+          }
+
+          startWatchdog();
+        },
+        onRenderSuccess() {
+          if (!root) return;
+          root.dataset.fullAppReady = '1';
+          clearWatchdog();
+          if (shell && shell.parentElement === root) {
+            shell.remove();
+          }
+        },
+        onRenderFailure(error) {
+          clearWatchdog();
+          if (error && typeof window.showError === 'function') {
+            window.showError('安全モードで起動しました', error.stack || String(error));
+          }
+          renderFallback();
+        }
+      };
     };
 
     const actionBarRoot = document.getElementById('action-bar-root');
@@ -929,12 +1430,18 @@
     const pushError = (message) => {
       errorState.logs.push(message);
       renderErrorBanner();
+      if (typeof window.showError === 'function') {
+        window.showError('アプリでエラーが発生しました', message);
+      }
     };
 
     const showRecoverableError = (message, rollback) => {
       errorState.logs.push(message);
       errorState.rollback = typeof rollback === 'function' ? rollback : null;
       renderErrorBanner();
+      if (typeof window.showError === 'function') {
+        window.showError('アプリでエラーが発生しました', message);
+      }
     };
 
     const clearRecoverableError = () => {
@@ -2004,7 +2511,7 @@
 
     const buildHash = (route) => `#/${route}`;
 
-    let appState = { route: parseRoute(location.hash) };
+    let appState = { route: SAFE_MODE ? ROUTES.WORKOUT : parseRoute(location.hash) };
     let lastStableState = { ...appState };
     let suppressHashEvent = false;
     let renderQueued = false;
@@ -2028,8 +2535,15 @@
 
     const applyRoute = (route) => {
       const normalized = ROUTE_VALUES.has(route) ? route : ROUTES.HOME;
+      const targetRoute = (() => {
+        if (!SAFE_MODE) return normalized;
+        if (normalized !== ROUTES.WORKOUT && typeof window.showError === 'function') {
+          window.showError('安全モードが有効です', `現在は記録画面のみ利用できます (要求: ${normalized})`);
+        }
+        return ROUTES.WORKOUT;
+      })();
       const previousState = { ...appState };
-      const nextState = { ...appState, route: normalized };
+      const nextState = { ...appState, route: targetRoute };
       try {
         appState = nextState;
         render(appState);
@@ -2048,6 +2562,14 @@
 
     const setHash = (route) => {
       const normalized = ROUTE_VALUES.has(route) ? route : ROUTES.HOME;
+      if (SAFE_MODE && normalized !== ROUTES.WORKOUT) {
+        if (typeof window.showError === 'function') {
+          window.showError('安全モードが有効です', `現在は記録画面のみ利用できます (要求: ${normalized})`);
+        }
+        syncHashToRoute(ROUTES.WORKOUT);
+        applyRoute(ROUTES.WORKOUT);
+        return;
+      }
       const target = buildHash(normalized);
       if (location.hash === target) {
         applyRoute(normalized);
@@ -2064,11 +2586,25 @@
         return;
       }
       const route = parseRoute(location.hash);
+      if (SAFE_MODE && route !== ROUTES.WORKOUT) {
+        if (typeof window.showError === 'function') {
+          window.showError('安全モードが有効です', `現在は記録画面のみ利用できます (要求: ${route})`);
+        }
+        syncHashToRoute(ROUTES.WORKOUT);
+        applyRoute(ROUTES.WORKOUT);
+        return;
+      }
       applyRoute(route);
     });
 
     /*** chart manager ***/
     const createChartManager = (canvas) => {
+      if (SAFE_MODE || typeof Chart === 'undefined' || !canvas) {
+        return {
+          update() {},
+          destroy() {}
+        };
+      }
       const chart = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
@@ -2126,7 +2662,7 @@
     };
 
     const ensureHistoryChartObserver = () => {
-      if (historyChartObserver) return;
+      if (historyChartObserver || SAFE_MODE || typeof IntersectionObserver === 'undefined') return;
       historyChartObserver = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
@@ -2145,6 +2681,8 @@
 
     /*** render helpers ***/
     const appRoot = document.getElementById('app');
+    const safeMode = createSafeModeController();
+    safeMode.mount(appRoot);
 
     const heading = createElem('h1', { className: 'mb-6 text-2xl font-bold text-slate-900', textContent: '筋トレメモ' });
     const viewContainer = createElem('div', { className: 'space-y-6' });
@@ -2179,6 +2717,13 @@
       document.querySelectorAll('.tab-button').forEach((btn) => {
         btn.addEventListener('click', () => {
           const route = btn.getAttribute('data-route');
+          if (SAFE_MODE && route !== ROUTES.WORKOUT) {
+            if (typeof window.showError === 'function') {
+              window.showError('安全モードが有効です', `現在は記録画面のみ利用できます (要求: ${route})`);
+            }
+            syncHashToRoute(ROUTES.WORKOUT);
+            return;
+          }
           if (ROUTE_VALUES.has(route)) setHash(route);
         });
       });
@@ -5309,6 +5854,17 @@
         };
 
         const runDiagnostics = () => {
+          if (SAFE_MODE) {
+            const result = {
+              status: 'warn',
+              summaryMessage: '安全モードでは自己診断をスキップしています',
+              entries: [],
+              labels: { warn: 'SKIP', pass: 'PASS', fail: 'FAIL' },
+              report: ''
+            };
+            applyResult(result);
+            return;
+          }
           const result = runSelfCheck();
           applyResult(result);
         };
@@ -5409,8 +5965,10 @@
     try {
       render(appState);
       lastStableState = { ...appState };
+      safeMode.onRenderSuccess();
     } catch (err) {
       pushError(`初期化に失敗しました: ${err.message || err}`);
+      safeMode.onRenderFailure(err);
     }
   })();
   </script>
