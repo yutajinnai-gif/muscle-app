@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=DIAG-20251002</title>
+  <title>BUILD_TAG=PWA-20240427</title>
+  <meta name="theme-color" content="#111827">
+  <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -19,10 +21,15 @@
     .btn-muted { background-color: white; color: #1f2937; border: 1px solid rgba(30,41,59,0.3); }
     .input-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.6rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; }
     .input-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
+    #pwa-toast-root { position: fixed; inset-inline: 0; bottom: 4.5rem; display: flex; justify-content: center; padding: 0 1rem 1.25rem; pointer-events: none; z-index: 60; }
+    #pwa-toast-root.hidden { display: none; }
+    .pwa-toast-card { pointer-events: auto; display: inline-flex; align-items: center; gap: 0.75rem; background: #111827; color: white; border-radius: 9999px; padding: 0.75rem 1.15rem; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.32); font-size: 0.95rem; font-weight: 600; }
+    .pwa-toast-card button { background: white; color: #111827; font-weight: 700; border-radius: 9999px; padding: 0.4rem 0.95rem; font-size: 0.9rem; }
   </style>
 </head>
 <body class="text-slate-900 overflow-x-hidden">
   <div id="error-root" class="error-banner hidden"></div>
+  <div id="pwa-toast-root" class="hidden"></div>
   <main id="app" class="max-w-3xl mx-auto main-content px-4 sm:px-6"></main>
   <nav class="tab-nav">
     <button data-route="home" class="tab-button flex-1 text-sm font-semibold text-slate-800">ホーム</button>
@@ -33,6 +40,157 @@
   <script>
   (function(){
     'use strict';
+
+    const BUILD_TAG = 'PWA-20240427';
+
+    let manifestObjectUrl = null;
+
+    const ensureManifest = () => {
+      const manifestLink = document.querySelector('#app-manifest');
+      if (!manifestLink) return;
+      if (manifestObjectUrl) {
+        URL.revokeObjectURL(manifestObjectUrl);
+        manifestObjectUrl = null;
+      }
+      const iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none"><rect width="512" height="512" rx="128" fill="#111827"/><path d="M140 364V148h70l46 96 46-96h70v216h-64V256l-52 112h-8l-52-112v108h-64Z" fill="#38bdf8"/></svg>';
+      const iconUrl = `data:image/svg+xml;utf8,${encodeURIComponent(iconSvg)}`;
+      const manifest = {
+        name: '筋トレメモ',
+        short_name: '筋トレメモ',
+        description: 'オフラインでも使える筋トレ記録アプリ',
+        start_url: '.',
+        display: 'standalone',
+        background_color: '#111827',
+        theme_color: '#111827',
+        lang: 'ja-JP',
+        orientation: 'portrait',
+        icons: [
+          { src: iconUrl, sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
+        ]
+      };
+      manifestObjectUrl = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/json' }));
+      manifestLink.setAttribute('href', manifestObjectUrl);
+    };
+
+    window.addEventListener('beforeunload', () => {
+      if (manifestObjectUrl) {
+        URL.revokeObjectURL(manifestObjectUrl);
+        manifestObjectUrl = null;
+      }
+    });
+
+    const createPwaToastController = () => {
+      const root = document.getElementById('pwa-toast-root');
+      if (!root) {
+        return {
+          showUpdatePrompt: () => {},
+          showStatus: () => {}
+        };
+      }
+
+      let hideTimer = null;
+
+      const clearTimer = () => {
+        if (hideTimer) {
+          clearTimeout(hideTimer);
+          hideTimer = null;
+        }
+      };
+
+      const hide = () => {
+        clearTimer();
+        root.classList.add('hidden');
+        root.innerHTML = '';
+      };
+
+      const show = (message, action) => {
+        clearTimer();
+        root.innerHTML = '';
+        const card = document.createElement('div');
+        card.className = 'pwa-toast-card';
+        const text = document.createElement('span');
+        text.textContent = message;
+        card.appendChild(text);
+        if (action) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = action.label;
+          button.addEventListener('click', action.onClick, { once: true });
+          card.appendChild(button);
+        }
+        root.appendChild(card);
+        root.classList.remove('hidden');
+      };
+
+      return {
+        showUpdatePrompt(onConfirm) {
+          show('新バージョンがあります→更新', {
+            label: '更新',
+            onClick: () => {
+              show('更新を適用しています…');
+              onConfirm();
+            }
+          });
+        },
+        showStatus(message) {
+          show(message);
+          hideTimer = setTimeout(() => {
+            hide();
+          }, 3500);
+        },
+        hide
+      };
+    };
+
+    const registerPwaFeatures = () => {
+      ensureManifest();
+      if (!('serviceWorker' in navigator)) {
+        return;
+      }
+
+      const toast = createPwaToastController();
+      const swUrl = `./pwa-sw.js?build=${BUILD_TAG}`;
+
+      navigator.serviceWorker.register(swUrl).then((registration) => {
+        const listenForWaiting = (worker) => {
+          if (!worker) return;
+          toast.showUpdatePrompt(() => worker.postMessage({ type: 'SKIP_WAITING' }));
+        };
+
+        if (registration.waiting) {
+          listenForWaiting(registration.waiting);
+        }
+
+        registration.addEventListener('updatefound', () => {
+          const worker = registration.installing;
+          if (!worker) return;
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+              listenForWaiting(registration.waiting || worker);
+            }
+          });
+        });
+
+        navigator.serviceWorker.ready.then((readyRegistration) => {
+          const hasController = Boolean(navigator.serviceWorker.controller);
+          if (!hasController || !(registration.waiting || readyRegistration.waiting)) {
+            toast.showStatus('オフラインモードを準備しました');
+          }
+        }).catch(() => {});
+      }).catch((error) => {
+        console.error('[pwa] Service worker registration failed', error);
+      });
+
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    };
+
+    registerPwaFeatures();
 
     /*** utils ***/
     const ROUTES = Object.freeze({
