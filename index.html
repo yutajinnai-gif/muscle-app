@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=PWA-20240427</title>
+  <title>BUILD_TAG=FIX-20240503-TYPING-GUARD</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -41,7 +41,7 @@
   (function(){
     'use strict';
 
-    const BUILD_TAG = 'PWA-20240427';
+    const BUILD_TAG = 'FIX-20240503-TYPING-GUARD';
 
     let manifestObjectUrl = null;
 
@@ -1564,6 +1564,56 @@
       return { exercise, superset, slot };
     };
 
+    const resolveBindingValue = (binding) => {
+      if (!binding) return '';
+      if (typeof binding.read === 'function') {
+        return binding.read();
+      }
+      if (binding.type === 'superset') {
+        const superset = getSupersetById(binding.supersetId);
+        const value = superset ? superset[binding.field] : '';
+        return value == null ? '' : value;
+      }
+      if (binding.type === 'exercise') {
+        const context = findExerciseContext(binding.exerciseId);
+        const exercise = context ? context.exercise : null;
+        const value = exercise ? exercise[binding.field] : '';
+        return value == null ? '' : value;
+      }
+      if (binding.type === 'set') {
+        const context = findExerciseContext(binding.exerciseId);
+        const exercise = context ? context.exercise : null;
+        const set = exercise && Array.isArray(exercise.sets) ? exercise.sets[binding.setIndex] : null;
+        const value = set ? set[binding.field] : '';
+        return value == null ? '' : value;
+      }
+      return '';
+    };
+
+    const applyTypingPatch = () => {
+      if (!typingState.active || !typingState.element || !typingState.binding) return false;
+      if (!typingState.element.isConnected) {
+        typingState.active = false;
+        typingState.binding = null;
+        typingState.element = null;
+        typingState.route = null;
+        typingState.pendingRender = false;
+        typingState.composing = false;
+        return false;
+      }
+      const binding = typingState.binding;
+      const applyFn = typeof binding.apply === 'function' ? binding.apply : applyInputValue;
+      applyFn(typingState.element, resolveBindingValue(binding));
+      if (typeof binding.sync === 'function') {
+        try {
+          binding.sync();
+        } catch (err) {
+          /* sync best effort */
+        }
+      }
+      return true;
+    };
+
     const ensureSupersetParity = (superset) => {
       if (!superset) return false;
       const lengths = superset.slots.map((slot) => {
@@ -2120,9 +2170,52 @@
       });
     };
 
+    const typingBindings = new WeakMap();
+    const typingState = {
+      active: false,
+      binding: null,
+      element: null,
+      route: null,
+      pendingRender: false,
+      composing: false
+    };
+
+    const registerTypingTarget = (element, binding) => {
+      if (!element || !binding) return;
+      typingBindings.set(element, binding);
+    };
+
+    const applyInputValue = (element, value) => {
+      if (!element) return;
+      const next = value == null ? '' : String(value);
+      if (element.value === next) return;
+      const { selectionStart, selectionEnd } = element;
+      element.value = next;
+      if (document.activeElement === element) {
+        try {
+          const start = typeof selectionStart === 'number' ? Math.min(selectionStart, next.length) : next.length;
+          const end = typeof selectionEnd === 'number' ? Math.min(selectionEnd, next.length) : next.length;
+          if (typeof element.setSelectionRange === 'function') {
+            element.setSelectionRange(start, end);
+          }
+        } catch (err) {
+          /* selection adjustment best effort */
+        }
+      }
+    };
+
     const INPUT_BUFFER_DELAY = 300;
     const bufferedMutations = new Map();
     const bufferTimers = new Map();
+
+    const armBufferedCommit = (key) => {
+      if (!bufferedMutations.has(key)) return;
+      const timer = setTimeout(() => {
+        bufferTimers.delete(key);
+        attemptBufferedCommit(key);
+      }, INPUT_BUFFER_DELAY);
+      bufferTimers.set(key, timer);
+    };
 
     const handleCommitOutcome = (key, outcome) => {
       if (!outcome || typeof outcome !== 'object') {
@@ -2135,6 +2228,9 @@
       }
       bufferedMutations.delete(key);
       clearValidationError();
+      if (typingState.binding && typingState.binding.key === key) {
+        applyTypingPatch();
+      }
       if (outcome.rerender) {
         requestRender();
       }
@@ -2161,14 +2257,82 @@
     const scheduleBufferedCommit = (key, value, executor) => {
       bufferedMutations.set(key, { value, executor });
       if (bufferTimers.has(key)) {
-        clearTimeout(bufferTimers.get(key));
-      }
-      const timer = setTimeout(() => {
+        const handle = bufferTimers.get(key);
+        if (handle) {
+          clearTimeout(handle);
+        }
         bufferTimers.delete(key);
-        attemptBufferedCommit(key);
-      }, INPUT_BUFFER_DELAY);
-      bufferTimers.set(key, timer);
+      }
+      if (typingState.composing) {
+        bufferTimers.set(key, null);
+        return;
+      }
+      armBufferedCommit(key);
     };
+
+    const pauseBufferedCommitsForComposition = () => {
+      typingState.composing = true;
+      bufferTimers.forEach((handle, key) => {
+        if (handle) {
+          clearTimeout(handle);
+          bufferTimers.set(key, null);
+        }
+      });
+    };
+
+    const resumeBufferedCommitsAfterComposition = () => {
+      typingState.composing = false;
+      bufferTimers.forEach((handle, key) => {
+        if (handle === null) {
+          armBufferedCommit(key);
+        }
+      });
+    };
+
+    document.addEventListener('focusin', (event) => {
+      const binding = typingBindings.get(event.target);
+      if (binding) {
+        typingState.active = true;
+        typingState.binding = binding;
+        typingState.element = event.target;
+        typingState.route = appState.route;
+        typingState.pendingRender = false;
+        typingState.composing = false;
+        return;
+      }
+      if (event.target === typingState.element) {
+        typingState.active = false;
+        typingState.binding = null;
+        typingState.element = null;
+        typingState.route = null;
+        typingState.pendingRender = false;
+        typingState.composing = false;
+      }
+    });
+
+    document.addEventListener('focusout', (event) => {
+      if (event.target !== typingState.element) return;
+      const shouldRender = typingState.pendingRender;
+      typingState.active = false;
+      typingState.binding = null;
+      typingState.element = null;
+      typingState.route = null;
+      typingState.pendingRender = false;
+      typingState.composing = false;
+      if (shouldRender) {
+        queueMicrotask(() => requestRender());
+      }
+    });
+
+    document.addEventListener('compositionstart', (event) => {
+      if (event.target !== typingState.element) return;
+      pauseBufferedCommitsForComposition();
+    });
+
+    document.addEventListener('compositionend', (event) => {
+      if (event.target !== typingState.element) return;
+      resumeBufferedCommitsAfterComposition();
+    });
 
     const commitSetField = (exerciseId, setIndex, field, rawValue) => {
       const context = findExerciseContext(exerciseId);
@@ -2926,6 +3090,13 @@
       equipmentInput.addEventListener('input', (event) => {
         scheduleExerciseFieldUpdate(exercise.id, 'equipment', event.target.value);
       });
+      registerTypingTarget(equipmentInput, {
+        key: `exercise:${exercise.id}:equipment`,
+        type: 'exercise',
+        exerciseId: exercise.id,
+        field: 'equipment',
+        apply: (el, value) => applyInputValue(el, value)
+      });
       const equipmentField = createFieldWrapper('器具', '使用した器具を入力します。', '使用した器具の種類を記録しましょう。', equipmentInput);
 
       const attachmentInput = createElem('input', {
@@ -2935,6 +3106,13 @@
       });
       attachmentInput.addEventListener('input', (event) => {
         scheduleExerciseFieldUpdate(exercise.id, 'attachment', event.target.value);
+      });
+      registerTypingTarget(attachmentInput, {
+        key: `exercise:${exercise.id}:attachment`,
+        type: 'exercise',
+        exerciseId: exercise.id,
+        field: 'attachment',
+        apply: (el, value) => applyInputValue(el, value)
       });
       const attachmentField = createFieldWrapper('アタッチメント', '利用したアタッチメントを記録します。', 'ケーブルハンドルなどをメモできます。', attachmentInput);
       equipmentRow.append(equipmentField, attachmentField);
@@ -2949,6 +3127,13 @@
       angleInput.addEventListener('input', (event) => {
         scheduleExerciseFieldUpdate(exercise.id, 'angle', event.target.value);
       });
+      registerTypingTarget(angleInput, {
+        key: `exercise:${exercise.id}:angle`,
+        type: 'exercise',
+        exerciseId: exercise.id,
+        field: 'angle',
+        apply: (el, value) => applyInputValue(el, value)
+      });
       const angleField = createFieldWrapper('角度 (°)', 'ベンチやマシンの角度を記録します。', '角度の変化を記録してフォームを比較。', angleInput);
 
       const positionInput = createElem('input', {
@@ -2958,6 +3143,13 @@
       });
       positionInput.addEventListener('input', (event) => {
         scheduleExerciseFieldUpdate(exercise.id, 'position', event.target.value);
+      });
+      registerTypingTarget(positionInput, {
+        key: `exercise:${exercise.id}:position`,
+        type: 'exercise',
+        exerciseId: exercise.id,
+        field: 'position',
+        apply: (el, value) => applyInputValue(el, value)
       });
       const positionField = createFieldWrapper('スタンス / ポジション', '足幅やグリップ幅などを記録します。', 'スタンスやポジションの工夫を書き残しましょう。', positionInput);
       angleRow.append(angleField, positionField);
@@ -2972,6 +3164,13 @@
       performedOnInput.addEventListener('input', (event) => {
         scheduleExerciseFieldUpdate(exercise.id, 'performedOn', event.target.value);
       });
+      registerTypingTarget(performedOnInput, {
+        key: `exercise:${exercise.id}:performedOn`,
+        type: 'exercise',
+        exerciseId: exercise.id,
+        field: 'performedOn',
+        apply: (el, value) => applyInputValue(el, value)
+      });
       const performedOnField = createFieldWrapper('実施日', 'トレーニングを行った日付です。', '後から見返すために日付を残せます。', performedOnInput);
 
       const intervalInput = createElem('input', {
@@ -2981,6 +3180,13 @@
       });
       intervalInput.addEventListener('input', (event) => {
         scheduleExerciseFieldUpdate(exercise.id, 'intervalSeconds', event.target.value);
+      });
+      registerTypingTarget(intervalInput, {
+        key: `exercise:${exercise.id}:intervalSeconds`,
+        type: 'exercise',
+        exerciseId: exercise.id,
+        field: 'intervalSeconds',
+        apply: (el, value) => applyInputValue(el, value)
       });
       const intervalField = createFieldWrapper('インターバル (秒)', 'セット間の休憩秒数を記録します。', 'タイマーで計測した秒数を入力。', intervalInput);
       scheduleRow.append(performedOnField, intervalField);
@@ -3190,6 +3396,19 @@
             }
             timerBtn.textContent = `休憩 ${value || superset.restSeconds}秒`;
           });
+          registerTypingTarget(restInput, {
+            key: `superset:${superset.id}:restSeconds`,
+            type: 'superset',
+            supersetId: superset.id,
+            field: 'restSeconds',
+            apply: (el, value) => applyInputValue(el, value),
+            sync: () => {
+              const sup = getSupersetById(superset.id);
+              const fallback = sup?.restSeconds ?? DEFAULT_SUPERSET_REST;
+              const display = restInput.value || fallback;
+              timerBtn.textContent = `休憩 ${display}秒`;
+            }
+          });
           const restLabel = createElem('label', { className: 'flex w-28 flex-col text-xs font-semibold text-slate-700' });
           restLabel.append(
             createElem('span', { className: 'mb-1 text-[0.65rem] uppercase tracking-wide text-slate-500', textContent: '休憩プリセット' }),
@@ -3288,6 +3507,14 @@
                     );
                   } else {
                     const set = exercise.sets[index];
+                    let oneRmLabel = null;
+                    const updateOneRmLabel = () => {
+                      if (!oneRmLabel) return;
+                      const context = findExerciseContext(exercise.id);
+                      const currentSet = context?.exercise?.sets?.[index];
+                      const value = currentSet?.oneRM;
+                      oneRmLabel.textContent = value ? `推定1RM: ${value} ${appData.settings.unit}` : '推定1RM: -';
+                    };
                     const weightInput = createElem('input', {
                       className: 'input-base text-slate-900 placeholder-slate-400',
                       attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' },
@@ -3295,6 +3522,15 @@
                     });
                     weightInput.addEventListener('input', (event) => {
                       scheduleSetFieldUpdate(exercise.id, index, 'weight', event.target.value);
+                    });
+                    registerTypingTarget(weightInput, {
+                      key: `set:${exercise.id}:${index}:weight`,
+                      type: 'set',
+                      exerciseId: exercise.id,
+                      setIndex: index,
+                      field: 'weight',
+                      apply: (el, value) => applyInputValue(el, value),
+                      sync: updateOneRmLabel
                     });
                     slotCard.append(
                       createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput)
@@ -3309,6 +3545,15 @@
                     repsInput.addEventListener('input', (event) => {
                       scheduleSetFieldUpdate(exercise.id, index, 'reps', event.target.value);
                     });
+                    registerTypingTarget(repsInput, {
+                      key: `set:${exercise.id}:${index}:reps`,
+                      type: 'set',
+                      exerciseId: exercise.id,
+                      setIndex: index,
+                      field: 'reps',
+                      apply: (el, value) => applyInputValue(el, value),
+                      sync: updateOneRmLabel
+                    });
                     slotCard.append(createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput));
                     repsInputs.push(repsInput);
 
@@ -3320,15 +3565,24 @@
                     noteInput.addEventListener('input', (event) => {
                       scheduleSetFieldUpdate(exercise.id, index, 'note', event.target.value);
                     });
+                    registerTypingTarget(noteInput, {
+                      key: `set:${exercise.id}:${index}:note`,
+                      type: 'set',
+                      exerciseId: exercise.id,
+                      setIndex: index,
+                      field: 'note',
+                      apply: (el, value) => applyInputValue(el, value),
+                      sync: updateOneRmLabel
+                    });
                     slotCard.append(createFieldWrapper('セットメモ', '気づいたことや次回の課題を記録します。', 'フォームやRPEを自由に入力。', noteInput));
                     noteInputs.push(noteInput);
 
-                    slotCard.append(
-                      createElem('p', {
-                        className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800',
-                        textContent: set?.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -'
-                      })
-                    );
+                    oneRmLabel = createElem('p', {
+                      className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800',
+                      textContent: set?.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -'
+                    });
+                    updateOneRmLabel();
+                    slotCard.append(oneRmLabel);
                   }
                   slotGrid.append(slotCard);
                 });
@@ -3612,10 +3866,19 @@
           host.classList.add('hidden');
         }
       });
+      const host = viewHosts[route] || viewHosts[ROUTES.HOME];
+      if (typingState.active && typingState.route === route) {
+        if (applyTypingPatch()) {
+          typingState.pendingRender = true;
+          return;
+        }
+        typingState.pendingRender = false;
+      } else {
+        typingState.pendingRender = false;
+      }
       const builder = viewBuilders[route] || viewBuilders[ROUTES.HOME];
       const result = builder ? builder() : [];
       const nodes = Array.isArray(result) ? result : (result ? [result] : []);
-      const host = viewHosts[route] || viewHosts[ROUTES.HOME];
       host.replaceChildren(...nodes);
     };
 
