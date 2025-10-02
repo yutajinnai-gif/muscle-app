@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20240503-TYPING-GUARD</title>
+  <title>BUILD_TAG=FIX-20240508-SINGLE-MODE</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -41,7 +41,7 @@
   (function(){
     'use strict';
 
-    const BUILD_TAG = 'FIX-20240503-TYPING-GUARD';
+    const BUILD_TAG = 'FIX-20240508-SINGLE-MODE';
 
     let manifestObjectUrl = null;
 
@@ -1097,6 +1097,7 @@
       currentWorkout: {
         id: `current-${Date.now()}`,
         startedAt: Date.now(),
+        entryMode: 'superset',
         exercises: [],
         supersets: []
       },
@@ -1111,7 +1112,8 @@
       templates: []
     });
 
-    const SUPERSET_SLOT_ROLES = Object.freeze(['A', 'B']);
+    const WORKOUT_ENTRY_MODES = Object.freeze({ single: 'single', superset: 'superset' });
+    const SUPERSET_GROUP_IDS = Object.freeze(['A', 'B']);
     const DEFAULT_SUPERSET_REST = 90;
     const generateSupersetLabel = (index) => {
       const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1125,59 +1127,137 @@
     };
     const createSupersetId = () => `ss-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
 
+    const normalizeEntryMode = (mode) => (mode === WORKOUT_ENTRY_MODES.single ? WORKOUT_ENTRY_MODES.single : WORKOUT_ENTRY_MODES.superset);
+    const getGroupIdsForMode = (mode) => (mode === WORKOUT_ENTRY_MODES.single ? [null] : SUPERSET_GROUP_IDS);
+
+    const createSupersetSkeleton = ({
+      id = createSupersetId(),
+      label,
+      restSeconds = DEFAULT_SUPERSET_REST,
+      collapsed = false,
+      mode = WORKOUT_ENTRY_MODES.superset
+    } = {}) => {
+      const entryMode = normalizeEntryMode(mode);
+      return {
+        id,
+        label,
+        restSeconds,
+        collapsed,
+        mode: entryMode,
+        slots: getGroupIdsForMode(entryMode).map((groupId) => ({ groupId, exerciseId: null }))
+      };
+    };
+
     const normalizeSupersetSlots = (superset) => {
+      if (!superset || typeof superset !== 'object') return;
+      const mode = normalizeEntryMode(superset.mode);
+      superset.mode = mode;
+      const desiredGroupIds = getGroupIdsForMode(mode);
       if (!Array.isArray(superset.slots)) {
         const fallback = Array.isArray(superset.exerciseIds) ? superset.exerciseIds : [];
-        superset.slots = SUPERSET_SLOT_ROLES.map((role, index) => ({
-          role,
+        superset.slots = desiredGroupIds.map((groupId, index) => ({
+          groupId,
           exerciseId: fallback[index] || null
         }));
-      } else {
-        const usedRoles = new Set();
-        superset.slots = superset.slots.map((slot, index) => {
-          const role = SUPERSET_SLOT_ROLES.includes(slot?.role) && !usedRoles.has(slot.role)
-            ? slot.role
-            : SUPERSET_SLOT_ROLES[index] || SUPERSET_SLOT_ROLES[0];
-          usedRoles.add(role);
-          return { role, exerciseId: slot?.exerciseId ?? null };
-        });
-        SUPERSET_SLOT_ROLES.forEach((role) => {
-          if (!superset.slots.some((slot) => slot.role === role)) {
-            superset.slots.push({ role, exerciseId: null });
-          }
-        });
-        superset.slots = superset.slots
-          .sort((a, b) => SUPERSET_SLOT_ROLES.indexOf(a.role) - SUPERSET_SLOT_ROLES.indexOf(b.role))
-          .slice(0, SUPERSET_SLOT_ROLES.length);
+        return;
       }
+
+      const normalized = superset.slots.map((slot) => ({
+        groupId: slot?.groupId ?? (typeof slot?.role === 'string' ? slot.role : null),
+        exerciseId: slot?.exerciseId ?? null
+      }));
+
+      const slots = [];
+      const consumed = new Set();
+
+      desiredGroupIds.forEach((groupId, index) => {
+        let matchIndex = normalized.findIndex((slot, idx) => {
+          if (consumed.has(idx)) return false;
+          const candidateId = slot.groupId;
+          if (groupId == null) {
+            return candidateId == null;
+          }
+          return candidateId === groupId;
+        });
+
+        if (matchIndex === -1) {
+          matchIndex = normalized.findIndex((slot, idx) => {
+            if (consumed.has(idx)) return false;
+            return slot.groupId == null;
+          });
+        }
+
+        if (matchIndex === -1) {
+          matchIndex = normalized.findIndex((slot, idx) => {
+            if (consumed.has(idx)) return false;
+            return typeof slot.groupId === 'string' && !desiredGroupIds.includes(slot.groupId);
+          });
+        }
+
+        if (matchIndex !== -1) {
+          consumed.add(matchIndex);
+          const matched = normalized[matchIndex];
+          slots.push({ groupId, exerciseId: matched.exerciseId });
+        } else {
+          slots.push({ groupId, exerciseId: null });
+        }
+      });
+
+      superset.slots = slots;
     };
 
     const normalizeWorkout = (workout) => {
       if (!workout || typeof workout !== 'object') return;
+      workout.entryMode = normalizeEntryMode(workout.entryMode);
       if (!Array.isArray(workout.exercises)) workout.exercises = [];
+
+      const exerciseMap = new Map();
+      workout.exercises = workout.exercises.filter((exercise) => exercise && typeof exercise === 'object');
+      workout.exercises.forEach((exercise) => {
+        if (!exercise.id) {
+          exercise.id = `ex-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+        }
+        if (!Array.isArray(exercise.sets) || !exercise.sets.length) {
+          exercise.sets = [createEmptySet()];
+        } else {
+          exercise.sets = exercise.sets.map((set) => ({ ...createEmptySet(), ...set, oneRM: null }));
+        }
+        if (typeof exercise.groupId === 'string' && exercise.groupId.trim()) {
+          exercise.groupId = exercise.groupId.trim();
+        } else {
+          exercise.groupId = null;
+        }
+        exerciseMap.set(exercise.id, exercise);
+      });
+
       if (!Array.isArray(workout.supersets)) {
-        workout.supersets = workout.exercises.map((exercise, index) => ({
-          id: createSupersetId(),
-          label: generateSupersetLabel(index),
-          restSeconds: DEFAULT_SUPERSET_REST,
-          collapsed: false,
-          slots: SUPERSET_SLOT_ROLES.map((role, roleIndex) => ({
-            role,
-            exerciseId: roleIndex === 0 ? exercise.id : null
-          }))
-        }));
+        workout.supersets = workout.exercises.map((exercise, index) => {
+          const superset = createSupersetSkeleton({
+            id: createSupersetId(),
+            label: generateSupersetLabel(index),
+            mode: WORKOUT_ENTRY_MODES.single
+          });
+          superset.slots[0].exerciseId = exercise?.id ?? null;
+          return superset;
+        });
       }
-      const validExerciseIds = new Set(workout.exercises.map((exercise) => exercise?.id).filter(Boolean));
+
       workout.supersets = workout.supersets.filter((superset) => superset && typeof superset === 'object');
       workout.supersets.forEach((superset, index) => {
         if (!superset.id) superset.id = createSupersetId();
         if (typeof superset.label !== 'string' || !superset.label.trim()) superset.label = generateSupersetLabel(index);
         const restSeconds = Number(superset.restSeconds);
-        superset.restSeconds = Number.isFinite(restSeconds) ? Math.max(10, Math.min(600, Math.round(restSeconds))) : DEFAULT_SUPERSET_REST;
+        superset.restSeconds = Number.isFinite(restSeconds)
+          ? Math.max(10, Math.min(600, Math.round(restSeconds)))
+          : DEFAULT_SUPERSET_REST;
         superset.collapsed = Boolean(superset.collapsed);
         normalizeSupersetSlots(superset);
         superset.slots.forEach((slot) => {
-          if (slot.exerciseId && !validExerciseIds.has(slot.exerciseId)) {
+          if (!slot) return;
+          if (slot.groupId != null && typeof slot.groupId !== 'string') {
+            slot.groupId = String(slot.groupId);
+          }
+          if (slot.exerciseId && !exerciseMap.has(slot.exerciseId)) {
             slot.exerciseId = null;
           }
         });
@@ -1186,25 +1266,39 @@
       const assigned = new Set();
       workout.supersets.forEach((superset) => {
         superset.slots.forEach((slot) => {
-          if (slot.exerciseId) assigned.add(slot.exerciseId);
+          if (!slot.exerciseId) return;
+          const exercise = exerciseMap.get(slot.exerciseId);
+          if (!exercise) {
+            slot.exerciseId = null;
+            return;
+          }
+          assigned.add(exercise.id);
+          exercise.groupId = slot.groupId ?? null;
         });
       });
 
       workout.exercises.forEach((exercise) => {
         if (!assigned.has(exercise.id)) {
-          let target = workout.supersets.find((superset) => superset.slots.some((slot) => !slot.exerciseId));
-          if (!target) {
-            target = {
-              id: createSupersetId(),
-              label: generateSupersetLabel(workout.supersets.length),
-              restSeconds: DEFAULT_SUPERSET_REST,
-              collapsed: false,
-              slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
-            };
-            workout.supersets.push(target);
-          }
-          const slot = target.slots.find((item) => !item.exerciseId);
-          if (slot) slot.exerciseId = exercise.id;
+          exercise.groupId = null;
+        }
+      });
+
+      workout.exercises.forEach((exercise) => {
+        if (assigned.has(exercise.id)) return;
+        let target = workout.supersets.find((superset) => superset.slots.some((slot) => !slot.exerciseId));
+        if (!target) {
+          target = createSupersetSkeleton({
+            id: createSupersetId(),
+            label: generateSupersetLabel(workout.supersets.length),
+            mode: WORKOUT_ENTRY_MODES.single
+          });
+          workout.supersets.push(target);
+        }
+        const slot = target.slots.find((item) => !item.exerciseId);
+        if (slot) {
+          slot.exerciseId = exercise.id;
+          exercise.groupId = slot.groupId ?? null;
+          assigned.add(exercise.id);
         }
       });
     };
@@ -1462,13 +1556,20 @@
       });
     };
 
-    const createCard = (titleText, body) => {
+    const createCard = (titleText, body, { headerNodes = [] } = {}) => {
+      const headerChildren = [
+        createElem('h2', { className: 'text-lg font-bold text-slate-800', textContent: titleText })
+      ];
+      headerNodes.forEach((node) => {
+        if (node) headerChildren.push(node);
+      });
       return createElem('section', {
         className: 'bg-white rounded-2xl shadow-sm border border-slate-200/70 p-5 mb-6',
         children: [
-          createElem('header', { className: 'flex items-center justify-between mb-4', children: [
-            createElem('h2', { className: 'text-lg font-bold text-slate-800', textContent: titleText })
-          ] }),
+          createElem('header', {
+            className: 'mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
+            children: headerChildren
+          }),
           body
         ]
       });
@@ -1488,6 +1589,7 @@
       return {
         id: `ex-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
         name,
+        groupId: defaults.groupId ?? null,
         equipment: defaults.equipment ?? '',
         attachment: defaults.attachment ?? '',
         angle: defaults.angle ?? null,
@@ -1518,29 +1620,48 @@
       });
     };
 
+    const setCurrentWorkoutEntryMode = (mode) => {
+      const nextMode = normalizeEntryMode(mode);
+      if (appData.currentWorkout.entryMode === nextMode) return;
+      appData.currentWorkout.entryMode = nextMode;
+      persist();
+      requestRender();
+    };
+
     const addSuperset = async () => {
       const index = appData.currentWorkout.supersets.length;
       const label = generateSupersetLabel(index);
-      const selectedNames = [];
-      for (const role of SUPERSET_SLOT_ROLES) {
-        const name = await promptExerciseName(`${label} ${role} の種目`);
+      const mode = normalizeEntryMode(appData.currentWorkout.entryMode);
+      const groupIds = getGroupIdsForMode(mode);
+      const selections = [];
+      for (const groupId of groupIds) {
+        const promptLabel = mode === WORKOUT_ENTRY_MODES.single || groupId == null
+          ? '追加する種目'
+          : `${label} ${groupId} の種目`;
+        const name = await promptExerciseName(promptLabel);
         if (!name) return;
-        selectedNames.push(name);
+        selections.push({ name, groupId });
       }
 
-      const superset = {
+      const superset = createSupersetSkeleton({
         id: createSupersetId(),
         label,
         restSeconds: DEFAULT_SUPERSET_REST,
         collapsed: false,
-        slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
-      };
+        mode
+      });
 
-      selectedNames.forEach((exerciseName, slotIndex) => {
-        ensureExerciseCatalog(exerciseName);
-        const exercise = createExerciseEntity(exerciseName);
+      selections.forEach(({ name, groupId }, slotIndex) => {
+        ensureExerciseCatalog(name);
+        const exercise = createExerciseEntity(name);
+        const slot = superset.slots[slotIndex] || superset.slots.find((entry) => entry.groupId === groupId);
         appData.currentWorkout.exercises.push(exercise);
-        superset.slots[slotIndex].exerciseId = exercise.id;
+        if (slot) {
+          slot.exerciseId = exercise.id;
+          exercise.groupId = slot.groupId ?? null;
+        } else {
+          exercise.groupId = null;
+        }
         recomputeExercise(appData.currentWorkout.id, exercise);
       });
 
@@ -1692,14 +1813,14 @@
     const duplicateSuperset = (supersetId) => {
       const source = getSupersetById(supersetId);
       if (!source) return;
-      const clone = {
+      const clone = createSupersetSkeleton({
         id: createSupersetId(),
         label: source.label,
         restSeconds: source.restSeconds,
         collapsed: false,
-        slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
-      };
-      source.slots.forEach((slot) => {
+        mode: source.mode
+      });
+      source.slots.forEach((slot, slotIndex) => {
         if (!slot.exerciseId) return;
         const exercise = getExerciseById(slot.exerciseId);
         if (!exercise) return;
@@ -1713,9 +1834,10 @@
           sets: exercise.sets.map((set) => ({ weight: set.weight, reps: set.reps, note: set.note }))
         });
         appData.currentWorkout.exercises.push(newExercise);
-        const slotIndex = clone.slots.findIndex((entry) => entry.role === slot.role);
-        if (slotIndex !== -1) {
-          clone.slots[slotIndex].exerciseId = newExercise.id;
+        const targetSlot = clone.slots.find((entry) => entry.groupId === slot.groupId) || clone.slots[slotIndex];
+        if (targetSlot) {
+          targetSlot.exerciseId = newExercise.id;
+          newExercise.groupId = targetSlot.groupId ?? null;
         }
         recomputeExercise(appData.currentWorkout.id, newExercise);
       });
@@ -1748,12 +1870,15 @@
       requestRender();
     };
 
-    const configureSupersetSlot = async (supersetId, role) => {
+    const configureSupersetSlot = async (supersetId, groupId) => {
       const superset = getSupersetById(supersetId);
       if (!superset) return;
-      const slot = superset.slots.find((item) => item.role === role);
+      const slot = superset.slots.find((item) => item.groupId === groupId);
       if (!slot) return;
-      const name = await promptExerciseName(`${superset.label} ${role} の種目`);
+      const promptLabel = superset.mode === WORKOUT_ENTRY_MODES.single || groupId == null
+        ? `${superset.label} の種目`
+        : `${superset.label} ${groupId} の種目`;
+      const name = await promptExerciseName(promptLabel);
       if (!name) return;
       ensureExerciseCatalog(name);
       if (slot.exerciseId) {
@@ -1762,6 +1887,7 @@
       const exercise = createExerciseEntity(name);
       appData.currentWorkout.exercises.push(exercise);
       slot.exerciseId = exercise.id;
+      exercise.groupId = slot.groupId ?? null;
       recomputeExercise(appData.currentWorkout.id, exercise);
       persist();
       requestRender();
@@ -1817,11 +1943,12 @@
       return workout.supersets.map((superset) => ({
         label: superset?.label ?? '',
         restSeconds: superset?.restSeconds,
+        mode: normalizeEntryMode(superset?.mode),
         slots: Array.isArray(superset?.slots)
           ? superset.slots.map((slot) => {
               const exercise = slot?.exerciseId ? exerciseMap.get(slot.exerciseId) : null;
               const base = {
-                role: slot?.role,
+                groupId: slot?.groupId ?? (typeof slot?.role === 'string' ? slot.role : null),
                 name: exercise ? exercise.name : null,
                 equipment: exercise?.equipment ?? '',
                 attachment: exercise?.attachment ?? '',
@@ -1854,15 +1981,16 @@
       const blueprint = appData.lastSupersetBlueprint;
       if (!Array.isArray(blueprint) || !blueprint.length) return;
       blueprint.forEach((config, index) => {
-        const superset = {
+        const mode = normalizeEntryMode(config?.mode);
+        const superset = createSupersetSkeleton({
           id: createSupersetId(),
           label: generateSupersetLabel(index),
-          restSeconds: Number.isFinite(Number(config.restSeconds))
+          restSeconds: Number.isFinite(Number(config?.restSeconds))
             ? Math.max(10, Math.min(600, Math.round(Number(config.restSeconds))))
             : DEFAULT_SUPERSET_REST,
           collapsed: false,
-          slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
-        };
+          mode
+        });
         config.slots.forEach((slotConfig) => {
           if (!slotConfig || !slotConfig.name) return;
           ensureExerciseCatalog(slotConfig.name);
@@ -1880,9 +2008,11 @@
             exercise.sets.push(createEmptySet());
           }
           appData.currentWorkout.exercises.push(exercise);
-          const slotIndex = superset.slots.findIndex((slot) => slot.role === slotConfig.role);
+          const groupId = slotConfig.groupId ?? (typeof slotConfig.role === 'string' ? slotConfig.role : null);
+          const slotIndex = superset.slots.findIndex((slot) => slot.groupId === groupId);
           if (slotIndex !== -1) {
             superset.slots[slotIndex].exerciseId = exercise.id;
+            exercise.groupId = superset.slots[slotIndex].groupId ?? null;
           }
           recomputeExercise(appData.currentWorkout.id, exercise);
         });
@@ -1973,30 +2103,34 @@
       const workout = {
         id: `current-${Date.now()}`,
         startedAt,
+        entryMode: WORKOUT_ENTRY_MODES.superset,
         exercises: [],
         supersets: []
       };
       const today = getTodayDateValue();
       blueprint.forEach((config, index) => {
         if (!config) return;
-        const superset = {
+        const mode = normalizeEntryMode(config?.mode);
+        const superset = createSupersetSkeleton({
           id: createSupersetId(),
-          label: typeof config.label === 'string' && config.label.trim()
-            ? config.label.trim()
-            : generateSupersetLabel(workout.supersets.length),
+          label:
+            typeof config.label === 'string' && config.label.trim()
+              ? config.label.trim()
+              : generateSupersetLabel(workout.supersets.length),
           restSeconds: (() => {
             const value = safeNumber(config.restSeconds);
             if (value === null) return DEFAULT_SUPERSET_REST;
             return Math.max(10, Math.min(600, Math.round(value)));
           })(),
           collapsed: false,
-          slots: SUPERSET_SLOT_ROLES.map((role) => ({ role, exerciseId: null }))
-        };
-        const slotMap = new Map(superset.slots.map((slot) => [slot.role, slot]));
+          mode
+        });
+        const slotMap = new Map(superset.slots.map((slot) => [slot.groupId, slot]));
         if (Array.isArray(config.slots)) {
           config.slots.forEach((slotConfig) => {
-            if (!slotConfig || !slotConfig.role) return;
-            const slot = slotMap.get(slotConfig.role);
+            if (!slotConfig) return;
+            const groupId = slotConfig.groupId ?? (typeof slotConfig.role === 'string' ? slotConfig.role : null);
+            const slot = slotMap.get(groupId);
             if (!slot) return;
             if (!slotConfig.name) return;
             ensureExerciseCatalog(slotConfig.name);
@@ -2017,12 +2151,16 @@
               sets: desiredSets
             });
             workout.exercises.push(exercise);
+            exercise.groupId = slot.groupId ?? null;
             slot.exerciseId = exercise.id;
             recomputeExercise(workout.id, exercise);
           });
         }
         workout.supersets.push(superset);
       });
+      if (blueprint.length) {
+        workout.entryMode = normalizeEntryMode(blueprint[0]?.mode);
+      }
       workout.supersets = workout.supersets.filter((superset) =>
         superset.slots.some((slot) => slot.exerciseId)
       );
@@ -3312,16 +3450,43 @@
 
       const workout = appData.currentWorkout;
       const cardBody = createElem('div', { className: 'space-y-6' });
+      const toggleContainer = (() => {
+        const wrapper = createElem('div', {
+          className: 'inline-flex items-center rounded-full border border-slate-300 bg-slate-100 p-1 text-xs font-semibold'
+        });
+        const createToggleButton = (mode, label) => {
+          const active = workout.entryMode === mode;
+          const btn = createElem('button', {
+            className: `rounded-full px-3 py-1 transition ${
+              active
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`,
+            attrs: { type: 'button', 'aria-pressed': active ? 'true' : 'false' },
+            textContent: label
+          });
+          btn.addEventListener('click', () => setCurrentWorkoutEntryMode(mode));
+          return btn;
+        };
+        wrapper.append(
+          createToggleButton(WORKOUT_ENTRY_MODES.single, 'Single'),
+          createToggleButton(WORKOUT_ENTRY_MODES.superset, 'Superset')
+        );
+        return wrapper;
+      })();
       const headerInfo = createElem('p', {
         className: 'rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800',
         textContent: `開始: ${formatDate(workout.startedAt)}`
       });
       cardBody.append(headerInfo);
       if (!workout.supersets.length) {
+        const emptyMessage = workout.entryMode === WORKOUT_ENTRY_MODES.single
+          ? '種目を追加して記録を始めましょう。'
+          : 'スーパーセットを追加して記録を始めましょう。';
         cardBody.append(
           createElem('p', {
             className: 'text-sm leading-relaxed text-slate-800',
-            textContent: 'スーパーセットを追加して記録を始めましょう。'
+            textContent: emptyMessage
           })
         );
       } else {
@@ -3423,7 +3588,7 @@
           const duplicateBtn = createElem('button', {
             className: 'btn-muted rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100',
             attrs: { type: 'button' },
-            textContent: 'グループ複製'
+            textContent: superset.mode === WORKOUT_ENTRY_MODES.single ? '複製' : 'グループ複製'
           });
           duplicateBtn.addEventListener('click', () => duplicateSuperset(superset.id));
           const deleteBtn = createElem('button', {
@@ -3477,17 +3642,29 @@
                 roundHeader.append(removeBtn);
                 round.append(roundHeader);
 
-                const slotGrid = createElem('div', { className: 'grid gap-4 sm:grid-cols-2' });
+                const slotGrid = createElem('div', {
+                  className: superset.mode === WORKOUT_ENTRY_MODES.single ? 'space-y-4' : 'grid gap-4 sm:grid-cols-2'
+                });
                 const weightInputs = [];
                 const repsInputs = [];
                 const noteInputs = [];
                 slotExercises.forEach(({ slot, exercise }) => {
-                  const slotCard = createElem('div', { className: 'space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4' });
+                  const slotCard = createElem('div', {
+                    className:
+                      superset.mode === WORKOUT_ENTRY_MODES.single
+                        ? 'space-y-3 rounded-xl border border-slate-200 bg-white p-4'
+                        : 'space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4'
+                  });
                   const slotHeader = createElem('div', { className: 'flex items-center justify-between' });
+                  const slotTitle = superset.mode === WORKOUT_ENTRY_MODES.single
+                    ? exercise
+                      ? exercise.name
+                      : '未設定'
+                    : `${slot.groupId ?? '種目'}: ${exercise ? exercise.name : '未設定'}`;
                   slotHeader.append(
                     createElem('span', {
                       className: 'text-sm font-semibold text-slate-900',
-                      textContent: `${slot.role}: ${exercise ? exercise.name : '未設定'}`
+                      textContent: slotTitle
                     })
                   );
                   const changeBtn = createElem('button', {
@@ -3495,7 +3672,7 @@
                     attrs: { type: 'button' },
                     textContent: exercise ? '変更' : '設定'
                   });
-                  changeBtn.addEventListener('click', () => configureSupersetSlot(superset.id, slot.role));
+                  changeBtn.addEventListener('click', () => configureSupersetSlot(superset.id, slot.groupId));
                   slotHeader.append(changeBtn);
                   slotCard.append(slotHeader);
                   if (!exercise) {
@@ -3604,14 +3781,19 @@
               body.append(roundsContainer);
             }
 
-            const metaGrid = createElem('div', { className: 'grid gap-4 sm:grid-cols-2' });
+            const metaGrid = createElem('div', {
+              className: superset.mode === WORKOUT_ENTRY_MODES.single ? 'space-y-4' : 'grid gap-4 sm:grid-cols-2'
+            });
             slotExercises.forEach(({ slot, exercise }) => {
               if (!exercise) return;
               const wrapper = createElem('div', { className: 'space-y-3' });
               wrapper.append(
                 createElem('h4', {
                   className: 'text-sm font-semibold text-slate-900',
-                  textContent: `${slot.role}: ${exercise.name}`
+                  textContent:
+                    superset.mode === WORKOUT_ENTRY_MODES.single
+                      ? exercise.name
+                      : `${slot.groupId ?? '種目'}: ${exercise.name}`
                 })
               );
               wrapper.append(createExerciseMetaPanel(exercise));
@@ -3626,13 +3808,18 @@
         });
       }
       const actions = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row' });
-      const addExerciseBtn = createElem('button', { className: 'btn-primary flex-1 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500', textContent: 'スーパーセットを追加', attrs: { type: 'button' } });
+      const addExerciseLabel = workout.entryMode === WORKOUT_ENTRY_MODES.single ? '種目を追加' : 'スーパーセットを追加';
+      const addExerciseBtn = createElem('button', {
+        className: 'btn-primary flex-1 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
+        textContent: addExerciseLabel,
+        attrs: { type: 'button' }
+      });
       addExerciseBtn.addEventListener('click', addSuperset);
       const finishBtn = createElem('button', { className: 'btn-muted flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500', textContent: '完了して履歴へ', attrs: { type: 'button' } });
       finishBtn.addEventListener('click', finishWorkout);
       actions.append(addExerciseBtn, finishBtn);
       cardBody.append(actions);
-      nodes.push(createCard('現在のワークアウト', cardBody));
+      nodes.push(createCard('現在のワークアウト', cardBody, { headerNodes: [toggleContainer] }));
       return nodes;
     };
 
