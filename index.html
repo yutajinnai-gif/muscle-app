@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20250214-PRESET-SETTINGS</title>
+  <title>BUILD_TAG=FIX-20250305-GRACEFUL-INPUT</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -27,6 +27,8 @@
     #pwa-toast-root.hidden { display: none; }
     .pwa-toast-card { pointer-events: auto; display: inline-flex; align-items: center; gap: 0.75rem; background: #111827; color: white; border-radius: 9999px; padding: 0.75rem 1.15rem; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.32); font-size: 0.95rem; font-weight: 600; }
     .pwa-toast-card button { background: white; color: #111827; font-weight: 700; border-radius: 9999px; padding: 0.4rem 0.95rem; font-size: 0.9rem; }
+    .provisional-highlight { background-color: #fef3c7 !important; border-color: #fbbf24 !important; }
+    .provisional-warning { background-color: #fef3c7; border: 1px solid #fbbf24; color: #78350f; }
   </style>
 </head>
 <body class="text-slate-900 overflow-x-hidden">
@@ -43,7 +45,7 @@
   (function(){
     'use strict';
 
-    const BUILD_TAG = 'FIX-20250214-PRESET-SETTINGS';
+    const BUILD_TAG = 'FIX-20250305-GRACEFUL-INPUT';
 
     const IS_DEV = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(window.location.hostname);
     let initializationWarningCount = 0;
@@ -248,6 +250,15 @@
       return wrapper;
     };
 
+    const applyProvisionalHighlight = (element, shouldHighlight) => {
+      if (!element) return;
+      if (shouldHighlight) {
+        element.classList.add('provisional-highlight');
+      } else {
+        element.classList.remove('provisional-highlight');
+      }
+    };
+
     const getTodayDateValue = () => {
       const now = new Date();
       const offset = now.getTimezoneOffset();
@@ -295,6 +306,43 @@
       if (typeof value === 'string' && value.trim() === '') return null;
       const num = Number(value);
       return Number.isFinite(num) ? num : null;
+    };
+
+    const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
+
+    const analyzeSetCompletion = (set) => {
+      if (!set || typeof set !== 'object') {
+        return {
+          hasAny: false,
+          hasWeight: false,
+          hasReps: false,
+          missingWeight: false,
+          missingReps: false,
+          isProvisional: false
+        };
+      }
+      const hasWeight = isFiniteNumber(set.weight);
+      const hasReps = isFiniteNumber(set.reps);
+      const hasAny = hasWeight || hasReps;
+      const missingWeight = hasAny && !hasWeight;
+      const missingReps = hasAny && !hasReps;
+      return {
+        hasAny,
+        hasWeight,
+        hasReps,
+        missingWeight,
+        missingReps,
+        isProvisional: hasAny && (missingWeight || missingReps)
+      };
+    };
+
+    const applyProvisionalState = (set) => {
+      const analysis = analyzeSetCompletion(set);
+      set.isProvisional = analysis.isProvisional;
+      if (set.isProvisional) {
+        set.oneRM = null;
+      }
+      return analysis;
     };
 
     const cloneDeep = (obj) => {
@@ -1425,6 +1473,7 @@
       settings: {
         unit: 'kg',
         allowFreeInput: false,
+        allowProvisionalValues: false,
         optionCatalogs: {
           exercise: cloneOptionEntries(DEFAULT_OPTION_CATALOGS.exercise),
           equipment: cloneOptionEntries(DEFAULT_OPTION_CATALOGS.equipment),
@@ -1555,9 +1604,9 @@
           exercise.id = `ex-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
         }
         if (!Array.isArray(exercise.sets) || !exercise.sets.length) {
-          exercise.sets = [createEmptySet()];
+          exercise.sets = [normalizeSet({})];
         } else {
-          exercise.sets = exercise.sets.map((set) => ({ ...createEmptySet(), ...set, oneRM: null }));
+          exercise.sets = exercise.sets.map((set) => normalizeSet(set));
         }
         if (typeof exercise.groupId === 'string' && exercise.groupId.trim()) {
           exercise.groupId = exercise.groupId.trim();
@@ -1699,6 +1748,9 @@
     if (typeof appData.settings.allowFreeInput !== 'boolean') {
       appData.settings.allowFreeInput = false;
     }
+    if (typeof appData.settings.allowProvisionalValues !== 'boolean') {
+      appData.settings.allowProvisionalValues = false;
+    }
     ensureExerciseCatalogIntegrity();
     normalizeExercisePartHints();
     appData.settings.lastSelectedPartKey = normalizePartKey(appData.settings.lastSelectedPartKey);
@@ -1746,17 +1798,26 @@
 
     const recomputeExercise = (workoutId, exercise) => {
       const key = getExerciseKey(workoutId, exercise.id);
-      const signature = exercise.sets.map((set) => `${set.weight ?? ''}|${set.reps ?? ''}`).join('::');
+      const analyses = exercise.sets.map((set) => applyProvisionalState(set));
+      const signature = exercise.sets
+        .map((set, idx) => {
+          const marker = analyses[idx].isProvisional ? 'P' : 'F';
+          return `${marker}:${set.weight ?? ''}|${set.reps ?? ''}`;
+        })
+        .join('::');
       const cached = oneRmMemo.get(key);
       if (cached && cached.signature === signature) {
         cached.values.forEach((val, idx) => {
-          exercise.sets[idx].oneRM = val;
+          exercise.sets[idx].oneRM = analyses[idx].isProvisional ? null : val;
         });
         return;
       }
-      const values = exercise.sets.map((set) => compute1RM(set.weight, set.reps));
+      const values = exercise.sets.map((set, idx) => {
+        if (analyses[idx].isProvisional) return null;
+        return compute1RM(set.weight, set.reps);
+      });
       values.forEach((val, idx) => {
-        exercise.sets[idx].oneRM = val;
+        exercise.sets[idx].oneRM = analyses[idx].isProvisional ? null : val;
       });
       oneRmMemo.set(key, { signature, values });
     };
@@ -1983,8 +2044,33 @@
 
     /*** actions ***/
     function createEmptySet() {
-      return { weight: null, reps: null, oneRM: null, note: '' };
+      return { weight: null, reps: null, oneRM: null, note: '', isProvisional: false };
     }
+
+    const normalizeSet = (input) => {
+      const base = createEmptySet();
+      if (!input || typeof input !== 'object') {
+        applyProvisionalState(base);
+        return base;
+      }
+      const weight = safeNumber(input.weight);
+      const reps = safeNumber(input.reps);
+      if (weight !== null) base.weight = weight;
+      if (reps !== null) base.reps = reps;
+      base.note = typeof input.note === 'string' ? input.note : '';
+      if (typeof input.isProvisional === 'boolean') {
+        base.isProvisional = input.isProvisional;
+      }
+      applyProvisionalState(base);
+      return base;
+    };
+
+    const workoutHasProvisionalSets = (workout) => {
+      if (!workout || !Array.isArray(workout.exercises)) return false;
+      return workout.exercises.some((exercise) =>
+        Array.isArray(exercise?.sets) && exercise.sets.some((set) => Boolean(set?.isProvisional))
+      );
+    };
 
     const ensureExerciseCatalog = (name, partKey = null) => {
       const result = ensureOptionEntry('exercise', name, { allowCreate: true, partKey });
@@ -2017,8 +2103,8 @@
         performedOn: defaults.performedOn ?? getTodayDateValue(),
         intervalSeconds: defaults.intervalSeconds ?? null,
         sets: Array.isArray(defaults.sets) && defaults.sets.length
-          ? defaults.sets.map((set) => ({ ...createEmptySet(), ...set, oneRM: null }))
-          : [createEmptySet()]
+          ? defaults.sets.map((set) => normalizeSet(set))
+          : [normalizeSet({})]
       };
       const equipmentResult = ensureOptionEntry('equipment', defaults.equipmentKey ?? defaults.equipment ?? '', {
         allowCreate: true
@@ -2213,7 +2299,9 @@
         const exercise = getExerciseById(slot.exerciseId);
         if (!exercise) return;
         while (exercise.sets.length < targetLength) {
-          exercise.sets.push(createEmptySet());
+          const newSet = createEmptySet();
+          applyProvisionalState(newSet);
+          exercise.sets.push(newSet);
           mutated = true;
         }
       });
@@ -2228,7 +2316,9 @@
         if (!slot.exerciseId) return;
         const exercise = getExerciseById(slot.exerciseId);
         if (!exercise) return;
-        exercise.sets.push(createEmptySet());
+        const newSet = createEmptySet();
+        applyProvisionalState(newSet);
+        exercise.sets.push(newSet);
         recomputeExercise(appData.currentWorkout.id, exercise);
       });
       persist();
@@ -2249,6 +2339,7 @@
         cloned.weight = baseSet.weight;
         cloned.reps = baseSet.reps;
         cloned.note = baseSet.note;
+        applyProvisionalState(cloned);
         exercise.sets.splice(setIndex + 1, 0, cloned);
         recomputeExercise(appData.currentWorkout.id, exercise);
       });
@@ -2498,7 +2589,9 @@
             ? slotConfig.sets.length
             : Math.max(1, Number(slotConfig.setCount) || 1);
           while (exercise.sets.length < desiredCount) {
-            exercise.sets.push(createEmptySet());
+            const newSet = createEmptySet();
+            applyProvisionalState(newSet);
+            exercise.sets.push(newSet);
           }
           appData.currentWorkout.exercises.push(exercise);
           const groupId = slotConfig.groupId ?? (typeof slotConfig.role === 'string' ? slotConfig.role : null);
@@ -2580,15 +2673,7 @@
 
     const sanitizeTemplateSets = (sets) => {
       if (!Array.isArray(sets)) return [];
-      return sets.map((set) => {
-        const base = createEmptySet();
-        const weight = safeNumber(set?.weight);
-        const reps = safeNumber(set?.reps);
-        if (weight !== null) base.weight = weight;
-        if (reps !== null) base.reps = reps;
-        base.note = typeof set?.note === 'string' ? set.note : '';
-        return base;
-      });
+      return sets.map((set) => normalizeSet(set));
     };
 
     const createWorkoutFromBlueprint = (blueprint, { startedAt = Date.now() } = {}) => {
@@ -2636,7 +2721,11 @@
               ? sanitizedSets
               : Array.from(
                   { length: Math.max(1, Number(slotConfig.setCount) || 1) },
-                  () => createEmptySet()
+                  () => {
+                    const newSet = createEmptySet();
+                    applyProvisionalState(newSet);
+                    return newSet;
+                  }
                 );
             const exercise = createExerciseEntity(exerciseKey, {
               partKey,
@@ -3022,12 +3111,18 @@
         return { success: false, message: '対象のセットが見つかりません。' };
       }
       if (field === 'weight' || field === 'reps') {
+        const allowProvisional = Boolean(appData?.settings?.allowProvisionalValues);
         const num = safeNumber(rawValue);
         if (num === null) {
-          const label = field === 'weight' ? '重量' : '回数';
-          return { success: false, message: `${label}には数値を入力してください。` };
+          if (!allowProvisional) {
+            const label = field === 'weight' ? '重量' : '回数';
+            return { success: false, message: `${label}には数値を入力してください。` };
+          }
+          set[field] = null;
+        } else {
+          set[field] = num;
         }
-        set[field] = num;
+        applyProvisionalState(set);
         recomputeExercise(appData.currentWorkout.id, exercise);
         persist();
         return { success: true, rerender: true };
@@ -3104,7 +3199,9 @@
         addSupersetRound(context.superset.id);
         return;
       }
-      context.exercise.sets.push(createEmptySet());
+      const newSet = createEmptySet();
+      applyProvisionalState(newSet);
+      context.exercise.sets.push(newSet);
       recomputeExercise(appData.currentWorkout.id, context.exercise);
       persist();
       requestRender();
@@ -3123,6 +3220,7 @@
       cloned.weight = baseSet.weight;
       cloned.reps = baseSet.reps;
       cloned.note = baseSet.note;
+      applyProvisionalState(cloned);
       context.exercise.sets.splice(setIndex + 1, 0, cloned);
       recomputeExercise(appData.currentWorkout.id, context.exercise);
       persist();
@@ -3208,8 +3306,19 @@
         }
         const setsList = createElem('ul', { className: 'space-y-2' });
         exercise.sets.forEach((set, index) => {
-          const info = `#${index + 1} 重量: ${set.weight ?? '-'}${appData.settings.unit} / 回数: ${set.reps ?? '-'} / 推定1RM: ${set.oneRM ?? '-'}${set.note ? ' / ' + set.note : ''}`;
-          setsList.append(createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm', textContent: info }));
+          const isProvisional = Boolean(set?.isProvisional);
+          const weightLabel = set?.weight ?? '-';
+          const repsLabel = set?.reps ?? '-';
+          const oneRmLabel = set?.oneRM ?? '-';
+          const suffix = isProvisional ? ' ※暫定' : '';
+          const notePart = set?.note ? ` / ${set.note}` : '';
+          const info = `#${index + 1} 重量: ${weightLabel}${appData.settings.unit} / 回数: ${repsLabel} / 推定1RM: ${oneRmLabel}${suffix}${notePart}`;
+          setsList.append(
+            createElem('li', {
+              className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm',
+              textContent: info
+            })
+          );
         });
         const trendBtn = createElem('button', {
           className: 'text-xs font-semibold text-blue-700 underline decoration-dotted hover:text-blue-800',
@@ -4149,6 +4258,14 @@
         textContent: `開始: ${formatDate(workout.startedAt)}`
       });
       cardBody.append(headerInfo);
+      if (workoutHasProvisionalSets(workout)) {
+        cardBody.append(
+          createElem('p', {
+            className: 'provisional-warning rounded-xl px-4 py-3 text-sm font-semibold',
+            textContent: '暫定値が含まれているセットがあります。内容を確認し、必要に応じて値を入力してください。'
+          })
+        );
+      }
       if (!workout.supersets.length) {
         const emptyMessage = workout.entryMode === WORKOUT_ENTRY_MODES.single
           ? '種目を追加して記録を始めましょう。'
@@ -4358,12 +4475,32 @@
                   } else {
                     const set = exercise.sets[index];
                     let oneRmLabel = null;
+                    const provisionalWarning = createElem('p', {
+                      className: 'provisional-warning hidden rounded-lg px-3 py-2 text-xs font-semibold',
+                      textContent: '暫定値のため集計と推定1RMには含まれません。'
+                    });
+                    const syncProvisionalVisuals = () => {
+                      const context = findExerciseContext(exercise.id);
+                      const currentSet = context?.exercise?.sets?.[index] || set;
+                      const status = analyzeSetCompletion(currentSet);
+                      applyProvisionalHighlight(weightInput, status.missingWeight);
+                      applyProvisionalHighlight(repsInput, status.missingReps);
+                      if (status.isProvisional) {
+                        provisionalWarning.classList.remove('hidden');
+                      } else {
+                        provisionalWarning.classList.add('hidden');
+                      }
+                    };
                     const updateOneRmLabel = () => {
                       if (!oneRmLabel) return;
                       const context = findExerciseContext(exercise.id);
                       const currentSet = context?.exercise?.sets?.[index];
                       const value = currentSet?.oneRM;
                       oneRmLabel.textContent = value ? `推定1RM: ${value} ${appData.settings.unit}` : '推定1RM: -';
+                    };
+                    const syncDerivedState = () => {
+                      updateOneRmLabel();
+                      syncProvisionalVisuals();
                     };
                     const weightInput = createElem('input', {
                       className: 'input-base text-slate-900 placeholder-slate-400',
@@ -4380,7 +4517,7 @@
                       setIndex: index,
                       field: 'weight',
                       apply: (el, value) => applyInputValue(el, value),
-                      sync: updateOneRmLabel
+                      sync: syncDerivedState
                     });
                     slotCard.append(
                       createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput)
@@ -4402,7 +4539,7 @@
                       setIndex: index,
                       field: 'reps',
                       apply: (el, value) => applyInputValue(el, value),
-                      sync: updateOneRmLabel
+                      sync: syncDerivedState
                     });
                     slotCard.append(createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput));
                     repsInputs.push(repsInput);
@@ -4431,8 +4568,9 @@
                       className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800',
                       textContent: set?.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -'
                     });
-                    updateOneRmLabel();
+                    syncDerivedState();
                     slotCard.append(oneRmLabel);
+                    slotCard.append(provisionalWarning);
                   }
                   slotGrid.append(slotCard);
                 });
@@ -4526,7 +4664,11 @@
           workout.exercises
             .filter((ex) => (ex.nameKey ? ex.nameKey === exerciseKey : ex.name === exerciseLabel))
             .forEach((exercise) => {
-              const best = Math.max(...exercise.sets.map((set) => Number(set.oneRM) || 0));
+              const validSets = exercise.sets.filter(
+                (set) => !set.isProvisional && Number.isFinite(Number(set.oneRM))
+              );
+              if (!validSets.length) return;
+              const best = Math.max(...validSets.map((set) => Number(set.oneRM)));
               dataset.push({ date: workout.completedAt || workout.startedAt, value: best });
             });
         });
@@ -4584,7 +4726,17 @@
           }
           const list = createElem('ul', { className: 'space-y-2' });
           exercise.sets.forEach((set, idx) => {
-            list.append(createElem('li', { className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm', textContent: `#${idx + 1} 重量:${set.weight ?? '-'}${appData.settings.unit} / 回数:${set.reps ?? '-'} / 推定1RM:${set.oneRM ?? '-'}` }));
+            const isProvisional = Boolean(set?.isProvisional);
+            const weightLabel = set?.weight ?? '-';
+            const repsLabel = set?.reps ?? '-';
+            const oneRmLabel = set?.oneRM ?? '-';
+            const suffix = isProvisional ? ' ※暫定' : '';
+            list.append(
+              createElem('li', {
+                className: 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm',
+                textContent: `#${idx + 1} 重量:${weightLabel}${appData.settings.unit} / 回数:${repsLabel} / 推定1RM:${oneRmLabel}${suffix}`
+              })
+            );
           });
           block.append(list);
           cardBody.append(block);
@@ -4631,6 +4783,27 @@
         })
       );
       cardBody.append(inputModeSection);
+
+      const provisionalSection = createElem('div', { className: 'space-y-2' });
+      provisionalSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '暫定値の扱い' }));
+      const provisionalLabel = createElem('label', { className: 'inline-flex items-center gap-3 text-sm font-semibold text-slate-800' });
+      const provisionalToggle = createElem('input', { attrs: { type: 'checkbox' } });
+      provisionalToggle.checked = Boolean(appData.settings.allowProvisionalValues);
+      provisionalToggle.addEventListener('change', (event) => {
+        appData.settings.allowProvisionalValues = Boolean(event.target.checked);
+        recomputeAll();
+        persist();
+        requestRender();
+      });
+      provisionalLabel.append(provisionalToggle, createElem('span', { textContent: '暫定値を許容' }));
+      provisionalSection.append(
+        provisionalLabel,
+        createElem('p', {
+          className: 'text-xs text-slate-600',
+          textContent: 'ONにすると重量や回数が未入力でも保存できます。暫定値は集計と推定1RMから除外され、次回編集時に注意喚起されます。'
+        })
+      );
+      cardBody.append(provisionalSection);
 
       const catalogSection = createElem('div', { className: 'space-y-3' });
       catalogSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '登録済み種目' }));
