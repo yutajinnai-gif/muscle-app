@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20251002-SAFE-ROUTER-BANNER</title>
+  <title>BUILD_TAG=FIX-20251002-SAFE-OFF-BY-DEFAULT</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script>
@@ -141,7 +141,8 @@
   (function(){
     'use strict';
 
-      const BUILD_TAG = 'MARKERS-20240607';
+      const BUILD_TAG = 'FIX-20251002-SAFE-OFF-BY-DEFAULT';
+      /* DEPRECATED: Legacy SAFE_MODE detection kept for reference.
       const SAFE_MODE = true;
       let runtimeSafeMode = (() => {
         try {
@@ -157,6 +158,31 @@
         if (/^#\/?unsafe$/i.test(hash)) return false;
         return SAFE_MODE;
       })();
+      */
+      const qs = (() => {
+        try {
+          return new URLSearchParams(window.location.search || '');
+        } catch (_) {
+          return null;
+        }
+      })();
+      let forceSafeOnce = false;
+      try {
+        forceSafeOnce = localStorage.getItem('forceSafe') === '1';
+      } catch (_) {
+        forceSafeOnce = false;
+      }
+      const SAFE_MODE = (qs ? qs.get('safe') === '1' : false) || forceSafeOnce;
+      if (forceSafeOnce) {
+        try {
+          localStorage.removeItem('forceSafe');
+        } catch (_) {}
+      }
+      let runtimeSafeMode = SAFE_MODE;
+      if (!runtimeSafeMode) {
+        const initialSafeBanner = document.getElementById('safe-banner');
+        if (initialSafeBanner) initialSafeBanner.remove();
+      }
       const SAFE_STORAGE_KEY = 'muscle-app.safe-mode.workout';
       const SAFE_BOOT_TIMEOUT = 2000;
       let safeModeServiceWorkerCleared = false;
@@ -5666,6 +5692,44 @@
           showSafeModeToast();
         }, { once: false });
       };
+      const bootModeSection = (() => {
+        const section = createElem('div', { className: 'space-y-2' });
+        section.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '起動モード' }));
+        const label = createElem('label', { className: 'inline-flex items-center gap-3 text-sm font-semibold text-slate-800' });
+        const toggle = createElem('input', { attrs: { type: 'checkbox' } });
+        let forceSafe = false;
+        try {
+          forceSafe = localStorage.getItem('forceSafe') === '1';
+        } catch (_) {
+          forceSafe = false;
+        }
+        toggle.checked = forceSafe;
+        toggle.addEventListener('change', (event) => {
+          const checked = Boolean(event.target.checked);
+          if (checked) {
+            try {
+              localStorage.setItem('forceSafe', '1');
+            } catch (_) {}
+            if (window.confirm('次回はセーフモードで起動します。再読み込みしますか？')) {
+              window.location.reload();
+            }
+          } else {
+            try {
+              if (localStorage.getItem('forceSafe') === '1') {
+                localStorage.removeItem('forceSafe');
+              }
+            } catch (_) {}
+          }
+        });
+        label.append(toggle, createElem('span', { textContent: '次回はセーフモードで起動' }));
+        section.append(label);
+        section.append(createElem('p', {
+          className: 'text-xs text-slate-600',
+          textContent: 'ONにすると再読み込み後に安全モードで起動します。起動時に自動的に解除されます。'
+        }));
+        return section;
+      })();
+      cardBody.append(bootModeSection);
       const unitSection = createElem('div', { className: 'space-y-3' });
       unitSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '単位設定' }));
       const unitOptions = ['kg', 'lb'];
@@ -6051,6 +6115,10 @@
     let safeBannerBound = false;
     const syncSafeBanner = (isSafeMode) => {
       const banner = document.getElementById('safe-banner');
+      if (!isSafeMode) {
+        if (banner) banner.remove();
+        return;
+      }
       const exitBtn = document.getElementById('exit-safe');
       if (!banner || !exitBtn) return;
       if (!safeBannerBound) {
@@ -6072,11 +6140,7 @@
         });
         safeBannerBound = true;
       }
-      if (isSafeMode) {
-        banner.classList.remove('hidden');
-      } else {
-        banner.classList.add('hidden');
-      }
+      banner.classList.remove('hidden');
     };
 
     const render = (state, appFlags = lastRenderFlags) => {
