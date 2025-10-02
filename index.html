@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20250305-GRACEFUL-INPUT</title>
+  <title>BUILD_TAG=FIX-20251002-TDZ-1609</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -45,7 +45,7 @@
   (function(){
     'use strict';
 
-    const BUILD_TAG = 'FIX-20250305-GRACEFUL-INPUT';
+      const BUILD_TAG = 'FIX-20251002-TDZ-1609';
 
     const IS_DEV = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(window.location.hostname);
     let initializationWarningCount = 0;
@@ -2043,27 +2043,27 @@
     };
 
     /*** actions ***/
-    function createEmptySet() {
-      return { weight: null, reps: null, oneRM: null, note: '', isProvisional: false };
-    }
+      function createEmptySet() {
+        return { weight: null, reps: null, oneRM: null, note: '', isProvisional: false };
+      }
 
-    const normalizeSet = (input) => {
-      const base = createEmptySet();
-      if (!input || typeof input !== 'object') {
+      function normalizeSet(input) {
+        const base = createEmptySet();
+        if (!input || typeof input !== 'object') {
+          applyProvisionalState(base);
+          return base;
+        }
+        const weight = safeNumber(input.weight);
+        const reps = safeNumber(input.reps);
+        if (weight !== null) base.weight = weight;
+        if (reps !== null) base.reps = reps;
+        base.note = typeof input.note === 'string' ? input.note : '';
+        if (typeof input.isProvisional === 'boolean') {
+          base.isProvisional = input.isProvisional;
+        }
         applyProvisionalState(base);
         return base;
       }
-      const weight = safeNumber(input.weight);
-      const reps = safeNumber(input.reps);
-      if (weight !== null) base.weight = weight;
-      if (reps !== null) base.reps = reps;
-      base.note = typeof input.note === 'string' ? input.note : '';
-      if (typeof input.isProvisional === 'boolean') {
-        base.isProvisional = input.isProvisional;
-      }
-      applyProvisionalState(base);
-      return base;
-    };
 
     const workoutHasProvisionalSets = (workout) => {
       if (!workout || !Array.isArray(workout.exercises)) return false;
