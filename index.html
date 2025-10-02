@@ -5966,16 +5966,166 @@
       applyScheduledActionBar(route);
     };
 
-    /*** bootstrap ***/
-    bindTabs();
-    syncHashToRoute(appState.route);
-    try {
+    const SAFE_MODE_ACTIVE = (() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('safe') === '1') return true;
+      } catch (_) {}
+      const hash = window.location.hash || '';
+      if (/^#\/?safe$/i.test(hash)) return true;
+      return SAFE_MODE;
+    })();
+
+    if (SAFE_MODE_ACTIVE && !SAFE_MODE) {
+      if (typeof disableServiceWorkerOnce === 'function') {
+        disableServiceWorkerOnce();
+      }
+      if (typeof window.Chart !== 'undefined') {
+        try { window.Chart = undefined; } catch (_) {}
+      }
+      if (typeof window.IntersectionObserver !== 'undefined') {
+        try { window.IntersectionObserver = undefined; } catch (_) {}
+      }
+    }
+
+    const RECOVERY_BUILD_TAG = (() => {
+      const now = new Date();
+      const year = String(now.getFullYear());
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      return `FIX-BOOT-RECOVERY-${year}${month}${day}`;
+    })();
+
+    let tabsBound = false;
+    let bootWatchdogId = null;
+
+    const ensureHostStructure = () => {
+      const bodyEl = document.body;
+      if (!bodyEl) return null;
+      let errbar = document.getElementById('errbar');
+      if (!errbar) {
+        errbar = document.createElement('div');
+        errbar.id = 'errbar';
+        bodyEl.insertBefore(errbar, bodyEl.firstChild || null);
+      }
+      errbar.setAttribute('aria-live', 'assertive');
+      let host = appRoot || document.getElementById('app');
+      if (!host) {
+        host = document.createElement('main');
+        host.id = 'app';
+        bodyEl.appendChild(host);
+      }
+      return host;
+    };
+
+    const applyVisibilityGuarantees = (host) => {
+      const htmlEl = document.documentElement;
+      [htmlEl, document.body, host].forEach((node) => {
+        if (!node) return;
+        node.style.setProperty('display', 'block');
+        node.style.setProperty('visibility', 'visible');
+        node.style.setProperty('opacity', '1');
+        node.style.setProperty('overflow-y', 'auto');
+      });
+    };
+
+    const updateBuildIdentifiers = (tag, host) => {
+      document.title = `BUILD_TAG=${tag}`;
+      const htmlEl = document.documentElement;
+      if (htmlEl) htmlEl.setAttribute('data-build-tag', tag);
+      const bodyEl = document.body;
+      if (bodyEl) bodyEl.setAttribute('data-build-tag', tag);
+      const scope = host || appRoot || document.getElementById('app');
+      const buildLabel = scope?.querySelector('.safe-mode-shell span.text-xs.text-slate-500');
+      if (buildLabel) {
+        buildLabel.textContent = `BUILD: ${tag}`;
+      }
+    };
+
+    const clearBootWatchdog = () => {
+      if (bootWatchdogId !== null) {
+        window.clearTimeout(bootWatchdogId);
+        bootWatchdogId = null;
+      }
+    };
+
+    const mountBootTimeoutUi = () => {
+      const host = appRoot || document.getElementById('app');
+      if (!host || host.dataset.fullAppReady === '1') return;
+      if (host.querySelector('.boot-timeout-fallback')) return;
+      const fallback = createElem('div', {
+        className: 'boot-timeout-fallback bg-white rounded-2xl shadow-sm p-4 sm:p-5 flex flex-col gap-3'
+      });
+      fallback.append(
+        createElem('h2', { className: 'text-base font-semibold text-slate-900', textContent: '安全モードの起動に失敗しました' }),
+        createElem('p', { className: 'text-sm text-slate-600', textContent: '初期化がタイムアウトしたため、簡易UIを表示しています。' })
+      );
+      host.append(fallback);
+    };
+
+    const startBootWatchdog = () => {
+      clearBootWatchdog();
+      bootWatchdogId = window.setTimeout(() => {
+        const host = appRoot || document.getElementById('app');
+        if (host && host.dataset.fullAppReady === '1') {
+          bootWatchdogId = null;
+          return;
+        }
+        bootWatchdogId = null;
+        mountBootTimeoutUi();
+        if (typeof window.showError === 'function') {
+          window.showError('Boot timeout');
+        }
+        safeMode.onRenderFailure(new Error('Boot timeout'));
+      }, SAFE_BOOT_TIMEOUT);
+    };
+
+    const mountAppSkeleton = () => {
+      const host = ensureHostStructure();
+      if (!host) {
+        throw new Error('アプリのルート要素が見つかりません');
+      }
+      applyVisibilityGuarantees(host);
+      if (!tabsBound) {
+        bindTabs();
+        tabsBound = true;
+      }
+      safeMode.mount(host);
+      updateBuildIdentifiers(RECOVERY_BUILD_TAG, host);
+      return host;
+    };
+
+    const renderSafeWorkout = () => {
+      if (SAFE_MODE_ACTIVE && appState.route !== ROUTES.WORKOUT) {
+        appState = { ...appState, route: ROUTES.WORKOUT };
+      }
+      syncHashToRoute(appState.route);
       render(appState);
       lastStableState = { ...appState };
+      clearBootWatchdog();
       safeMode.onRenderSuccess();
+    };
+
+    const boot = () => {
+      mountAppSkeleton();
+      renderSafeWorkout();
+    };
+
+    startBootWatchdog();
+    try {
+      boot();
     } catch (err) {
+      clearBootWatchdog();
+      const detail = err?.stack || String(err);
+      if (typeof window.showError === 'function') {
+        window.showError('Boot crash', detail);
+      }
       pushError(`初期化に失敗しました: ${err.message || err}`);
-      safeMode.onRenderFailure(err);
+      ensureHostStructure();
+      applyVisibilityGuarantees(appRoot || document.getElementById('app'));
+      updateBuildIdentifiers(RECOVERY_BUILD_TAG);
+      mountBootTimeoutUi();
+      safeMode.onRenderFailure(err instanceof Error ? err : new Error(detail));
     }
 <!-- PATCH-END: BOOT-SAFE -->
   })();
