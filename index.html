@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20251002-REF-TDZ</title>
+  <title>BUILD_TAG=FIX-20251002-DROPDOWNS</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -19,8 +19,10 @@
     .btn-primary { background-color: #1f2937; color: white; }
     .btn-primary:hover { background-color: #111827; }
     .btn-muted { background-color: white; color: #1f2937; border: 1px solid rgba(30,41,59,0.3); }
-    .input-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.6rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; }
+    .input-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.6rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; min-height: 44px; }
     .input-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
+    .select-base { border: 1px solid rgba(51,65,85,0.35); border-radius: 0.75rem; padding: 0.6rem 0.75rem; font-size: 1rem; width: 100%; background-color: white; color: #111827; min-height: 44px; }
+    .select-base:focus { outline: 2px solid rgba(30, 64, 175, 0.6); outline-offset: 2px; }
     #pwa-toast-root { position: fixed; inset-inline: 0; bottom: 4.5rem; display: flex; justify-content: center; padding: 0 1rem 1.25rem; pointer-events: none; z-index: 60; }
     #pwa-toast-root.hidden { display: none; }
     .pwa-toast-card { pointer-events: auto; display: inline-flex; align-items: center; gap: 0.75rem; background: #111827; color: white; border-radius: 9999px; padding: 0.75rem 1.15rem; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.32); font-size: 0.95rem; font-weight: 600; }
@@ -41,7 +43,7 @@
   (function(){
     'use strict';
 
-    const BUILD_TAG = 'FIX-20251002-REF-TDZ';
+    const BUILD_TAG = 'FIX-20251002-DROPDOWNS';
 
     const IS_DEV = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(window.location.hostname);
     let initializationWarningCount = 0;
@@ -324,11 +326,16 @@
       'workoutOrder',
       'date',
       'part',
+      'partKey',
       'exercise',
+      'exerciseKey',
       'equipment',
+      'equipmentKey',
       'attachment',
+      'attachmentKey',
       'angle',
       'position',
+      'positionKey',
       'performedOn',
       'intervalSeconds',
       'exerciseId',
@@ -383,6 +390,257 @@
     const getPartDefinition = (key) => {
       const normalized = normalizePartKey(key);
       return normalized ? EXERCISE_PARTS.find((part) => part.key === normalized) || null : null;
+    };
+
+    const DEFAULT_EXERCISE_OPTIONS = Object.freeze([
+      { key: 'bench_press', label: 'ベンチプレス', partKey: 'chest' },
+      { key: 'incline_bench_press', label: 'インクラインベンチプレス', partKey: 'chest' },
+      { key: 'dumbbell_fly', label: 'ダンベルフライ', partKey: 'chest' },
+      { key: 'chest_press_machine', label: 'チェストプレス', partKey: 'chest' },
+      { key: 'dips', label: 'ディップス', partKey: 'chest' },
+      { key: 'deadlift', label: 'デッドリフト', partKey: 'back' },
+      { key: 'bent_over_row', label: 'ベントオーバーロウ', partKey: 'back' },
+      { key: 'lat_pulldown', label: 'ラットプルダウン', partKey: 'back' },
+      { key: 'seated_row', label: 'シーテッドロウ', partKey: 'back' },
+      { key: 'pull_up', label: 'プルアップ', partKey: 'back' },
+      { key: 'shoulder_press', label: 'ショルダープレス', partKey: 'shoulder' },
+      { key: 'lateral_raise', label: 'サイドレイズ', partKey: 'shoulder' },
+      { key: 'rear_raise', label: 'リアレイズ', partKey: 'shoulder' },
+      { key: 'front_raise', label: 'フロントレイズ', partKey: 'shoulder' },
+      { key: 'upright_row', label: 'アップライトロウ', partKey: 'shoulder' },
+      { key: 'biceps_curl', label: 'バイセップカール', partKey: 'arm' },
+      { key: 'triceps_pushdown', label: 'トライセプスプレスダウン', partKey: 'arm' },
+      { key: 'dumbbell_curl', label: 'ダンベルカール', partKey: 'arm' },
+      { key: 'skull_crusher', label: 'スカルクラッシャー', partKey: 'arm' },
+      { key: 'hammer_curl', label: 'ハンマーカール', partKey: 'arm' },
+      { key: 'plank', label: 'プランク', partKey: 'core' },
+      { key: 'crunch', label: 'クランチ', partKey: 'core' },
+      { key: 'leg_raise', label: 'レッグレイズ', partKey: 'core' },
+      { key: 'russian_twist', label: 'ロシアンツイスト', partKey: 'core' },
+      { key: 'ab_wheel', label: 'アブローラー', partKey: 'core' },
+      { key: 'squat', label: 'スクワット', partKey: 'leg' },
+      { key: 'lunge', label: 'ランジ', partKey: 'leg' },
+      { key: 'leg_press', label: 'レッグプレス', partKey: 'leg' },
+      { key: 'leg_extension', label: 'レッグエクステンション', partKey: 'leg' },
+      { key: 'leg_curl', label: 'レッグカール', partKey: 'leg' }
+    ]);
+
+    const DEFAULT_EQUIPMENT_OPTIONS = Object.freeze([
+      { key: 'barbell', label: 'バーベル' },
+      { key: 'dumbbell', label: 'ダンベル' },
+      { key: 'machine', label: 'マシン' },
+      { key: 'cable', label: 'ケーブル' },
+      { key: 'bodyweight', label: '自重' },
+      { key: 'kettlebell', label: 'ケトルベル' }
+    ]);
+
+    const DEFAULT_ATTACHMENT_OPTIONS = Object.freeze([
+      { key: 'none', label: 'なし' },
+      { key: 'rope', label: 'ロープ' },
+      { key: 'straight_bar', label: 'ストレートバー' },
+      { key: 'ez_bar', label: 'EZバー' },
+      { key: 'd_handle', label: 'Dハンドル' },
+      { key: 'v_bar', label: 'Vバー' }
+    ]);
+
+    const DEFAULT_POSITION_OPTIONS = Object.freeze([
+      { key: 'neutral', label: 'ナチュラル' },
+      { key: 'wide', label: 'ワイド' },
+      { key: 'narrow', label: 'ナロー' },
+      { key: 'supinated', label: 'サップネイテッド' },
+      { key: 'pronated', label: 'プロネイテッド' },
+      { key: 'mixed', label: 'ミックスグリップ' }
+    ]);
+
+    const OPTION_FIELD_LIST = Object.freeze(['exercise', 'equipment', 'attachment', 'position']);
+
+    const DEFAULT_OPTION_CATALOGS = Object.freeze({
+      exercise: DEFAULT_EXERCISE_OPTIONS,
+      equipment: DEFAULT_EQUIPMENT_OPTIONS,
+      attachment: DEFAULT_ATTACHMENT_OPTIONS,
+      position: DEFAULT_POSITION_OPTIONS
+    });
+
+    const cloneOptionEntries = (entries) => entries.map((entry) => ({ ...entry }));
+
+    const normalizeLabelValue = (value) => {
+      if (typeof value !== 'string') return '';
+      try {
+        return value.normalize('NFKC');
+      } catch (err) {
+        return value;
+      }
+    };
+
+    const createLabelSignature = (value) => normalizeLabelValue(value).replace(/\s+/g, '').toLowerCase();
+
+    const createDeterministicOptionKey = (field, label) => {
+      const normalized = normalizeLabelValue(label);
+      let hash = 0;
+      for (const char of normalized) {
+        const code = char.codePointAt(0);
+        hash = (hash * 31 + code) >>> 0;
+      }
+      return `${field}-${hash.toString(36)}`;
+    };
+
+    const ensureOptionCatalogs = (settings) => {
+      if (!settings || typeof settings !== 'object') return;
+      if (!settings.optionCatalogs || typeof settings.optionCatalogs !== 'object') {
+        settings.optionCatalogs = {};
+      }
+      OPTION_FIELD_LIST.forEach((field) => {
+        const existing = Array.isArray(settings.optionCatalogs[field])
+          ? settings.optionCatalogs[field]
+          : [];
+        const sanitized = [];
+        const seenKeys = new Set();
+        existing.forEach((entry) => {
+          if (!entry || typeof entry !== 'object') return;
+          const key = typeof entry.key === 'string' && entry.key.trim() ? entry.key.trim() : null;
+          const label = normalizeLabelValue(entry.label ?? '');
+          if (!key || !label) return;
+          if (seenKeys.has(key)) return;
+          const option = { key, label };
+          if (field === 'exercise') {
+            option.partKey = normalizePartKey(entry.partKey) || null;
+          }
+          if (entry.custom) option.custom = true;
+          sanitized.push(option);
+          seenKeys.add(key);
+        });
+        DEFAULT_OPTION_CATALOGS[field].forEach((entry) => {
+          if (seenKeys.has(entry.key)) return;
+          const option = field === 'exercise'
+            ? { key: entry.key, label: entry.label, partKey: entry.partKey }
+            : { key: entry.key, label: entry.label };
+          sanitized.push(option);
+          seenKeys.add(entry.key);
+        });
+        sanitized.sort((a, b) => a.label.localeCompare(b.label, 'ja'));
+        settings.optionCatalogs[field] = sanitized;
+      });
+    };
+
+    const getOptionCatalogFromSettings = (settings, field) => {
+      if (!settings || typeof settings !== 'object') return DEFAULT_OPTION_CATALOGS[field] || [];
+      ensureOptionCatalogs(settings);
+      return settings.optionCatalogs[field] || [];
+    };
+
+    const getOptionCatalog = (field) => getOptionCatalogFromSettings(appData?.settings, field);
+
+    const findOptionEntry = (field, predicate, settings = appData?.settings) => {
+      const catalog = getOptionCatalogFromSettings(settings, field);
+      for (let index = 0; index < catalog.length; index += 1) {
+        const entry = catalog[index];
+        if (predicate(entry)) return entry;
+      }
+      return null;
+    };
+
+    const getOptionByKey = (field, key) => {
+      if (!key) return null;
+      return findOptionEntry(field, (entry) => entry.key === key) || null;
+    };
+
+    const getOptionLabel = (field, key) => {
+      if (!key) return '';
+      const entry = getOptionByKey(field, key);
+      return entry ? entry.label : '';
+    };
+
+    const ensureOptionEntry = (field, value, { partKey = null, allowCreate = true, settingsOverride = null } = {}) => {
+      if (!value && value !== '') {
+        return { key: null, entry: null, created: false };
+      }
+      const settings = settingsOverride || appData?.settings;
+      const catalog = getOptionCatalogFromSettings(settings, field);
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return { key: null, entry: null, created: false };
+        }
+        const byKey = findOptionEntry(field, (entry) => entry.key === trimmed, settings);
+        if (byKey) {
+          return { key: byKey.key, entry: byKey, created: false };
+        }
+        const signature = createLabelSignature(trimmed);
+        const byLabel = findOptionEntry(field, (entry) => createLabelSignature(entry.label) === signature, settings);
+        if (byLabel) {
+          return { key: byLabel.key, entry: byLabel, created: false };
+        }
+        if (!allowCreate) {
+          return { key: null, entry: null, created: false };
+        }
+        if (!settings) {
+          return { key: null, entry: null, created: false };
+        }
+        ensureOptionCatalogs(settings);
+        const label = normalizeLabelValue(trimmed).trim();
+        if (!label) {
+          return { key: null, entry: null, created: false };
+        }
+        let candidateKey = createDeterministicOptionKey(field, label);
+        let counter = 1;
+        while ((settings.optionCatalogs[field] || []).some((entry) => entry.key === candidateKey)) {
+          counter += 1;
+          candidateKey = `${createDeterministicOptionKey(field, `${label}-${counter}`)}-${counter}`;
+        }
+        const newEntry = field === 'exercise'
+          ? { key: candidateKey, label, partKey: normalizePartKey(partKey) || null, custom: true }
+          : { key: candidateKey, label, custom: true };
+        settings.optionCatalogs[field].push(newEntry);
+        settings.optionCatalogs[field].sort((a, b) => a.label.localeCompare(b.label, 'ja'));
+        return { key: candidateKey, entry: newEntry, created: true };
+      }
+      return { key: null, entry: null, created: false };
+    };
+
+    const ensureExerciseCatalogIntegrity = () => {
+      if (!appData || !appData.settings) return;
+      ensureOptionCatalogs(appData.settings);
+      if (!Array.isArray(appData.settings.exerciseCatalog)) {
+        appData.settings.exerciseCatalog = [];
+      }
+      const seen = new Set();
+      const normalized = [];
+      const appendKey = (key) => {
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        normalized.push(key);
+      };
+      appData.settings.exerciseCatalog.forEach((value) => {
+        const result = ensureOptionEntry('exercise', value, { allowCreate: true });
+        if (result.key) appendKey(result.key);
+      });
+      DEFAULT_OPTION_CATALOGS.exercise.forEach((entry) => appendKey(entry.key));
+      appData.settings.exerciseCatalog = normalized;
+    };
+
+    const getExerciseLabelByKey = (key) => getOptionLabel('exercise', key);
+
+    const getExercisePartByKey = (key) => {
+      if (!key) return null;
+      const entry = getOptionByKey('exercise', key);
+      return entry ? normalizePartKey(entry.partKey) : null;
+    };
+
+    const normalizeExercisePartHints = () => {
+      if (!appData || !appData.settings) return;
+      const hints = appData.settings.exercisePartHints;
+      const next = {};
+      if (hints && typeof hints === 'object') {
+        Object.entries(hints).forEach(([rawName, rawPart]) => {
+          const normalizedPart = normalizePartKey(rawPart);
+          if (!normalizedPart) return;
+          const { key } = ensureOptionEntry('exercise', rawName, { allowCreate: true });
+          if (key) {
+            next[key] = normalizedPart;
+          }
+        });
+      }
+      appData.settings.exercisePartHints = next;
     };
     const CSV_ALLOWED_SET_TYPES = new Set(['', 'standard']);
     const CSV_LINE_BREAK = '\r\n';
@@ -1166,12 +1424,19 @@
       },
       settings: {
         unit: 'kg',
-        exerciseCatalog: ['ベンチプレス', 'スクワット', 'デッドリフト'],
+        allowFreeInput: false,
+        optionCatalogs: {
+          exercise: cloneOptionEntries(DEFAULT_OPTION_CATALOGS.exercise),
+          equipment: cloneOptionEntries(DEFAULT_OPTION_CATALOGS.equipment),
+          attachment: cloneOptionEntries(DEFAULT_OPTION_CATALOGS.attachment),
+          position: cloneOptionEntries(DEFAULT_OPTION_CATALOGS.position)
+        },
+        exerciseCatalog: DEFAULT_OPTION_CATALOGS.exercise.map((entry) => entry.key),
         lastSelectedPartKey: null,
         exercisePartHints: {}
       },
       historyView: {
-        exerciseName: null
+        exerciseKey: null
       },
       lastSupersetBlueprint: null,
       templates: []
@@ -1274,6 +1539,7 @@
     const normalizeWorkout = (workout) => {
       if (!workout || typeof workout !== 'object') return;
       assertInitialized('createEmptySet', createEmptySet);
+      ensureExerciseCatalogIntegrity();
       workout.entryMode = normalizeEntryMode(workout.entryMode);
       if (workout.selectedPartKey === undefined) {
         workout.selectedPartKey = null;
@@ -1298,6 +1564,32 @@
         } else {
           exercise.groupId = null;
         }
+        const nameSource = typeof exercise.nameKey === 'string' && exercise.nameKey
+          ? exercise.nameKey
+          : typeof exercise.name === 'string'
+            ? exercise.name
+            : '';
+        const nameResult = ensureOptionEntry('exercise', nameSource, { allowCreate: true });
+        exercise.nameKey = nameResult.key || null;
+        exercise.name = nameResult.entry?.label || (typeof exercise.name === 'string' ? exercise.name : '');
+        if (exercise.nameKey && !appData.settings.exerciseCatalog.includes(exercise.nameKey)) {
+          appData.settings.exerciseCatalog.push(exercise.nameKey);
+        }
+        const equipmentResult = ensureOptionEntry('equipment', exercise.equipmentKey ?? exercise.equipment ?? '', {
+          allowCreate: true
+        });
+        exercise.equipmentKey = equipmentResult.key || null;
+        exercise.equipment = equipmentResult.entry?.label || '';
+        const attachmentResult = ensureOptionEntry('attachment', exercise.attachmentKey ?? exercise.attachment ?? '', {
+          allowCreate: true
+        });
+        exercise.attachmentKey = attachmentResult.key || null;
+        exercise.attachment = attachmentResult.entry?.label || '';
+        const positionResult = ensureOptionEntry('position', exercise.positionKey ?? exercise.position ?? '', {
+          allowCreate: true
+        });
+        exercise.positionKey = positionResult.key || null;
+        exercise.position = positionResult.entry?.label || '';
         exerciseMap.set(exercise.id, exercise);
       });
 
@@ -1403,13 +1695,24 @@
     if (!appData.settings || typeof appData.settings !== 'object') {
       appData.settings = createInitialData().settings;
     }
-    if (!Array.isArray(appData.settings.exerciseCatalog)) {
-      appData.settings.exerciseCatalog = createInitialData().settings.exerciseCatalog.slice();
+    ensureOptionCatalogs(appData.settings);
+    if (typeof appData.settings.allowFreeInput !== 'boolean') {
+      appData.settings.allowFreeInput = false;
     }
-    if (!appData.settings.exercisePartHints || typeof appData.settings.exercisePartHints !== 'object') {
-      appData.settings.exercisePartHints = {};
-    }
+    ensureExerciseCatalogIntegrity();
+    normalizeExercisePartHints();
     appData.settings.lastSelectedPartKey = normalizePartKey(appData.settings.lastSelectedPartKey);
+    if (!appData.historyView || typeof appData.historyView !== 'object') {
+      appData.historyView = { exerciseKey: null };
+    }
+    if (appData.historyView.exerciseName && !appData.historyView.exerciseKey) {
+      const { key } = ensureOptionEntry('exercise', appData.historyView.exerciseName, { allowCreate: true });
+      appData.historyView.exerciseKey = key || null;
+      delete appData.historyView.exerciseName;
+    }
+    if (appData.historyView.exerciseKey && !getExerciseLabelByKey(appData.historyView.exerciseKey)) {
+      appData.historyView.exerciseKey = null;
+    }
     normalizeWorkout(appData.currentWorkout);
     const initialPartKey = normalizePartKey(appData.currentWorkout.selectedPartKey)
       ?? appData.settings.lastSelectedPartKey
@@ -1683,28 +1986,62 @@
       return { weight: null, reps: null, oneRM: null, note: '' };
     }
 
-    const ensureExerciseCatalog = (name) => {
-      if (!name) return;
-      if (!appData.settings.exerciseCatalog.includes(name)) {
-        appData.settings.exerciseCatalog.push(name);
+    const ensureExerciseCatalog = (name, partKey = null) => {
+      const result = ensureOptionEntry('exercise', name, { allowCreate: true, partKey });
+      if (!result.key) return null;
+      ensureExerciseCatalogIntegrity();
+      if (!appData.settings.exerciseCatalog.includes(result.key)) {
+        appData.settings.exerciseCatalog.push(result.key);
       }
+      return result.key;
     };
 
     const createExerciseEntity = (name, defaults = {}) => {
-      return {
+      const partKey = normalizePartKey(defaults.partKey) || getExercisePartByKey(defaults.nameKey) || null;
+      const nameResult = ensureOptionEntry('exercise', defaults.nameKey ?? name ?? '', {
+        allowCreate: true,
+        partKey
+      });
+      const exercise = {
         id: `ex-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
-        name,
+        nameKey: nameResult.key || null,
+        name: nameResult.entry?.label || (typeof name === 'string' ? normalizeLabelValue(name).trim() : ''),
         groupId: defaults.groupId ?? null,
-        equipment: defaults.equipment ?? '',
-        attachment: defaults.attachment ?? '',
+        equipmentKey: null,
+        equipment: '',
+        attachmentKey: null,
+        attachment: '',
         angle: defaults.angle ?? null,
-        position: defaults.position ?? '',
+        positionKey: null,
+        position: '',
         performedOn: defaults.performedOn ?? getTodayDateValue(),
         intervalSeconds: defaults.intervalSeconds ?? null,
         sets: Array.isArray(defaults.sets) && defaults.sets.length
           ? defaults.sets.map((set) => ({ ...createEmptySet(), ...set, oneRM: null }))
           : [createEmptySet()]
       };
+      const equipmentResult = ensureOptionEntry('equipment', defaults.equipmentKey ?? defaults.equipment ?? '', {
+        allowCreate: true
+      });
+      exercise.equipmentKey = equipmentResult.key || null;
+      exercise.equipment = equipmentResult.entry?.label || '';
+      const attachmentResult = ensureOptionEntry('attachment', defaults.attachmentKey ?? defaults.attachment ?? '', {
+        allowCreate: true
+      });
+      exercise.attachmentKey = attachmentResult.key || null;
+      exercise.attachment = attachmentResult.entry?.label || '';
+      const positionResult = ensureOptionEntry('position', defaults.positionKey ?? defaults.position ?? '', {
+        allowCreate: true
+      });
+      exercise.positionKey = positionResult.key || null;
+      exercise.position = positionResult.entry?.label || '';
+      if (exercise.nameKey && appData?.settings) {
+        ensureExerciseCatalogIntegrity();
+        if (!appData.settings.exerciseCatalog.includes(exercise.nameKey)) {
+          appData.settings.exerciseCatalog.push(exercise.nameKey);
+        }
+      }
+      return exercise;
     };
 
     const getExerciseOptionsForPart = (partKey) => {
@@ -1712,35 +2049,30 @@
       const hints = (appData.settings && typeof appData.settings.exercisePartHints === 'object')
         ? appData.settings.exercisePartHints
         : {};
-      const suggestions = new Set();
-      if (normalized) {
-        const definition = getPartDefinition(normalized);
-        if (definition) {
-          definition.exercises.forEach((name) => suggestions.add(name));
-        }
-        Object.entries(hints).forEach(([name, key]) => {
-          if (normalizePartKey(key) === normalized) {
-            suggestions.add(name);
+      const catalog = getOptionCatalog('exercise');
+      const matched = [];
+      const fallback = [];
+      const seen = new Set();
+      catalog.forEach((entry) => {
+        if (!entry || !entry.key) return;
+        const entryPart = normalizePartKey(entry.partKey) || normalizePartKey(hints[entry.key]);
+        if (normalized) {
+          if (entryPart === normalized) {
+            if (!seen.has(entry.key)) {
+              seen.add(entry.key);
+              matched.push(entry);
+            }
+          } else if (!fallback.some((item) => item.key === entry.key)) {
+            fallback.push(entry);
           }
-        });
-        appData.settings.exerciseCatalog.forEach((name) => {
-          if (normalizePartKey(hints?.[name]) === normalized) {
-            suggestions.add(name);
-          }
-        });
-        if (!suggestions.size) {
-          appData.settings.exerciseCatalog.forEach((name) => suggestions.add(name));
+        } else if (!seen.has(entry.key)) {
+          seen.add(entry.key);
+          matched.push(entry);
         }
-      } else {
-        EXERCISE_PARTS.forEach((part) => {
-          part.exercises.forEach((name) => suggestions.add(name));
-        });
-        Object.keys(hints).forEach((name) => suggestions.add(name));
-        appData.settings.exerciseCatalog.forEach((name) => suggestions.add(name));
-      }
-      const list = Array.from(suggestions);
-      list.sort((a, b) => a.localeCompare(b, 'ja'));
-      return list;
+      });
+      const source = normalized && matched.length === 0 ? fallback : matched;
+      const sorted = source.slice().sort((a, b) => a.label.localeCompare(b.label, 'ja'));
+      return sorted;
     };
 
     const getActivePartKey = () => normalizePartKey(appData?.currentWorkout?.selectedPartKey);
@@ -1748,24 +2080,12 @@
     const recordExercisePartHint = (name, partKey) => {
       const normalized = normalizePartKey(partKey);
       if (!normalized) return;
-      if (typeof name !== 'string') return;
-      const trimmed = name.trim();
-      if (!trimmed) return;
+      const result = ensureOptionEntry('exercise', name, { allowCreate: true, partKey: normalized });
+      if (!result.key) return;
       if (!appData.settings.exercisePartHints || typeof appData.settings.exercisePartHints !== 'object') {
         appData.settings.exercisePartHints = {};
       }
-      appData.settings.exercisePartHints[trimmed] = normalized;
-    };
-
-    const promptExerciseName = async (title) => {
-      const options = getExerciseOptionsForPart(getActivePartKey());
-      const choice = await pickFromList(title, [...options, '新規追加']);
-      if (!choice) return null;
-      if (choice === '新規追加') {
-        const value = await promptText('新しい種目名');
-        return value || null;
-      }
-      return choice;
+      appData.settings.exercisePartHints[result.key] = normalized;
     };
 
     const refreshSupersetLabels = () => {
@@ -1798,21 +2118,10 @@
       requestRender();
     };
 
-    const addSuperset = async () => {
+    const addSuperset = () => {
       const index = appData.currentWorkout.supersets.length;
       const label = generateSupersetLabel(index);
       const mode = normalizeEntryMode(appData.currentWorkout.entryMode);
-      const groupIds = getGroupIdsForMode(mode);
-      const selections = [];
-      for (const groupId of groupIds) {
-        const promptLabel = mode === WORKOUT_ENTRY_MODES.single || groupId == null
-          ? '追加する種目'
-          : `${label} ${groupId} の種目`;
-        const name = await promptExerciseName(promptLabel);
-        if (!name) return;
-        selections.push({ name, groupId, partKey: getActivePartKey() });
-      }
-
       const superset = createSupersetSkeleton({
         id: createSupersetId(),
         label,
@@ -1820,22 +2129,6 @@
         collapsed: false,
         mode
       });
-
-      selections.forEach(({ name, groupId, partKey }, slotIndex) => {
-        recordExercisePartHint(name, partKey);
-        ensureExerciseCatalog(name);
-        const exercise = createExerciseEntity(name);
-        const slot = superset.slots[slotIndex] || superset.slots.find((entry) => entry.groupId === groupId);
-        appData.currentWorkout.exercises.push(exercise);
-        if (slot) {
-          slot.exerciseId = exercise.id;
-          exercise.groupId = slot.groupId ?? null;
-        } else {
-          exercise.groupId = null;
-        }
-        recomputeExercise(appData.currentWorkout.id, exercise);
-      });
-
       appData.currentWorkout.supersets.push(superset);
       refreshSupersetLabels();
       persist();
@@ -1995,12 +2288,12 @@
         if (!slot.exerciseId) return;
         const exercise = getExerciseById(slot.exerciseId);
         if (!exercise) return;
-        ensureExerciseCatalog(exercise.name);
-        const newExercise = createExerciseEntity(exercise.name, {
-          equipment: exercise.equipment,
-          attachment: exercise.attachment,
+        ensureExerciseCatalog(exercise.nameKey ?? exercise.name, getExercisePartByKey(exercise.nameKey));
+        const newExercise = createExerciseEntity(exercise.nameKey ?? exercise.name, {
+          equipmentKey: exercise.equipmentKey,
+          attachmentKey: exercise.attachmentKey,
           angle: exercise.angle,
-          position: exercise.position,
+          positionKey: exercise.positionKey,
           intervalSeconds: exercise.intervalSeconds,
           sets: exercise.sets.map((set) => ({ weight: set.weight, reps: set.reps, note: set.note }))
         });
@@ -2041,26 +2334,45 @@
       requestRender();
     };
 
-    const configureSupersetSlot = async (supersetId, groupId) => {
+    const setSupersetSlotExercise = (supersetId, groupId, rawValue) => {
       const superset = getSupersetById(supersetId);
       if (!superset) return;
       const slot = superset.slots.find((item) => item.groupId === groupId);
       if (!slot) return;
-      const promptLabel = superset.mode === WORKOUT_ENTRY_MODES.single || groupId == null
-        ? `${superset.label} の種目`
-        : `${superset.label} ${groupId} の種目`;
-      const name = await promptExerciseName(promptLabel);
-      if (!name) return;
-      recordExercisePartHint(name, getActivePartKey());
-      ensureExerciseCatalog(name);
-      if (slot.exerciseId) {
-        appData.currentWorkout.exercises = appData.currentWorkout.exercises.filter((exercise) => exercise.id !== slot.exerciseId);
+      const trimmed = typeof rawValue === 'string' ? rawValue.trim() : '';
+      if (!trimmed) {
+        if (slot.exerciseId) {
+          const removed = removeExerciseFromSuperset(slot.exerciseId);
+          if (removed) {
+            persist();
+            requestRender();
+          }
+        }
+        return;
       }
-      const exercise = createExerciseEntity(name);
-      appData.currentWorkout.exercises.push(exercise);
-      slot.exerciseId = exercise.id;
-      exercise.groupId = slot.groupId ?? null;
-      recomputeExercise(appData.currentWorkout.id, exercise);
+      const { key } = ensureOptionEntry('exercise', trimmed, {
+        allowCreate: appData.settings.allowFreeInput,
+        partKey: getActivePartKey()
+      });
+      if (!key) return;
+      const activePart = getActivePartKey();
+      const resolvedPart = activePart || getExercisePartByKey(key);
+      if (resolvedPart) {
+        recordExercisePartHint(key, resolvedPart);
+      }
+      ensureExerciseCatalog(key, resolvedPart);
+      let exercise = slot.exerciseId ? getExerciseById(slot.exerciseId) : null;
+      if (exercise) {
+        exercise.nameKey = key;
+        exercise.name = getExerciseLabelByKey(key) || exercise.name;
+        recomputeExercise(appData.currentWorkout.id, exercise);
+      } else {
+        exercise = createExerciseEntity(key, { partKey: resolvedPart });
+        appData.currentWorkout.exercises.push(exercise);
+        slot.exerciseId = exercise.id;
+        exercise.groupId = slot.groupId ?? null;
+        recomputeExercise(appData.currentWorkout.id, exercise);
+      }
       persist();
       requestRender();
     };
@@ -2121,10 +2433,15 @@
               const exercise = slot?.exerciseId ? exerciseMap.get(slot.exerciseId) : null;
               const base = {
                 groupId: slot?.groupId ?? (typeof slot?.role === 'string' ? slot.role : null),
+                partKey: exercise ? getExercisePartByKey(exercise.nameKey) : null,
+                nameKey: exercise?.nameKey ?? null,
                 name: exercise ? exercise.name : null,
+                equipmentKey: exercise?.equipmentKey ?? null,
                 equipment: exercise?.equipment ?? '',
+                attachmentKey: exercise?.attachmentKey ?? null,
                 attachment: exercise?.attachment ?? '',
                 angle: exercise?.angle ?? null,
+                positionKey: exercise?.positionKey ?? null,
                 position: exercise?.position ?? '',
                 intervalSeconds: exercise?.intervalSeconds ?? null
               };
@@ -2164,13 +2481,17 @@
           mode
         });
         config.slots.forEach((slotConfig) => {
-          if (!slotConfig || !slotConfig.name) return;
-          ensureExerciseCatalog(slotConfig.name);
-          const exercise = createExerciseEntity(slotConfig.name, {
-            equipment: slotConfig.equipment,
-            attachment: slotConfig.attachment,
+          if (!slotConfig || !slotConfig.nameKey && !slotConfig.name) return;
+          const partKey = normalizePartKey(slotConfig.partKey)
+            || (slotConfig.nameKey ? getExercisePartByKey(slotConfig.nameKey) : null);
+          const exerciseKey = slotConfig.nameKey ?? slotConfig.name;
+          ensureExerciseCatalog(exerciseKey, partKey);
+          const exercise = createExerciseEntity(exerciseKey, {
+            partKey,
+            equipmentKey: slotConfig.equipmentKey ?? slotConfig.equipment ?? '',
+            attachmentKey: slotConfig.attachmentKey ?? slotConfig.attachment ?? '',
             angle: slotConfig.angle,
-            position: slotConfig.position,
+            positionKey: slotConfig.positionKey ?? slotConfig.position ?? '',
             intervalSeconds: slotConfig.intervalSeconds
           });
           const desiredCount = Array.isArray(slotConfig.sets) && slotConfig.sets.length
@@ -2305,8 +2626,11 @@
             const groupId = slotConfig.groupId ?? (typeof slotConfig.role === 'string' ? slotConfig.role : null);
             const slot = slotMap.get(groupId);
             if (!slot) return;
-            if (!slotConfig.name) return;
-            ensureExerciseCatalog(slotConfig.name);
+            if (!slotConfig.nameKey && !slotConfig.name) return;
+            const partKey = normalizePartKey(slotConfig.partKey)
+              || (slotConfig.nameKey ? getExercisePartByKey(slotConfig.nameKey) : null);
+            const exerciseKey = slotConfig.nameKey ?? slotConfig.name;
+            ensureExerciseCatalog(exerciseKey, partKey);
             const sanitizedSets = sanitizeTemplateSets(slotConfig.sets);
             const desiredSets = sanitizedSets.length
               ? sanitizedSets
@@ -2314,11 +2638,12 @@
                   { length: Math.max(1, Number(slotConfig.setCount) || 1) },
                   () => createEmptySet()
                 );
-            const exercise = createExerciseEntity(slotConfig.name, {
-              equipment: slotConfig.equipment,
-              attachment: slotConfig.attachment,
+            const exercise = createExerciseEntity(exerciseKey, {
+              partKey,
+              equipmentKey: slotConfig.equipmentKey ?? slotConfig.equipment ?? '',
+              attachmentKey: slotConfig.attachmentKey ?? slotConfig.attachment ?? '',
               angle: slotConfig.angle,
-              position: slotConfig.position,
+              positionKey: slotConfig.positionKey ?? slotConfig.position ?? '',
               intervalSeconds: slotConfig.intervalSeconds,
               performedOn: today,
               sets: desiredSets
@@ -2704,9 +3029,22 @@
         return { success: true, rerender: false };
       }
       if (field === 'equipment' || field === 'attachment' || field === 'position') {
-        exercise[field] = typeof rawValue === 'string' ? rawValue : '';
+        if (rawValue === '' || rawValue === null || rawValue === undefined) {
+          exercise[field] = '';
+          exercise[`${field}Key`] = null;
+          persist();
+          return { success: true, rerender: false };
+        }
+        const { key, entry, created } = ensureOptionEntry(field, rawValue, {
+          allowCreate: appData.settings.allowFreeInput
+        });
+        if (!key) {
+          return { success: false, message: '選択した値を保存できませんでした。' };
+        }
+        exercise[field] = entry?.label || exercise[field] || '';
+        exercise[`${field}Key`] = key;
         persist();
-        return { success: true, rerender: false };
+        return { success: true, rerender: Boolean(created) };
       }
       return { success: false, message: '不明なフィールドです。' };
     };
@@ -2841,7 +3179,7 @@
           attrs: { type: 'button' }
         });
         trendBtn.addEventListener('click', () => {
-          appData.historyView.exerciseName = exercise.name;
+          appData.historyView.exerciseKey = exercise.nameKey ?? null;
           requestRender();
         });
         exerciseBlock.append(setsList, trendBtn);
@@ -3003,15 +3341,18 @@
       pushRow({ recordType: CSV_RECORD_TYPES.META });
       pushRow({ recordType: CSV_RECORD_TYPES.SETTINGS, unit: appData.settings.unit });
       appData.settings.exerciseCatalog.forEach((entry) => {
+        const label = getExerciseLabelByKey(entry) || entry;
         pushRow({
           recordType: CSV_RECORD_TYPES.CATALOG,
           catalogEntry: entry,
-          exercise: entry
+          exercise: label,
+          exerciseKey: entry
         });
       });
       pushRow({
         recordType: CSV_RECORD_TYPES.HISTORY_VIEW,
-        exercise: appData.historyView.exerciseName ?? ''
+        exercise: appData.historyView.exerciseKey ? getExerciseLabelByKey(appData.historyView.exerciseKey) : '',
+        exerciseKey: appData.historyView.exerciseKey ?? ''
       });
 
       const workoutDateValue = (workout, exercise) => {
@@ -3033,20 +3374,30 @@
           date: workoutDateValue(workout)
         });
         workout.exercises.forEach((exercise) => {
-          pushRow({
-            recordType: CSV_RECORD_TYPES.EXERCISE,
-            workoutState: state,
-            workoutId: workout.id,
-            exerciseId: exercise.id,
-            exercise: exercise.name ?? '',
-            equipment: exercise.equipment ?? '',
-            attachment: exercise.attachment ?? '',
-            angle: exercise.angle ?? '',
-            position: exercise.position ?? '',
-            performedOn: exercise.performedOn ?? '',
-            intervalSeconds: exercise.intervalSeconds ?? '',
-            date: workoutDateValue(workout, exercise)
-          });
+        pushRow({
+          recordType: CSV_RECORD_TYPES.EXERCISE,
+          workoutState: state,
+          workoutId: workout.id,
+          exerciseId: exercise.id,
+          part: (() => {
+            const part = getExercisePartByKey(exercise.nameKey);
+            const def = part ? getPartDefinition(part) : null;
+            return def ? def.label : '';
+          })(),
+          partKey: getExercisePartByKey(exercise.nameKey) ?? '',
+          exercise: exercise.name ?? '',
+          exerciseKey: exercise.nameKey ?? '',
+          equipment: exercise.equipment ?? '',
+          equipmentKey: exercise.equipmentKey ?? '',
+          attachment: exercise.attachment ?? '',
+          attachmentKey: exercise.attachmentKey ?? '',
+          angle: exercise.angle ?? '',
+          position: exercise.position ?? '',
+          positionKey: exercise.positionKey ?? '',
+          performedOn: exercise.performedOn ?? '',
+          intervalSeconds: exercise.intervalSeconds ?? '',
+          date: workoutDateValue(workout, exercise)
+        });
           exercise.sets.forEach((set, index) => {
             pushRow({
               recordType: CSV_RECORD_TYPES.SET,
@@ -3083,6 +3434,9 @@
 
     const restoreAppDataFromCsv = (rows) => {
       const issues = [];
+      const base = createInitialData();
+      const restoreSettings = base.settings;
+      ensureOptionCatalogs(restoreSettings);
       const group = rows.reduce((acc, row) => {
         const type = row.recordType || '';
         if (!acc[type]) acc[type] = [];
@@ -3113,10 +3467,23 @@
         issues.push(`サポートされていない単位です: ${unit}`);
       }
 
-      const catalogEntries = (group[CSV_RECORD_TYPES.CATALOG] || []).map((row) => (row.catalogEntry || '').trim()).filter((entry) => entry);
+      const catalogEntrySet = new Set();
+      const catalogEntries = [];
+      (group[CSV_RECORD_TYPES.CATALOG] || []).forEach((row) => {
+        const raw = (row.exerciseKey || row.catalogEntry || row.exercise || '').trim();
+        if (!raw) return;
+        const result = ensureOptionEntry('exercise', raw, { allowCreate: true, settingsOverride: restoreSettings });
+        if (result.key && !catalogEntrySet.has(result.key)) {
+          catalogEntrySet.add(result.key);
+          catalogEntries.push(result.key);
+        }
+      });
       const historyViewRow = (group[CSV_RECORD_TYPES.HISTORY_VIEW] || [])[0];
-      const historyExerciseName = historyViewRow && historyViewRow.exercise && historyViewRow.exercise.trim()
-        ? historyViewRow.exercise.trim()
+      const historyExerciseRaw = historyViewRow
+        ? (historyViewRow.exerciseKey || historyViewRow.exerciseId || historyViewRow.exercise || '').trim()
+        : '';
+      const historyExerciseEntry = historyExerciseRaw
+        ? ensureOptionEntry('exercise', historyExerciseRaw, { allowCreate: true, settingsOverride: restoreSettings }).key
         : null;
 
       const workoutContainers = new Map();
@@ -3220,17 +3587,42 @@
         if (intervalRaw && String(intervalRaw).trim() && intervalSeconds === null) {
           issues.push(`行${line}: intervalSeconds が数値ではありません。`);
         }
+        const nameResult = ensureOptionEntry('exercise', row.exerciseKey || row.exercise || '', {
+          allowCreate: true,
+          settingsOverride: restoreSettings,
+          partKey: row.partKey || row.part
+        });
+        const equipmentResult = ensureOptionEntry('equipment', row.equipmentKey || row.equipment || '', {
+          allowCreate: true,
+          settingsOverride: restoreSettings
+        });
+        const attachmentResult = ensureOptionEntry('attachment', row.attachmentKey || row.attachment || '', {
+          allowCreate: true,
+          settingsOverride: restoreSettings
+        });
+        const positionResult = ensureOptionEntry('position', row.positionKey || row.position || '', {
+          allowCreate: true,
+          settingsOverride: restoreSettings
+        });
         const exercise = {
           id: exerciseId,
-          name: row.exercise || '',
-          equipment: row.equipment || '',
-          attachment: row.attachment || '',
+          name: nameResult.entry?.label || row.exercise || '',
+          nameKey: nameResult.key || null,
+          equipment: equipmentResult.entry?.label || '',
+          equipmentKey: equipmentResult.key || null,
+          attachment: attachmentResult.entry?.label || '',
+          attachmentKey: attachmentResult.key || null,
           angle: angle === null ? null : angle,
-          position: row.position || '',
+          position: positionResult.entry?.label || '',
+          positionKey: positionResult.key || null,
           performedOn: row.performedOn || '',
           intervalSeconds: intervalSeconds === null ? null : intervalSeconds,
           sets: []
         };
+        const partKey = normalizePartKey(row.partKey || row.part);
+        if (partKey && exercise.nameKey) {
+          restoreSettings.exercisePartHints[exercise.nameKey] = partKey;
+        }
         workoutContainer.workout.exercises.push(exercise);
         const exerciseKey = `${key}:${exerciseId}`;
         exerciseContainers.set(exerciseKey, { exercise, line });
@@ -3320,17 +3712,18 @@
         return a.order - b.order;
       });
 
-      const base = createInitialData();
       const data = {
         workouts: historyWorkouts.map((item) => item.workout),
         currentWorkout: currentWorkoutContainer ? currentWorkoutContainer.workout : base.currentWorkout,
         settings: {
           ...base.settings,
           unit: unit || base.settings.unit,
-          exerciseCatalog: catalogEntries.length ? catalogEntries : base.settings.exerciseCatalog
+          optionCatalogs: restoreSettings.optionCatalogs,
+          exerciseCatalog: catalogEntries.length ? catalogEntries : restoreSettings.exerciseCatalog,
+          exercisePartHints: restoreSettings.exercisePartHints
         },
         historyView: {
-          exerciseName: historyExerciseName
+          exerciseKey: historyExerciseEntry
         },
         templates: base.templates
       };
@@ -3393,6 +3786,9 @@
         if (!appData.settings.exercisePartHints || typeof appData.settings.exercisePartHints !== 'object') {
           appData.settings.exercisePartHints = {};
         }
+        ensureOptionCatalogs(appData.settings);
+        ensureExerciseCatalogIntegrity();
+        normalizeExercisePartHints();
         appData.settings.lastSelectedPartKey = normalizePartKey(appData.settings.lastSelectedPartKey);
         normalizeWorkout(appData.currentWorkout);
         appData.currentWorkout.selectedPartKey = normalizePartKey(appData.currentWorkout.selectedPartKey)
@@ -3408,43 +3804,71 @@
     };
 
     /*** route renderers ***/
+    let optionControlSequence = 0;
+
+    const createOptionControl = ({ field, valueKey = null, partKey = null, placeholder = '選択してください', onCommit }) => {
+      const allowFreeInput = Boolean(appData?.settings?.allowFreeInput);
+      const currentLabel = valueKey
+        ? (field === 'exercise' ? getExerciseLabelByKey(valueKey) : getOptionLabel(field, valueKey))
+        : '';
+      if (allowFreeInput) {
+        optionControlSequence += 1;
+        const controlId = `option-${field}-${optionControlSequence}`;
+        const input = createElem('input', {
+          className: 'input-base text-sm text-slate-900',
+          attrs: { list: controlId, placeholder }
+        });
+        if (currentLabel) input.value = currentLabel;
+        const datalist = createElem('datalist', { attrs: { id: controlId } });
+        const entries = field === 'exercise' ? getExerciseOptionsForPart(partKey) : getOptionCatalog(field);
+        const seen = new Set();
+        entries.forEach((entry) => {
+          if (!entry || !entry.label || seen.has(entry.label)) return;
+          seen.add(entry.label);
+          datalist.append(createElem('option', { attrs: { value: entry.label } }));
+        });
+        if (currentLabel && !seen.has(currentLabel)) {
+          datalist.append(createElem('option', { attrs: { value: currentLabel } }));
+        }
+        input.addEventListener('change', () => {
+          onCommit(input.value.trim());
+        });
+        return createElem('div', { children: [input, datalist] });
+      }
+      const select = createElem('select', {
+        className: 'select-base text-sm text-slate-900 bg-white'
+      });
+      select.append(createElem('option', { value: '', textContent: placeholder }));
+      const entries = field === 'exercise' ? getExerciseOptionsForPart(partKey) : getOptionCatalog(field);
+      entries.forEach((entry) => {
+        select.append(createElem('option', { value: entry.key, textContent: entry.label }));
+      });
+      select.value = valueKey || '';
+      select.addEventListener('change', (event) => {
+        onCommit(event.target.value);
+      });
+      return select;
+    };
+
     const createExerciseMetaPanel = (exercise) => {
       const metaPanel = createElem('div', { className: 'space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4' });
 
       const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-4 sm:grid-cols-2' });
-      const equipmentInput = createElem('input', {
-        className: 'input-base text-slate-900 placeholder-slate-400',
-        attrs: { type: 'text', autocomplete: 'off', placeholder: '例: バーベル' },
-        value: exercise.equipment ?? ''
-      });
-      equipmentInput.addEventListener('input', (event) => {
-        scheduleExerciseFieldUpdate(exercise.id, 'equipment', event.target.value);
-      });
-      registerTypingTarget(equipmentInput, {
-        key: `exercise:${exercise.id}:equipment`,
-        type: 'exercise',
-        exerciseId: exercise.id,
+      const equipmentControl = createOptionControl({
         field: 'equipment',
-        apply: (el, value) => applyInputValue(el, value)
+        valueKey: exercise.equipmentKey,
+        placeholder: '器具を選択',
+        onCommit: (value) => scheduleExerciseFieldUpdate(exercise.id, 'equipment', value)
       });
-      const equipmentField = createFieldWrapper('器具', '使用した器具を入力します。', '使用した器具の種類を記録しましょう。', equipmentInput);
+      const equipmentField = createFieldWrapper('器具', '使用した器具を入力します。', '使用した器具の種類を記録しましょう。', equipmentControl);
 
-      const attachmentInput = createElem('input', {
-        className: 'input-base text-slate-900 placeholder-slate-400',
-        attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ワイドグリップ' },
-        value: exercise.attachment ?? ''
-      });
-      attachmentInput.addEventListener('input', (event) => {
-        scheduleExerciseFieldUpdate(exercise.id, 'attachment', event.target.value);
-      });
-      registerTypingTarget(attachmentInput, {
-        key: `exercise:${exercise.id}:attachment`,
-        type: 'exercise',
-        exerciseId: exercise.id,
+      const attachmentControl = createOptionControl({
         field: 'attachment',
-        apply: (el, value) => applyInputValue(el, value)
+        valueKey: exercise.attachmentKey,
+        placeholder: 'アタッチメントを選択',
+        onCommit: (value) => scheduleExerciseFieldUpdate(exercise.id, 'attachment', value)
       });
-      const attachmentField = createFieldWrapper('アタッチメント', '利用したアタッチメントを記録します。', 'ケーブルハンドルなどをメモできます。', attachmentInput);
+      const attachmentField = createFieldWrapper('アタッチメント', '利用したアタッチメントを記録します。', 'ケーブルハンドルなどをメモできます。', attachmentControl);
       equipmentRow.append(equipmentField, attachmentField);
       metaPanel.append(equipmentRow);
 
@@ -3466,22 +3890,13 @@
       });
       const angleField = createFieldWrapper('角度 (°)', 'ベンチやマシンの角度を記録します。', '角度の変化を記録してフォームを比較。', angleInput);
 
-      const positionInput = createElem('input', {
-        className: 'input-base text-slate-900 placeholder-slate-400',
-        attrs: { type: 'text', autocomplete: 'off', placeholder: '例: ナロー・スタンス' },
-        value: exercise.position ?? ''
-      });
-      positionInput.addEventListener('input', (event) => {
-        scheduleExerciseFieldUpdate(exercise.id, 'position', event.target.value);
-      });
-      registerTypingTarget(positionInput, {
-        key: `exercise:${exercise.id}:position`,
-        type: 'exercise',
-        exerciseId: exercise.id,
+      const positionControl = createOptionControl({
         field: 'position',
-        apply: (el, value) => applyInputValue(el, value)
+        valueKey: exercise.positionKey,
+        placeholder: 'スタンス / ポジションを選択',
+        onCommit: (value) => scheduleExerciseFieldUpdate(exercise.id, 'position', value)
       });
-      const positionField = createFieldWrapper('スタンス / ポジション', '足幅やグリップ幅などを記録します。', 'スタンスやポジションの工夫を書き残しましょう。', positionInput);
+      const positionField = createFieldWrapper('スタンス / ポジション', '足幅やグリップ幅などを記録します。', 'スタンスやポジションの工夫を書き残しましょう。', positionControl);
       angleRow.append(angleField, positionField);
       metaPanel.append(angleRow);
 
@@ -3644,49 +4059,28 @@
       const cardBody = createElem('div', { className: 'space-y-6' });
       const partSelector = (() => {
         const section = createElem('section', { className: 'space-y-2' });
-        const headerRow = createElem('div', { className: 'flex items-center justify-between' });
-        headerRow.append(
-          createElem('h3', { className: 'text-sm font-semibold text-slate-900', textContent: '記録する部位' }),
-          createElem('span', { className: 'text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500', textContent: '即時切替' })
+        section.append(
+          createElem('h3', { className: 'text-sm font-semibold text-slate-900', textContent: '記録する部位' })
         );
-        const chipRow = createElem('div', { className: 'flex flex-wrap gap-2' });
-        const info = createElem('p', { className: 'text-xs text-slate-600' });
-        const baseClass = 'rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500';
-        const activeClass = 'border-slate-900 bg-slate-900 text-white shadow-sm';
-        const inactiveClass = 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:text-slate-900';
-        const options = [{ key: null, label: '未選択' }, ...EXERCISE_PARTS];
-        const buttons = [];
-        const update = () => {
-          const active = getActivePartKey();
-          let message = '部位を選ぶと候補が絞り込まれます。';
-          buttons.forEach((entry) => {
-            const isActive = (active ?? null) === (entry.key ?? null);
-            entry.button.className = `${baseClass} ${isActive ? activeClass : inactiveClass}`;
-            entry.button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-            if (isActive && entry.key) {
-              const definition = getPartDefinition(entry.key);
-              if (definition) {
-                message = `${definition.label}を中心に候補を表示します。`;
-              }
-            }
-          });
-          info.textContent = message;
-        };
-        options.forEach((part) => {
-          const button = createElem('button', {
-            className: `${baseClass} ${inactiveClass}`,
-            textContent: part.label,
-            attrs: { type: 'button' }
-          });
-          buttons.push({ button, key: part.key });
-          button.addEventListener('click', () => {
-            setSelectedPartKey(part.key ?? null);
-            update();
-          });
-          chipRow.append(button);
+        const select = createElem('select', {
+          className: 'select-base text-sm font-semibold text-slate-900 bg-white',
+          attrs: { name: 'part-selector' }
         });
-        update();
-        section.append(headerRow, chipRow, info);
+        const placeholder = createElem('option', { textContent: '未選択', value: '' });
+        select.append(placeholder);
+        EXERCISE_PARTS.forEach((part) => {
+          select.append(createElem('option', { textContent: part.label, value: part.key }));
+        });
+        select.value = getActivePartKey() || '';
+        select.addEventListener('change', (event) => {
+          const value = event.target.value || null;
+          setSelectedPartKey(value);
+        });
+        const info = createElem('p', {
+          className: 'text-xs text-slate-600',
+          textContent: '部位を選ぶと候補が絞り込まれます。'
+        });
+        section.append(select, info);
         return section;
       })();
       cardBody.append(partSelector);
@@ -3907,14 +4301,17 @@
                       textContent: slotTitle
                     })
                   );
-                  const changeBtn = createElem('button', {
-                    className: 'text-xs font-semibold text-blue-700 underline decoration-dotted hover:text-blue-800',
-                    attrs: { type: 'button' },
-                    textContent: exercise ? '変更' : '設定'
-                  });
-                  changeBtn.addEventListener('click', () => configureSupersetSlot(superset.id, slot.groupId));
-                  slotHeader.append(changeBtn);
                   slotCard.append(slotHeader);
+                  const exerciseControl = createOptionControl({
+                    field: 'exercise',
+                    valueKey: exercise?.nameKey ?? null,
+                    partKey: getActivePartKey() || getExercisePartByKey(exercise?.nameKey),
+                    placeholder: '種目を選択',
+                    onCommit: (value) => setSupersetSlotExercise(superset.id, slot.groupId, value)
+                  });
+                  slotCard.append(
+                    createFieldWrapper('種目', 'この枠で記録する種目を選択します。', '自由入力を有効にすると候補にない名称も追加できます。', exerciseControl)
+                  );
                   if (!exercise) {
                     slotCard.append(
                       createElem('p', {
@@ -4085,12 +4482,13 @@
       }
       historyChartHost = chartContainer;
 
-      const exerciseName = appData.historyView.exerciseName;
-      if (exerciseName) {
+      const exerciseKey = appData.historyView.exerciseKey;
+      if (exerciseKey) {
+        const exerciseLabel = getExerciseLabelByKey(exerciseKey) || '';
         const dataset = [];
         appData.workouts.slice().reverse().forEach((workout) => {
           workout.exercises
-            .filter((ex) => ex.name === exerciseName)
+            .filter((ex) => (ex.nameKey ? ex.nameKey === exerciseKey : ex.name === exerciseLabel))
             .forEach((exercise) => {
               const best = Math.max(...exercise.sets.map((set) => Number(set.oneRM) || 0));
               dataset.push({ date: workout.completedAt || workout.startedAt, value: best });
@@ -4178,11 +4576,32 @@
       unitSection.append(unitWrap);
       cardBody.append(unitSection);
 
+      const inputModeSection = createElem('div', { className: 'space-y-2' });
+      inputModeSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '入力モード' }));
+      const freeInputLabel = createElem('label', { className: 'inline-flex items-center gap-3 text-sm font-semibold text-slate-800' });
+      const freeInputToggle = createElem('input', { attrs: { type: 'checkbox' } });
+      freeInputToggle.checked = Boolean(appData.settings.allowFreeInput);
+      freeInputToggle.addEventListener('change', (event) => {
+        appData.settings.allowFreeInput = Boolean(event.target.checked);
+        persist();
+        requestRender();
+      });
+      freeInputLabel.append(freeInputToggle, createElem('span', { textContent: '自由入力を許可' }));
+      inputModeSection.append(
+        freeInputLabel,
+        createElem('p', {
+          className: 'text-xs text-slate-600',
+          textContent: 'ONにすると候補にない名称も追加できます。保存時は正規化され、内部キーの一意性が保たれます。'
+        })
+      );
+      cardBody.append(inputModeSection);
+
       const catalogSection = createElem('div', { className: 'space-y-3' });
       catalogSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '登録済み種目' }));
       const list = createElem('ul', { className: 'space-y-2' });
-      appData.settings.exerciseCatalog.forEach((name) => {
-        list.append(createElem('li', { className: 'text-sm text-slate-800 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200', textContent: name }));
+      appData.settings.exerciseCatalog.forEach((key) => {
+        const label = getExerciseLabelByKey(key) || key;
+        list.append(createElem('li', { className: 'text-sm text-slate-800 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200', textContent: label }));
       });
       catalogSection.append(list);
       cardBody.append(catalogSection);
@@ -4283,6 +4702,7 @@
     };
 
     const render = (state) => {
+      optionControlSequence = 0;
       if (!appRoot) return;
       const route = ROUTE_VALUES.has(state.route) ? state.route : ROUTES.HOME;
       updateTabState(route);
