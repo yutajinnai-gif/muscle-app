@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-UI-SINGLE-NO-AB-20240530</title>
+  <title>BUILD_TAG=MARKERS-20240607</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script>
@@ -133,7 +133,7 @@
   (function(){
     'use strict';
 
-      const BUILD_TAG = 'FIX-UI-SINGLE-NO-AB-20240530';
+      const BUILD_TAG = 'MARKERS-20240607';
       const SAFE_MODE = true;
       const SAFE_STORAGE_KEY = 'muscle-app.safe-mode.workout';
       const SAFE_BOOT_TIMEOUT = 2000;
@@ -2135,6 +2135,7 @@
       templates: []
     });
 
+<!-- PATCH-START: SINGLE-AB-LABEL -->
     const WORKOUT_ENTRY_MODES = Object.freeze({ single: 'single', superset: 'superset' });
     const SUPERSET_GROUP_IDS = Object.freeze(['A', 'B']);
     const DEFAULT_SUPERSET_REST = 90;
@@ -2159,6 +2160,7 @@
 
     const normalizeEntryMode = (mode) => (mode === WORKOUT_ENTRY_MODES.single ? WORKOUT_ENTRY_MODES.single : WORKOUT_ENTRY_MODES.superset);
     const getGroupIdsForMode = (mode) => (mode === WORKOUT_ENTRY_MODES.single ? [null] : SUPERSET_GROUP_IDS);
+<!-- PATCH-END: SINGLE-AB-LABEL -->
 
     const createSupersetSkeleton = ({
       id = createSupersetId(),
@@ -4730,6 +4732,7 @@
       return select;
     };
 
+<!-- PATCH-START: UI-DENSITY -->
     const createExerciseMetaPanel = (exercise) => {
       const metaPanel = createElem('div', { className: 'space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4' });
 
@@ -4819,6 +4822,7 @@
 
       return metaPanel;
     };
+<!-- PATCH-END: UI-DENSITY -->
 
     const buildHomeView = () => {
       const nodes = [];
@@ -5496,6 +5500,7 @@
       return nodes;
     };
 
+<!-- PATCH-START: WORKOUT-RENDER -->
     const buildWorkoutView = () => {
       const nodes = [];
       const cardBody = createElem('div', { className: 'space-y-6' });
@@ -5548,6 +5553,7 @@
       nodes.push(createCard('最新のワークアウト', cardBody));
       return nodes;
     };
+<!-- PATCH-END: WORKOUT-RENDER -->
 
     const buildSettingsView = () => {
       const nodes = [];
@@ -5914,6 +5920,7 @@
       [ROUTES.WORKOUT]: buildWorkoutView
     };
 
+<!-- PATCH-START: BOOT-SAFE -->
     const render = (state) => {
       optionControlSequence = 0;
       scheduledActionBarContent = null;
@@ -5970,6 +5977,7 @@
       pushError(`初期化に失敗しました: ${err.message || err}`);
       safeMode.onRenderFailure(err);
     }
+<!-- PATCH-END: BOOT-SAFE -->
   })();
   </script>
 </body>
