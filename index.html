@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=UI-DENSE-20240527</title>
+  <title>BUILD_TAG=FIX-UI-SINGLE-NO-AB-20240530</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -52,7 +52,7 @@
   (function(){
     'use strict';
 
-      const BUILD_TAG = 'FIX-20240523-SELF-CHECK-EXT';
+      const BUILD_TAG = 'FIX-UI-SINGLE-NO-AB-20240530';
 
     const IS_DEV = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(window.location.hostname);
     let initializationWarningCount = 0;
@@ -1631,9 +1631,16 @@
     const WORKOUT_ENTRY_MODES = Object.freeze({ single: 'single', superset: 'superset' });
     const SUPERSET_GROUP_IDS = Object.freeze(['A', 'B']);
     const DEFAULT_SUPERSET_REST = 90;
-    const generateSupersetLabel = (index) => {
+    const generateSupersetLabel = (index, mode = WORKOUT_ENTRY_MODES.superset) => {
+      const normalizedMode = mode === WORKOUT_ENTRY_MODES.single
+        ? WORKOUT_ENTRY_MODES.single
+        : WORKOUT_ENTRY_MODES.superset;
+      const numericIndex = Math.max(0, Number(index) || 0);
+      if (normalizedMode === WORKOUT_ENTRY_MODES.single) {
+        return `Set ${numericIndex + 1}`;
+      }
       const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      let value = Math.max(0, Number(index) || 0);
+      let value = numericIndex;
       let label = '';
       while (value >= 0) {
         label = alphabet[value % alphabet.length] + label;
@@ -1656,7 +1663,9 @@
       const entryMode = normalizeEntryMode(mode);
       return {
         id,
-        label,
+        label: typeof label === 'string' && label.trim()
+          ? label
+          : generateSupersetLabel(0, entryMode),
         restSeconds,
         collapsed,
         mode: entryMode,
@@ -1783,7 +1792,7 @@
         workout.supersets = workout.exercises.map((exercise, index) => {
           const superset = createSupersetSkeleton({
             id: createSupersetId(),
-            label: generateSupersetLabel(index),
+            label: generateSupersetLabel(index, WORKOUT_ENTRY_MODES.single),
             mode: WORKOUT_ENTRY_MODES.single
           });
           superset.slots[0].exerciseId = exercise?.id ?? null;
@@ -1794,7 +1803,11 @@
       workout.supersets = workout.supersets.filter((superset) => superset && typeof superset === 'object');
       workout.supersets.forEach((superset, index) => {
         if (!superset.id) superset.id = createSupersetId();
-        if (typeof superset.label !== 'string' || !superset.label.trim()) superset.label = generateSupersetLabel(index);
+        const mode = normalizeEntryMode(superset.mode);
+        superset.mode = mode;
+        if (typeof superset.label !== 'string' || !superset.label.trim()) {
+          superset.label = generateSupersetLabel(index, mode);
+        }
         const restSeconds = Number(superset.restSeconds);
         superset.restSeconds = Number.isFinite(restSeconds)
           ? Math.max(10, Math.min(600, Math.round(restSeconds)))
@@ -1838,7 +1851,7 @@
         if (!target) {
           target = createSupersetSkeleton({
             id: createSupersetId(),
-            label: generateSupersetLabel(workout.supersets.length),
+            label: generateSupersetLabel(workout.supersets.length, WORKOUT_ENTRY_MODES.single),
             mode: WORKOUT_ENTRY_MODES.single
           });
           workout.supersets.push(target);
@@ -2324,7 +2337,9 @@
 
     const refreshSupersetLabels = () => {
       appData.currentWorkout.supersets.forEach((superset, index) => {
-        superset.label = generateSupersetLabel(index);
+        const mode = normalizeEntryMode(superset?.mode ?? appData.currentWorkout.entryMode);
+        superset.mode = mode;
+        superset.label = generateSupersetLabel(index, mode);
       });
     };
 
@@ -2354,8 +2369,8 @@
 
     const addSuperset = () => {
       const index = appData.currentWorkout.supersets.length;
-      const label = generateSupersetLabel(index);
       const mode = normalizeEntryMode(appData.currentWorkout.entryMode);
+      const label = generateSupersetLabel(index, mode);
       const superset = createSupersetSkeleton({
         id: createSupersetId(),
         label,
@@ -2713,7 +2728,7 @@
         const mode = normalizeEntryMode(config?.mode);
         const superset = createSupersetSkeleton({
           id: createSupersetId(),
-          label: generateSupersetLabel(index),
+          label: generateSupersetLabel(index, mode),
           restSeconds: Number.isFinite(Number(config?.restSeconds))
             ? Math.max(10, Math.min(600, Math.round(Number(config.restSeconds))))
             : DEFAULT_SUPERSET_REST,
@@ -2844,7 +2859,7 @@
           label:
             typeof config.label === 'string' && config.label.trim()
               ? config.label.trim()
-              : generateSupersetLabel(workout.supersets.length),
+              : generateSupersetLabel(workout.supersets.length, mode),
           restSeconds: (() => {
             const value = safeNumber(config.restSeconds);
             if (value === null) return DEFAULT_SUPERSET_REST;
@@ -4562,24 +4577,25 @@
 
           const body = createElem('div', { className: 'space-y-3' });
           if (superset.collapsed) body.classList.add('hidden');
-          if (!slotExercises.some(({ exercise }) => exercise)) {
+          const hasExercises = slotExercises.some(({ exercise }) => exercise);
+          if (!hasExercises) {
             body.append(
               createElem('p', {
                 className: 'text-sm leading-snug text-slate-700',
                 textContent: 'このスーパーセットにはまだ種目が設定されていません。'
               })
             );
-          } else {
-            if (roundCount <= 0) {
-              body.append(
-                createElem('p', {
-                  className: 'text-sm leading-snug text-slate-700',
-                  textContent: 'セットを追加して記録を開始しましょう。'
-                })
-              );
-            } else {
-              const roundsContainer = createElem('div', { className: 'space-y-3' });
-              for (let index = 0; index < roundCount; index += 1) {
+          } else if (roundCount <= 0) {
+            body.append(
+              createElem('p', {
+                className: 'text-sm leading-snug text-slate-700',
+                textContent: 'セットを追加して記録を開始しましょう。'
+              })
+            );
+          }
+          const roundsContainer = createElem('div', { className: 'space-y-3' });
+          const iterationCount = Math.max(roundCount, 1);
+          for (let index = 0; index < iterationCount; index += 1) {
                 const round = createElem('div', {
                   className: 'space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm',
                   attrs: { title: '長押しでこのラウンドを複製できます' }
@@ -4809,30 +4825,29 @@
                 round.append(slotGrid);
                 roundsContainer.append(round);
               }
-              body.append(roundsContainer);
-            }
+          }
+          body.append(roundsContainer);
 
-            const metaGrid = createElem('div', {
-              className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2'
-            });
-            slotExercises.forEach(({ slot, exercise }) => {
-              if (!exercise) return;
-              const wrapper = createElem('div', { className: 'space-y-2 leading-snug' });
-              wrapper.append(
-                createElem('h4', {
-                  className: 'text-sm font-semibold leading-snug text-slate-900',
-                  textContent:
-                    superset.mode === WORKOUT_ENTRY_MODES.single
-                      ? exercise.name
-                      : `${slot.groupId ?? '種目'}: ${exercise.name}`
-                })
-              );
-              wrapper.append(createExerciseMetaPanel(exercise));
-              metaGrid.append(wrapper);
-            });
-            if (metaGrid.children.length) {
-              body.append(metaGrid);
-            }
+          const metaGrid = createElem('div', {
+            className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2'
+          });
+          slotExercises.forEach(({ slot, exercise }) => {
+            if (!exercise) return;
+            const wrapper = createElem('div', { className: 'space-y-2 leading-snug' });
+            wrapper.append(
+              createElem('h4', {
+                className: 'text-sm font-semibold leading-snug text-slate-900',
+                textContent:
+                  superset.mode === WORKOUT_ENTRY_MODES.single
+                    ? exercise.name
+                    : `${slot.groupId ?? '種目'}: ${exercise.name}`
+              })
+            );
+            wrapper.append(createExerciseMetaPanel(exercise));
+            metaGrid.append(wrapper);
+          });
+          if (metaGrid.children.length) {
+            body.append(metaGrid);
           }
           supCard.append(body);
           cardBody.append(supCard);
