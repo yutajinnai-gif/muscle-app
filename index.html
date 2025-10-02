@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=TEMPLATE-YYYYMMDD</title>
+  <title>BUILD_TAG=DIAG-20251002</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
   <style>
@@ -511,6 +511,211 @@
       } catch (err) {
         console.warn('自動バックアップの保存に失敗しました', err);
       }
+    };
+
+    const runSelfCheck = () => {
+      const STATUS = Object.freeze({ PASS: 'pass', WARN: 'warn', FAIL: 'fail' });
+      const LABELS = Object.freeze({
+        [STATUS.PASS]: '良好',
+        [STATUS.WARN]: '注意',
+        [STATUS.FAIL]: '要対応'
+      });
+
+      const entries = [];
+      let overall = STATUS.PASS;
+      const snapshot = readAutoBackupSnapshot();
+
+      const updateOverall = (status) => {
+        if (status === STATUS.FAIL) {
+          overall = STATUS.FAIL;
+        } else if (status === STATUS.WARN && overall !== STATUS.FAIL) {
+          overall = STATUS.WARN;
+        }
+      };
+
+      const pushEntry = (title, status, detail) => {
+        entries.push({ title, status, detail });
+        updateOverall(status);
+      };
+
+      // スキーマ整合
+      (() => {
+        let status = STATUS.PASS;
+        let detail = '保存済みデータのスキーマは最新です。';
+        try {
+          const raw = localStorage.getItem(`${STORAGE_NAMESPACE}:${STORAGE_KEYS.DATA}`);
+          if (!raw) {
+            status = STATUS.WARN;
+            detail = '保存済みデータが見つかりません。';
+          } else {
+            const parsed = JSON.parse(raw);
+            if (!parsed || parsed.schema !== SCHEMA_VERSION) {
+              status = STATUS.FAIL;
+              detail = `期待スキーマ ${SCHEMA_VERSION} に一致しません。`;
+            }
+          }
+        } catch (err) {
+          status = STATUS.FAIL;
+          detail = `検証中にエラー: ${err?.message || err}`;
+        }
+        pushEntry('スキーマ整合', status, detail);
+      })();
+
+      // 主要配列長
+      (() => {
+        let status = STATUS.PASS;
+        const segments = [];
+        const specs = [
+          ['ワークアウト履歴', appData?.workouts],
+          ['進行中の種目', appData?.currentWorkout?.exercises],
+          ['テンプレート', appData?.templates],
+          ['種目カタログ', appData?.settings?.exerciseCatalog]
+        ];
+        specs.forEach(([label, value]) => {
+          if (!Array.isArray(value)) {
+            status = STATUS.WARN;
+            segments.push(`${label}: 不正な形式`);
+          } else {
+            segments.push(`${label}: ${value.length}`);
+          }
+        });
+        pushEntry('主要配列長', status, segments.join(' / '));
+      })();
+
+      // 直近例外
+      (() => {
+        if (errorState.logs.length === 0) {
+          pushEntry('直近例外', STATUS.PASS, '例外ログは記録されていません。');
+        } else {
+          const lastLog = errorState.logs[errorState.logs.length - 1];
+          pushEntry('直近例外', STATUS.WARN, lastLog);
+        }
+      })();
+
+      // 最後の保存時刻
+      (() => {
+        if (snapshot?.savedAt) {
+          pushEntry('最後の保存時刻', STATUS.PASS, formatDate(snapshot.savedAt) || snapshot.savedAt);
+        } else {
+          pushEntry('最後の保存時刻', STATUS.WARN, '保存履歴が見つかりません。');
+        }
+      })();
+
+      // バックアップ有無
+      (() => {
+        if (snapshot) {
+          pushEntry('バックアップ有無', STATUS.PASS, '自動バックアップが利用可能です。');
+        } else {
+          pushEntry('バックアップ有無', STATUS.WARN, '自動バックアップが作成されていません。');
+        }
+      })();
+
+      // 1RM が有限値か
+      (() => {
+        const invalid = [];
+        const inspectWorkout = (workout, scopeLabel) => {
+          if (!workout || !Array.isArray(workout.exercises)) return;
+          workout.exercises.forEach((exercise) => {
+            if (!Array.isArray(exercise?.sets)) return;
+            exercise.sets.forEach((set, idx) => {
+              const value = set?.oneRM;
+              if (value === null || value === undefined || value === '') return;
+              const numeric = Number(value);
+              if (!Number.isFinite(numeric)) {
+                invalid.push(`${scopeLabel} ${exercise?.name || exercise?.id || '未設定'} #${idx + 1}`);
+              }
+            });
+          });
+        };
+        inspectWorkout(appData?.currentWorkout, '進行中');
+        if (Array.isArray(appData?.workouts)) {
+          appData.workouts.forEach((workout, idx) => inspectWorkout(workout, `履歴${idx + 1}`));
+        }
+        if (invalid.length) {
+          pushEntry('1RM 整合性', STATUS.FAIL, `有限値ではない項目: ${invalid.slice(0, 5).join(', ')}${invalid.length > 5 ? ` 他${invalid.length - 5}件` : ''}`);
+        } else {
+          pushEntry('1RM 整合性', STATUS.PASS, 'すべて有限値または未計算です。');
+        }
+      })();
+
+      // キー一意性
+      (() => {
+        const duplicates = [];
+        const seenWorkouts = new Set();
+        const seenExercises = new Set();
+        const seenSupersets = new Set();
+        const checkId = (scope, id) => {
+          if (!id) {
+            duplicates.push(`${scope}: ID 未設定`);
+            return false;
+          }
+          return true;
+        };
+        const handleSet = (set, id, label) => {
+          if (set.has(id)) {
+            duplicates.push(`${label}: ${id}`);
+          } else {
+            set.add(id);
+          }
+        };
+        const allWorkouts = [];
+        if (appData?.currentWorkout) allWorkouts.push({ workout: appData.currentWorkout, scope: '進行中ワークアウト' });
+        if (Array.isArray(appData?.workouts)) {
+          appData.workouts.forEach((workout, idx) => {
+            allWorkouts.push({ workout, scope: `履歴ワークアウト${idx + 1}` });
+          });
+        }
+        allWorkouts.forEach(({ workout, scope }) => {
+          if (!workout) return;
+          if (checkId(scope, workout.id) && seenWorkouts.has(workout.id)) {
+            duplicates.push(`${scope}: 重複ワークアウトID ${workout.id}`);
+          }
+          if (workout?.id) {
+            handleSet(seenWorkouts, workout.id, '重複ワークアウトID');
+          }
+          if (Array.isArray(workout?.exercises)) {
+            workout.exercises.forEach((exercise, idx) => {
+              const exerciseScope = `${scope}の種目${idx + 1}`;
+              if (checkId(exerciseScope, exercise?.id) && exercise?.id) {
+                handleSet(seenExercises, exercise.id, '重複種目ID');
+              }
+            });
+          }
+          if (Array.isArray(workout?.supersets)) {
+            workout.supersets.forEach((superset, idx) => {
+              const supersetScope = `${scope}のスーパーセット${idx + 1}`;
+              if (checkId(supersetScope, superset?.id) && superset?.id) {
+                handleSet(seenSupersets, superset.id, '重複スーパーセットID');
+              }
+            });
+          }
+        });
+        if (duplicates.length) {
+          pushEntry('キー一意性', STATUS.FAIL, duplicates.slice(0, 5).join('\n') + (duplicates.length > 5 ? `\n他${duplicates.length - 5}件` : ''));
+        } else {
+          pushEntry('キー一意性', STATUS.PASS, '重複するIDは検出されませんでした。');
+        }
+      })();
+
+      const summaryMessage = (() => {
+        if (overall === STATUS.FAIL) return '重大な問題が検出されました。早急な対応を推奨します。';
+        if (overall === STATUS.WARN) return '注意事項があります。詳細を確認してください。';
+        return '重大な問題は検出されませんでした。';
+      })();
+
+      const reportLines = [
+        `診断ステータス: ${LABELS[overall]}`,
+        `診断時刻: ${formatDate(new Date().toISOString())}`,
+        ...entries.map((entry) => `- ${entry.title}: ${LABELS[entry.status]} | ${entry.detail}`)
+      ];
+
+      return {
+        status: overall,
+        entries,
+        summaryMessage,
+        report: reportLines.join('\n'),
+        labels: LABELS
+      };
     };
 
     /*** modal api ***/
@@ -3159,6 +3364,66 @@
       importLabel.append(input);
       importExportSection.append(createElem('div', { className: 'flex gap-3', children: [exportBtn, importLabel] }));
       cardBody.append(importExportSection);
+
+      const selfCheckSection = (() => {
+        const section = createElem('div', { className: 'space-y-4' });
+        section.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '自己診断' }));
+
+        const result = runSelfCheck();
+        const bannerClassMap = {
+          pass: 'bg-green-50 border-green-200 text-green-900',
+          warn: 'bg-yellow-50 border-yellow-200 text-yellow-900',
+          fail: 'bg-red-50 border-red-200 text-red-900'
+        };
+        const badgeClassMap = {
+          pass: 'bg-green-100 text-green-800 border-green-200',
+          warn: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+          fail: 'bg-red-100 text-red-800 border-red-300'
+        };
+
+        const banner = createElem('div', {
+          className: `rounded-2xl border px-4 py-3 text-sm font-semibold ${bannerClassMap[result.status] || bannerClassMap.pass}`,
+          textContent: result.summaryMessage
+        });
+        section.append(banner);
+
+        const list = createElem('ul', { className: 'space-y-3' });
+        result.entries.forEach((entry) => {
+          const item = createElem('li', { className: 'rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm' });
+          const header = createElem('div', { className: 'flex items-start justify-between gap-3' });
+          header.append(
+            createElem('span', { className: 'text-sm font-semibold text-slate-900', textContent: entry.title }),
+            createElem('span', {
+              className: `inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${badgeClassMap[entry.status] || badgeClassMap.pass}`,
+              textContent: result.labels[entry.status] || result.labels.pass
+            })
+          );
+          const detail = createElem('p', { className: 'mt-2 whitespace-pre-wrap text-sm text-slate-700 break-words', textContent: entry.detail });
+          item.append(header, detail);
+          list.append(item);
+        });
+        section.append(list);
+
+        const copyBtn = createElem('button', { className: 'btn-muted rounded-xl px-4 py-2 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500', textContent: '診断レポートをコピー', attrs: { type: 'button' } });
+        copyBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(result.report);
+            const original = copyBtn.textContent;
+            copyBtn.textContent = 'コピーしました';
+            copyBtn.disabled = true;
+            setTimeout(() => {
+              copyBtn.textContent = original;
+              copyBtn.disabled = false;
+            }, 2000);
+          } catch (err) {
+            pushError(`クリップボードへのコピーに失敗しました: ${err?.message || err}`);
+          }
+        });
+        section.append(copyBtn);
+
+        return section;
+      })();
+      cardBody.append(selfCheckSection);
 
       const dangerSection = createElem('div', { className: 'space-y-3' });
       dangerSection.append(createElem('h3', { className: 'text-base font-semibold text-red-700', textContent: 'データ初期化' }));
