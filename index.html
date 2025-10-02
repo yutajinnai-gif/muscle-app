@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20240513-PART-SELECT</title>
+  <title>BUILD_TAG=FIX-20251002-REF-TDZ</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -41,7 +41,18 @@
   (function(){
     'use strict';
 
-    const BUILD_TAG = 'FIX-20240513-PART-SELECT';
+    const BUILD_TAG = 'FIX-20251002-REF-TDZ';
+
+    const IS_DEV = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(window.location.hostname);
+    let initializationWarningCount = 0;
+
+    function assertInitialized(name, value) {
+      if (!IS_DEV) return;
+      if (typeof value === 'undefined') {
+        initializationWarningCount += 1;
+        console.warn(`[init-warning] ${name} は未初期化のまま参照されました。`);
+      }
+    }
 
     let manifestObjectUrl = null;
 
@@ -739,6 +750,14 @@
         updateOverall(status);
       };
 
+      (() => {
+        const status = initializationWarningCount > 0 ? STATUS.WARN : STATUS.PASS;
+        const detail = initializationWarningCount > 0
+          ? `初期化順序の警告: ${initializationWarningCount}件`
+          : '初期化順序の警告は検出されていません。';
+        pushEntry('初期化順序', status, detail);
+      })();
+
       // スキーマ整合
       (() => {
         let status = STATUS.PASS;
@@ -1254,6 +1273,7 @@
 
     const normalizeWorkout = (workout) => {
       if (!workout || typeof workout !== 'object') return;
+      assertInitialized('createEmptySet', createEmptySet);
       workout.entryMode = normalizeEntryMode(workout.entryMode);
       if (workout.selectedPartKey === undefined) {
         workout.selectedPartKey = null;
@@ -1659,7 +1679,9 @@
     };
 
     /*** actions ***/
-    const createEmptySet = () => ({ weight: null, reps: null, oneRM: null, note: '' });
+    function createEmptySet() {
+      return { weight: null, reps: null, oneRM: null, note: '' };
+    }
 
     const ensureExerciseCatalog = (name) => {
       if (!name) return;
