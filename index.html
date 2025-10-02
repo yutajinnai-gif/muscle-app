@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20251002-SAFE-OFF-BY-DEFAULT</title>
+  <title>BUILD_TAG=FIX-20251003-SAFE-OFF</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script>
@@ -122,14 +122,7 @@
   <div id="action-bar-root" class="action-bar-root hidden px-4 sm:px-6">
     <div id="action-bar-host" class="action-bar-host mx-auto max-w-3xl"></div>
   </div>
-  <div id="safe-banner" class="hidden sticky top-0 z-40 border-b border-amber-200 bg-amber-50 text-amber-900">
-    <div class="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-2 text-sm font-semibold sm:px-6">
-      <span>安全モードで起動中</span>
-      <button id="exit-safe" class="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 shadow-sm transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 sm:text-sm">
-        通常モードで再読み込み
-      </button>
-    </div>
-  </div>
+  <div id="safe-banner" class="hidden sticky top-0 z-40 border-b border-amber-200 bg-amber-50 text-amber-900 px-4 py-2 text-sm font-semibold sm:px-6"></div>
   <main id="app" class="max-w-3xl mx-auto main-content px-4 sm:px-6"></main>
   <nav class="tab-nav">
     <button data-route="home" class="tab-button flex-1 text-sm font-semibold text-slate-800">ホーム</button>
@@ -141,7 +134,7 @@
   (function(){
     'use strict';
 
-      const BUILD_TAG = 'FIX-20251002-SAFE-OFF-BY-DEFAULT';
+      const BUILD_TAG = 'FIX-20251003-SAFE-OFF';
       /* DEPRECATED: Legacy SAFE_MODE detection kept for reference.
       const SAFE_MODE = true;
       let runtimeSafeMode = (() => {
@@ -159,29 +152,33 @@
         return SAFE_MODE;
       })();
       */
-      const qs = (() => {
-        try {
-          return new URLSearchParams(window.location.search || '');
-        } catch (_) {
-          return null;
-        }
-      })();
+      let qs;
+      try {
+        qs = new URLSearchParams(window.location.search || '');
+      } catch (_) {
+        qs = new URLSearchParams('');
+      }
       let forceSafeOnce = false;
       try {
         forceSafeOnce = localStorage.getItem('forceSafe') === '1';
       } catch (_) {
         forceSafeOnce = false;
       }
-      const SAFE_MODE = (qs ? qs.get('safe') === '1' : false) || forceSafeOnce;
+      const safeQueryActive = qs.get('safe') === '1';
+      const SAFE_MODE = safeQueryActive || forceSafeOnce;
       if (forceSafeOnce) {
         try {
           localStorage.removeItem('forceSafe');
         } catch (_) {}
       }
+      const SAFE_MODE_FROM_QUERY = safeQueryActive;
       let runtimeSafeMode = SAFE_MODE;
       if (!runtimeSafeMode) {
         const initialSafeBanner = document.getElementById('safe-banner');
-        if (initialSafeBanner) initialSafeBanner.remove();
+        if (initialSafeBanner) {
+          initialSafeBanner.classList.add('hidden');
+          initialSafeBanner.innerHTML = '';
+        }
       }
       const SAFE_STORAGE_KEY = 'muscle-app.safe-mode.workout';
       const SAFE_BOOT_TIMEOUT = 2000;
@@ -5710,16 +5707,12 @@
             try {
               localStorage.setItem('forceSafe', '1');
             } catch (_) {}
-            if (window.confirm('次回はセーフモードで起動します。再読み込みしますか？')) {
-              window.location.reload();
-            }
-          } else {
-            try {
-              if (localStorage.getItem('forceSafe') === '1') {
-                localStorage.removeItem('forceSafe');
-              }
-            } catch (_) {}
+            window.location.reload();
+            return;
           }
+          try {
+            localStorage.removeItem('forceSafe');
+          } catch (_) {}
         });
         label.append(toggle, createElem('span', { textContent: '次回はセーフモードで起動' }));
         section.append(label);
@@ -6115,30 +6108,40 @@
     let safeBannerBound = false;
     const syncSafeBanner = (isSafeMode) => {
       const banner = document.getElementById('safe-banner');
-      if (!isSafeMode) {
-        if (banner) banner.remove();
+      if (!banner) return;
+      if (!isSafeMode || !SAFE_MODE_FROM_QUERY) {
+        banner.classList.add('hidden');
+        banner.innerHTML = '';
+        safeBannerBound = false;
         return;
       }
-      const exitBtn = document.getElementById('exit-safe');
-      if (!banner || !exitBtn) return;
       if (!safeBannerBound) {
-        exitBtn.addEventListener('click', (event) => {
-          event.preventDefault();
-          try {
-            const url = new URL(window.location.href);
-            url.searchParams.set('safe', '0');
-            const nextSearch = url.searchParams.toString();
-            const next = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash}`;
-            window.location.replace(next);
-          } catch (_) {
-            const params = new URLSearchParams(window.location.search || '');
-            params.set('safe', '0');
-            const search = params.toString();
-            const next = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash || ''}`;
-            window.location.replace(next);
-          }
-        });
-        safeBannerBound = true;
+        banner.innerHTML = `
+          <div class="mx-auto flex max-w-3xl items-center gap-2 text-amber-900">
+            <span>安全モード｜</span>
+            <button id="exit-safe" class="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 shadow-sm transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 sm:text-sm">通常モード</button>
+          </div>
+        `;
+        const exitBtn = banner.querySelector('#exit-safe');
+        if (exitBtn) {
+          exitBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('safe');
+              const nextSearch = url.searchParams.toString();
+              const next = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash}`;
+              window.location.replace(next);
+            } catch (_) {
+              const params = new URLSearchParams(window.location.search || '');
+              params.delete('safe');
+              const search = params.toString();
+              const next = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash || ''}`;
+              window.location.replace(next);
+            }
+          });
+          safeBannerBound = true;
+        }
       }
       banner.classList.remove('hidden');
     };
@@ -6323,7 +6326,7 @@
       return host;
     };
 
-    const renderSafeWorkout = () => {
+    const renderInitialApp = () => {
       /* SAFE_MODE initial route override disabled.
       if (SAFE_MODE_ACTIVE && appState.route !== ROUTES.WORKOUT) {
         appState = { ...appState, route: ROUTES.WORKOUT };
@@ -6333,12 +6336,24 @@
       render(appState, getAppFlags());
       lastStableState = { ...appState };
       clearBootWatchdog();
+      if (!SAFE_MODE_ACTIVE) {
+        updateBuildIdentifiers(BUILD_TAG);
+      }
+    };
+
+    const renderSafeWorkout = () => {
+      renderInitialApp();
+      updateBuildIdentifiers(RECOVERY_BUILD_TAG);
       safeMode.onRenderSuccess();
     };
 
     const boot = () => {
       mountAppSkeleton();
-      renderSafeWorkout();
+      if (SAFE_MODE_ACTIVE) {
+        renderSafeWorkout();
+      } else {
+        renderInitialApp();
+      }
     };
 
     startBootWatchdog();
