@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20251002-SYNTAX-5378</title>
+  <title>BUILD_TAG=FIX-20251002-SAFE-ROUTER-BANNER</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script>
@@ -122,6 +122,14 @@
   <div id="action-bar-root" class="action-bar-root hidden px-4 sm:px-6">
     <div id="action-bar-host" class="action-bar-host mx-auto max-w-3xl"></div>
   </div>
+  <div id="safe-banner" class="hidden sticky top-0 z-40 border-b border-amber-200 bg-amber-50 text-amber-900">
+    <div class="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-2 text-sm font-semibold sm:px-6">
+      <span>安全モードで起動中</span>
+      <button id="exit-safe" class="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 shadow-sm transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 sm:text-sm">
+        通常モードで再読み込み
+      </button>
+    </div>
+  </div>
   <main id="app" class="max-w-3xl mx-auto main-content px-4 sm:px-6"></main>
   <nav class="tab-nav">
     <button data-route="home" class="tab-button flex-1 text-sm font-semibold text-slate-800">ホーム</button>
@@ -135,6 +143,20 @@
 
       const BUILD_TAG = 'MARKERS-20240607';
       const SAFE_MODE = true;
+      let runtimeSafeMode = (() => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('safe')) {
+            const value = params.get('safe');
+            if (value === '0' || value === 'false') return false;
+            if (value === '1' || value === 'true' || value === '') return true;
+          }
+        } catch (_) {}
+        const hash = window.location.hash || '';
+        if (/^#\/?safe$/i.test(hash)) return true;
+        if (/^#\/?unsafe$/i.test(hash)) return false;
+        return SAFE_MODE;
+      })();
       const SAFE_STORAGE_KEY = 'muscle-app.safe-mode.workout';
       const SAFE_BOOT_TIMEOUT = 2000;
       let safeModeServiceWorkerCleared = false;
@@ -298,7 +320,7 @@
     };
 
     const disableServiceWorkerOnce = () => {
-      if (safeModeServiceWorkerCleared || !SAFE_MODE || !('serviceWorker' in navigator)) {
+      if (safeModeServiceWorkerCleared || !runtimeSafeMode || !('serviceWorker' in navigator)) {
         return;
       }
       safeModeServiceWorkerCleared = true;
@@ -309,7 +331,7 @@
       }).catch(() => {});
     };
 
-    if (SAFE_MODE) {
+    if (runtimeSafeMode) {
       disableServiceWorkerOnce();
     } else {
       registerPwaFeatures();
@@ -336,7 +358,7 @@
     };
 
     const createSafeModeController = () => {
-      if (!SAFE_MODE) {
+      if (!runtimeSafeMode) {
         return {
           mount() {},
           onRenderSuccess() {},
@@ -2513,17 +2535,18 @@
 
     const buildHash = (route) => `#/${route}`;
 
-    let appState = { route: SAFE_MODE ? ROUTES.WORKOUT : parseRoute(location.hash) };
+    let appState = { route: parseRoute(location.hash) };
     let lastStableState = { ...appState };
     let suppressHashEvent = false;
     let renderQueued = false;
+    const getAppFlags = () => ({ safeMode: runtimeSafeMode });
 
     const requestRender = () => {
       if (renderQueued) return;
       renderQueued = true;
       queueMicrotask(() => {
         renderQueued = false;
-        render(appState);
+        render(appState, getAppFlags());
       });
     };
 
@@ -2537,6 +2560,7 @@
 
     const applyRoute = (route) => {
       const normalized = ROUTE_VALUES.has(route) ? route : ROUTES.HOME;
+      /* SAFE_MODE routing override disabled.
       const targetRoute = (() => {
         if (!SAFE_MODE) return normalized;
         if (normalized !== ROUTES.WORKOUT && typeof window.showError === 'function') {
@@ -2544,11 +2568,13 @@
         }
         return ROUTES.WORKOUT;
       })();
+      */
+      const targetRoute = normalized;
       const previousState = { ...appState };
       const nextState = { ...appState, route: targetRoute };
       try {
         appState = nextState;
-        render(appState);
+        render(appState, getAppFlags());
         lastStableState = { ...appState };
         clearRecoverableError();
       } catch (err) {
@@ -2557,13 +2583,14 @@
         showRecoverableError(`画面の更新に失敗しました: ${err.message || err}`, () => {
           appState = { ...lastStableState };
           syncHashToRoute(lastStableState.route);
-          render(appState);
+          render(appState, getAppFlags());
         });
       }
     };
 
     const setHash = (route) => {
       const normalized = ROUTE_VALUES.has(route) ? route : ROUTES.HOME;
+      /* SAFE_MODE navigation guard disabled.
       if (SAFE_MODE && normalized !== ROUTES.WORKOUT) {
         if (typeof window.showError === 'function') {
           window.showError('安全モードが有効です', `現在は記録画面のみ利用できます (要求: ${normalized})`);
@@ -2572,6 +2599,7 @@
         applyRoute(ROUTES.WORKOUT);
         return;
       }
+      */
       const target = buildHash(normalized);
       if (location.hash === target) {
         applyRoute(normalized);
@@ -2588,6 +2616,7 @@
         return;
       }
       const route = parseRoute(location.hash);
+      /* SAFE_MODE navigation guard disabled.
       if (SAFE_MODE && route !== ROUTES.WORKOUT) {
         if (typeof window.showError === 'function') {
           window.showError('安全モードが有効です', `現在は記録画面のみ利用できます (要求: ${route})`);
@@ -2596,12 +2625,13 @@
         applyRoute(ROUTES.WORKOUT);
         return;
       }
+      */
       applyRoute(route);
     });
 
     /*** chart manager ***/
     const createChartManager = (canvas) => {
-      if (SAFE_MODE || typeof Chart === 'undefined' || !canvas) {
+      if (runtimeSafeMode || typeof Chart === 'undefined' || !canvas) {
         return {
           update() {},
           destroy() {}
@@ -2664,7 +2694,7 @@
     };
 
     const ensureHistoryChartObserver = () => {
-      if (historyChartObserver || SAFE_MODE || typeof IntersectionObserver === 'undefined') return;
+      if (historyChartObserver || runtimeSafeMode || typeof IntersectionObserver === 'undefined') return;
       historyChartObserver = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
@@ -2719,6 +2749,7 @@
       document.querySelectorAll('.tab-button').forEach((btn) => {
         btn.addEventListener('click', () => {
           const route = btn.getAttribute('data-route');
+          /* SAFE_MODE navigation guard disabled.
           if (SAFE_MODE && route !== ROUTES.WORKOUT) {
             if (typeof window.showError === 'function') {
               window.showError('安全モードが有効です', `現在は記録画面のみ利用できます (要求: ${route})`);
@@ -2726,6 +2757,7 @@
             syncHashToRoute(ROUTES.WORKOUT);
             return;
           }
+          */
           if (ROUTE_VALUES.has(route)) setHash(route);
         });
       });
@@ -4824,8 +4856,9 @@
     };
 <!-- PATCH-END: UI-DENSITY -->
 
-    const buildHomeView = () => {
+    const buildHomeView = (appFlags = {}) => {
       const nodes = [];
+      const safeMode = Boolean(appFlags?.safeMode);
 
       const quickBody = createElem('div', { className: 'space-y-5' });
       const quickActions = createElem('div', { className: 'flex flex-col gap-3 sm:flex-row' });
@@ -4859,10 +4892,48 @@
       quickActions.append(startLastBtn, saveTemplateBtn);
       quickBody.append(quickActions);
 
+      if (safeMode) {
+        const safeSummary = createElem('div', {
+          className: 'space-y-2 rounded-2xl border border-amber-200 bg-white p-4 text-sm shadow-sm text-amber-800'
+        });
+        safeSummary.append(
+          createElem('p', {
+            className: 'font-semibold',
+            textContent: '安全モードの簡易サマリ'
+          })
+        );
+        const statsList = createElem('ul', { className: 'space-y-1 text-xs text-amber-700' });
+        statsList.append(createElem('li', { textContent: `履歴件数: ${appData.workouts.length} 件` }));
+        statsList.append(createElem('li', { textContent: `保存テンプレート: ${appData.templates.length} 件` }));
+        const recent = appData.workouts[0];
+        if (recent) {
+          statsList.append(
+            createElem('li', {
+              textContent: `最新履歴: ${formatDate(recent.completedAt || recent.startedAt)}`
+            })
+          );
+        }
+        safeSummary.append(statsList);
+        safeSummary.append(
+          createElem('p', {
+            className: 'rounded-xl border border-dashed border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700',
+            textContent: '詳細なチャートと集計は通常モードでご利用ください。'
+          })
+        );
+        quickBody.append(safeSummary);
+      }
+
       const templateSection = createElem('div', { className: 'space-y-3' });
       templateSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: 'テンプレート' }));
 
-      if (!appData.templates.length) {
+      if (safeMode) {
+        templateSection.append(
+          createElem('p', {
+            className: 'text-sm text-amber-700',
+            textContent: '安全モードではテンプレート一覧の読み込みを省略しています。'
+          })
+        );
+      } else if (!appData.templates.length) {
         templateSection.append(
           createElem('p', {
             className: 'text-sm text-slate-700',
@@ -5440,8 +5511,9 @@
       return nodes;
     };
 
-    const buildHistoryView = () => {
+    const buildHistoryView = (appFlags = {}) => {
       const nodes = [];
+      const safeMode = Boolean(appFlags?.safeMode);
       const cardBody = createElem('div', { className: 'space-y-6' });
       if (!appData.workouts.length) {
         historyListScrollTop = 0;
@@ -5450,48 +5522,70 @@
         cardBody.append(createHistoryVirtualList(appData.workouts));
       }
 
-      if (!historyChartCanvas) {
-        historyChartCanvas = createElem('canvas');
-      }
-      const chartContainer = createElem('div', { className: 'mt-6 h-64 relative' });
-      chartContainer.append(historyChartCanvas);
-      cardBody.append(chartContainer);
-
-      if (historyChartObserver && historyChartHost && historyChartHost !== chartContainer) {
-        historyChartObserver.unobserve(historyChartHost);
-      }
-      historyChartHost = chartContainer;
-
-      const exerciseKey = appData.historyView.exerciseKey;
-      if (exerciseKey) {
-        const exerciseLabel = getExerciseLabelByKey(exerciseKey) || '';
-        const dataset = [];
-        appData.workouts.slice().reverse().forEach((workout) => {
-          workout.exercises
-            .filter((ex) => (ex.nameKey ? ex.nameKey === exerciseKey : ex.name === exerciseLabel))
-            .forEach((exercise) => {
-              const validSets = exercise.sets.filter(
-                (set) => !set.isProvisional && Number.isFinite(Number(set.oneRM))
-              );
-              if (!validSets.length) return;
-              const best = Math.max(...validSets.map((set) => Number(set.oneRM)));
-              dataset.push({ date: workout.completedAt || workout.startedAt, value: best });
-            });
-        });
-        historyChartPendingData = {
-          labels: dataset.map((d) => formatDate(d.date)),
-          values: dataset.map((d) => d.value)
-        };
-      } else {
+      if (safeMode) {
+        if (historyChartObserver && historyChartHost) {
+          historyChartObserver.unobserve(historyChartHost);
+        }
+        if (historyChartObserver && typeof historyChartObserver.disconnect === 'function') {
+          historyChartObserver.disconnect();
+        }
+        historyChartObserver = null;
+        historyChartHost = null;
+        if (historyChartManager && typeof historyChartManager.destroy === 'function') {
+          historyChartManager.destroy();
+        }
+        historyChartManager = null;
         historyChartPendingData = { labels: [], values: [] };
-      }
-
-      if (historyChartManager) {
-        applyHistoryChartData();
+        cardBody.append(
+          createElem('div', {
+            className: 'rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700',
+            textContent: '安全モードでは推移グラフを無効化しています。'
+          })
+        );
       } else {
-        ensureHistoryChartObserver();
-        if (historyChartObserver) {
-          historyChartObserver.observe(chartContainer);
+        if (!historyChartCanvas) {
+          historyChartCanvas = createElem('canvas');
+        }
+        const chartContainer = createElem('div', { className: 'mt-6 h-64 relative' });
+        chartContainer.append(historyChartCanvas);
+        cardBody.append(chartContainer);
+
+        if (historyChartObserver && historyChartHost && historyChartHost !== chartContainer) {
+          historyChartObserver.unobserve(historyChartHost);
+        }
+        historyChartHost = chartContainer;
+
+        const exerciseKey = appData.historyView.exerciseKey;
+        if (exerciseKey) {
+          const exerciseLabel = getExerciseLabelByKey(exerciseKey) || '';
+          const dataset = [];
+          appData.workouts.slice().reverse().forEach((workout) => {
+            workout.exercises
+              .filter((ex) => (ex.nameKey ? ex.nameKey === exerciseKey : ex.name === exerciseLabel))
+              .forEach((exercise) => {
+                const validSets = exercise.sets.filter(
+                  (set) => !set.isProvisional && Number.isFinite(Number(set.oneRM))
+                );
+                if (!validSets.length) return;
+                const best = Math.max(...validSets.map((set) => Number(set.oneRM)));
+                dataset.push({ date: workout.completedAt || workout.startedAt, value: best });
+              });
+          });
+          historyChartPendingData = {
+            labels: dataset.map((d) => formatDate(d.date)),
+            values: dataset.map((d) => d.value)
+          };
+        } else {
+          historyChartPendingData = { labels: [], values: [] };
+        }
+
+        if (historyChartManager) {
+          applyHistoryChartData();
+        } else {
+          ensureHistoryChartObserver();
+          if (historyChartObserver) {
+            historyChartObserver.observe(chartContainer);
+          }
         }
       }
 
@@ -5500,7 +5594,7 @@
     };
 
 <!-- PATCH-START: WORKOUT-RENDER -->
-    const buildWorkoutView = () => {
+    const buildWorkoutView = (appFlags = {}) => {
       const nodes = [];
       const cardBody = createElem('div', { className: 'space-y-6' });
       if (!appData.workouts.length) {
@@ -5554,9 +5648,24 @@
     };
 <!-- PATCH-END: WORKOUT-RENDER -->
 
-    const buildSettingsView = () => {
+    const buildSettingsView = (appFlags = {}) => {
       const nodes = [];
+      const safeMode = Boolean(appFlags?.safeMode);
       const cardBody = createElem('div', { className: 'space-y-6' });
+      const showSafeModeToast = () => {
+        const toast = createPwaToastController();
+        toast.showStatus('安全モードでは利用不可');
+      };
+      const registerSafeGuard = (target) => {
+        if (!target) return;
+        target.classList.add('cursor-not-allowed', 'opacity-60');
+        target.setAttribute('aria-disabled', 'true');
+        target.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          showSafeModeToast();
+        }, { once: false });
+      };
       const unitSection = createElem('div', { className: 'space-y-3' });
       unitSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: '単位設定' }));
       const unitOptions = ['kg', 'lb'];
@@ -5738,16 +5847,29 @@
       const importExportSection = createElem('div', { className: 'space-y-3' });
       importExportSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: 'バックアップ' }));
       const exportBtn = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'エクスポート', attrs: { type: 'button' } });
-      exportBtn.addEventListener('click', exportData);
+      if (safeMode) {
+        registerSafeGuard(exportBtn);
+      } else {
+        exportBtn.addEventListener('click', exportData);
+      }
       const importLabel = createElem('label', { className: 'btn-primary px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-2 w-fit cursor-pointer' });
       importLabel.append(createElem('span', { textContent: 'インポート' }));
       const input = createElem('input', { attrs: { type: 'file', accept: '.csv,text/csv' } });
       input.classList.add('hidden');
       input.addEventListener('change', (event) => {
+        if (safeMode) {
+          event.target.value = '';
+          showSafeModeToast();
+          return;
+        }
         const file = event.target.files?.[0];
         importData(file);
         event.target.value = '';
       });
+      if (safeMode) {
+        input.disabled = true;
+        registerSafeGuard(importLabel);
+      }
       importLabel.append(input);
       importExportSection.append(createElem('div', { className: 'flex gap-3', children: [exportBtn, importLabel] }));
       cardBody.append(importExportSection);
@@ -5859,7 +5981,7 @@
         };
 
         const runDiagnostics = () => {
-          if (SAFE_MODE) {
+          if (safeMode) {
             const result = {
               status: 'warn',
               summaryMessage: '安全モードでは自己診断をスキップしています',
@@ -5874,26 +5996,31 @@
           applyResult(result);
         };
 
-        runBtn.addEventListener('click', () => {
-          runDiagnostics();
-        });
+        if (safeMode) {
+          registerSafeGuard(runBtn);
+          registerSafeGuard(copyBtn);
+        } else {
+          runBtn.addEventListener('click', () => {
+            runDiagnostics();
+          });
 
-        copyBtn.addEventListener('click', async () => {
-          const report = latestResult?.report;
-          if (!report) return;
-          try {
-            await navigator.clipboard.writeText(report);
-            const original = copyBtn.textContent;
-            copyBtn.textContent = 'コピーしました';
-            copyBtn.disabled = true;
-            setTimeout(() => {
-              copyBtn.textContent = original;
-              copyBtn.disabled = false;
-            }, 2000);
-          } catch (err) {
-            pushError(`クリップボードへのコピーに失敗しました: ${err?.message || err}`);
-          }
-        });
+          copyBtn.addEventListener('click', async () => {
+            const report = latestResult?.report;
+            if (!report) return;
+            try {
+              await navigator.clipboard.writeText(report);
+              const original = copyBtn.textContent;
+              copyBtn.textContent = 'コピーしました';
+              copyBtn.disabled = true;
+              setTimeout(() => {
+                copyBtn.textContent = original;
+                copyBtn.disabled = false;
+              }, 2000);
+            } catch (err) {
+              pushError(`クリップボードへのコピーに失敗しました: ${err?.message || err}`);
+            }
+          });
+        }
 
         runDiagnostics();
 
@@ -5920,11 +6047,45 @@
     };
 
 <!-- PATCH-START: BOOT-SAFE -->
-    const render = (state) => {
+    let lastRenderFlags = getAppFlags();
+    let safeBannerBound = false;
+    const syncSafeBanner = (isSafeMode) => {
+      const banner = document.getElementById('safe-banner');
+      const exitBtn = document.getElementById('exit-safe');
+      if (!banner || !exitBtn) return;
+      if (!safeBannerBound) {
+        exitBtn.addEventListener('click', (event) => {
+          event.preventDefault();
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('safe', '0');
+            const nextSearch = url.searchParams.toString();
+            const next = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash}`;
+            window.location.replace(next);
+          } catch (_) {
+            const params = new URLSearchParams(window.location.search || '');
+            params.set('safe', '0');
+            const search = params.toString();
+            const next = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash || ''}`;
+            window.location.replace(next);
+          }
+        });
+        safeBannerBound = true;
+      }
+      if (isSafeMode) {
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+    };
+
+    const render = (state, appFlags = lastRenderFlags) => {
+      lastRenderFlags = { ...appFlags };
       optionControlSequence = 0;
       scheduledActionBarContent = null;
       if (!appRoot) return;
       const route = ROUTE_VALUES.has(state.route) ? state.route : ROUTES.HOME;
+      syncSafeBanner(Boolean(lastRenderFlags.safeMode));
       updateTabState(route);
       Object.entries(viewHosts).forEach(([key, host]) => {
         if (key === route) {
@@ -5959,12 +6120,13 @@
         typingDiagnostics.pendingSince = null;
       }
       const builder = viewBuilders[route] || viewBuilders[ROUTES.HOME];
-      const result = builder ? builder() : [];
+      const result = builder ? builder(lastRenderFlags) : [];
       const nodes = Array.isArray(result) ? result : (result ? [result] : []);
       host.replaceChildren(...nodes);
       applyScheduledActionBar(route);
     };
 
+    /* SAFE_MODE detection handled earlier.
     const SAFE_MODE_ACTIVE = (() => {
       try {
         const params = new URLSearchParams(window.location.search);
@@ -5974,6 +6136,9 @@
       if (/^#\/?safe$/i.test(hash)) return true;
       return SAFE_MODE;
     })();
+    */
+    const SAFE_MODE_ACTIVE = runtimeSafeMode;
+    runtimeSafeMode = SAFE_MODE_ACTIVE;
 
     if (SAFE_MODE_ACTIVE && !SAFE_MODE) {
       if (typeof disableServiceWorkerOnce === 'function') {
@@ -6095,11 +6260,13 @@
     };
 
     const renderSafeWorkout = () => {
+      /* SAFE_MODE initial route override disabled.
       if (SAFE_MODE_ACTIVE && appState.route !== ROUTES.WORKOUT) {
         appState = { ...appState, route: ROUTES.WORKOUT };
       }
+      */
       syncHashToRoute(appState.route);
-      render(appState);
+      render(appState, getAppFlags());
       lastStableState = { ...appState };
       clearBootWatchdog();
       safeMode.onRenderSuccess();
