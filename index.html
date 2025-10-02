@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20240508-SINGLE-MODE</title>
+  <title>BUILD_TAG=FIX-20240513-PART-SELECT</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
@@ -41,7 +41,7 @@
   (function(){
     'use strict';
 
-    const BUILD_TAG = 'FIX-20240508-SINGLE-MODE';
+    const BUILD_TAG = 'FIX-20240513-PART-SELECT';
 
     let manifestObjectUrl = null;
 
@@ -330,6 +330,49 @@
       'unit',
       'catalogEntry'
     ]);
+    const EXERCISE_PARTS = Object.freeze([
+      {
+        key: 'chest',
+        label: '胸',
+        exercises: Object.freeze(['ベンチプレス', 'インクラインベンチプレス', 'ダンベルフライ', 'チェストプレス', 'ディップス'])
+      },
+      {
+        key: 'back',
+        label: '背中',
+        exercises: Object.freeze(['デッドリフト', 'ベントオーバーロウ', 'ラットプルダウン', 'シーテッドロウ', 'プルアップ'])
+      },
+      {
+        key: 'shoulder',
+        label: '肩',
+        exercises: Object.freeze(['ショルダープレス', 'サイドレイズ', 'リアレイズ', 'フロントレイズ', 'アップライトロウ'])
+      },
+      {
+        key: 'arm',
+        label: '腕',
+        exercises: Object.freeze(['バイセップカール', 'トライセプスプレスダウン', 'ダンベルカール', 'スカルクラッシャー', 'ハンマーカール'])
+      },
+      {
+        key: 'core',
+        label: '体幹',
+        exercises: Object.freeze(['プランク', 'クランチ', 'レッグレイズ', 'ロシアンツイスト', 'アブローラー'])
+      },
+      {
+        key: 'leg',
+        label: '脚',
+        exercises: Object.freeze(['スクワット', 'ランジ', 'レッグプレス', 'レッグエクステンション', 'レッグカール'])
+      }
+    ]);
+    const EXERCISE_PART_KEY_SET = new Set(EXERCISE_PARTS.map((part) => part.key));
+    const normalizePartKey = (value) => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      return EXERCISE_PART_KEY_SET.has(trimmed) ? trimmed : null;
+    };
+    const getPartDefinition = (key) => {
+      const normalized = normalizePartKey(key);
+      return normalized ? EXERCISE_PARTS.find((part) => part.key === normalized) || null : null;
+    };
     const CSV_ALLOWED_SET_TYPES = new Set(['', 'standard']);
     const CSV_LINE_BREAK = '\r\n';
 
@@ -1099,11 +1142,14 @@
         startedAt: Date.now(),
         entryMode: 'superset',
         exercises: [],
-        supersets: []
+        supersets: [],
+        selectedPartKey: null
       },
       settings: {
         unit: 'kg',
-        exerciseCatalog: ['ベンチプレス', 'スクワット', 'デッドリフト']
+        exerciseCatalog: ['ベンチプレス', 'スクワット', 'デッドリフト'],
+        lastSelectedPartKey: null,
+        exercisePartHints: {}
       },
       historyView: {
         exerciseName: null
@@ -1209,6 +1255,11 @@
     const normalizeWorkout = (workout) => {
       if (!workout || typeof workout !== 'object') return;
       workout.entryMode = normalizeEntryMode(workout.entryMode);
+      if (workout.selectedPartKey === undefined) {
+        workout.selectedPartKey = null;
+      } else {
+        workout.selectedPartKey = normalizePartKey(workout.selectedPartKey);
+      }
       if (!Array.isArray(workout.exercises)) workout.exercises = [];
 
       const exerciseMap = new Map();
@@ -1306,12 +1357,44 @@
     const loadData = () => {
       const stored = storage.load(STORAGE_KEYS.DATA, createInitialData());
       const base = createInitialData();
-      return { ...base, ...stored };
+      const currentWorkout = {
+        ...base.currentWorkout,
+        ...(stored && typeof stored === 'object' ? stored.currentWorkout || {} : {})
+      };
+      const settings = {
+        ...base.settings,
+        ...(stored && typeof stored === 'object' ? stored.settings || {} : {})
+      };
+      const historyView = {
+        ...base.historyView,
+        ...(stored && typeof stored === 'object' ? stored.historyView || {} : {})
+      };
+      return {
+        ...base,
+        ...(stored && typeof stored === 'object' ? stored : {}),
+        currentWorkout,
+        settings,
+        historyView
+      };
     };
 
     let appData = loadData();
     if (!Array.isArray(appData.workouts)) appData.workouts = [];
+    if (!appData.settings || typeof appData.settings !== 'object') {
+      appData.settings = createInitialData().settings;
+    }
+    if (!Array.isArray(appData.settings.exerciseCatalog)) {
+      appData.settings.exerciseCatalog = createInitialData().settings.exerciseCatalog.slice();
+    }
+    if (!appData.settings.exercisePartHints || typeof appData.settings.exercisePartHints !== 'object') {
+      appData.settings.exercisePartHints = {};
+    }
+    appData.settings.lastSelectedPartKey = normalizePartKey(appData.settings.lastSelectedPartKey);
     normalizeWorkout(appData.currentWorkout);
+    const initialPartKey = normalizePartKey(appData.currentWorkout.selectedPartKey)
+      ?? appData.settings.lastSelectedPartKey
+      ?? null;
+    appData.currentWorkout.selectedPartKey = initialPartKey;
     appData.workouts.forEach((workout) => normalizeWorkout(workout));
     if (!Array.isArray(appData.templates)) appData.templates = [];
     createAutoBackupSnapshot();
@@ -1602,10 +1685,59 @@
       };
     };
 
+    const getExerciseOptionsForPart = (partKey) => {
+      const normalized = normalizePartKey(partKey);
+      const hints = (appData.settings && typeof appData.settings.exercisePartHints === 'object')
+        ? appData.settings.exercisePartHints
+        : {};
+      const suggestions = new Set();
+      if (normalized) {
+        const definition = getPartDefinition(normalized);
+        if (definition) {
+          definition.exercises.forEach((name) => suggestions.add(name));
+        }
+        Object.entries(hints).forEach(([name, key]) => {
+          if (normalizePartKey(key) === normalized) {
+            suggestions.add(name);
+          }
+        });
+        appData.settings.exerciseCatalog.forEach((name) => {
+          if (normalizePartKey(hints?.[name]) === normalized) {
+            suggestions.add(name);
+          }
+        });
+        if (!suggestions.size) {
+          appData.settings.exerciseCatalog.forEach((name) => suggestions.add(name));
+        }
+      } else {
+        EXERCISE_PARTS.forEach((part) => {
+          part.exercises.forEach((name) => suggestions.add(name));
+        });
+        Object.keys(hints).forEach((name) => suggestions.add(name));
+        appData.settings.exerciseCatalog.forEach((name) => suggestions.add(name));
+      }
+      const list = Array.from(suggestions);
+      list.sort((a, b) => a.localeCompare(b, 'ja'));
+      return list;
+    };
+
+    const getActivePartKey = () => normalizePartKey(appData?.currentWorkout?.selectedPartKey);
+
+    const recordExercisePartHint = (name, partKey) => {
+      const normalized = normalizePartKey(partKey);
+      if (!normalized) return;
+      if (typeof name !== 'string') return;
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      if (!appData.settings.exercisePartHints || typeof appData.settings.exercisePartHints !== 'object') {
+        appData.settings.exercisePartHints = {};
+      }
+      appData.settings.exercisePartHints[trimmed] = normalized;
+    };
+
     const promptExerciseName = async (title) => {
-      const catalog = [...appData.settings.exerciseCatalog];
-      catalog.sort((a, b) => a.localeCompare(b, 'ja'));
-      const choice = await pickFromList(title, [...catalog, '新規追加']);
+      const options = getExerciseOptionsForPart(getActivePartKey());
+      const choice = await pickFromList(title, [...options, '新規追加']);
       if (!choice) return null;
       if (choice === '新規追加') {
         const value = await promptText('新しい種目名');
@@ -1628,6 +1760,22 @@
       requestRender();
     };
 
+    const setSelectedPartKey = (partKey) => {
+      let normalized = normalizePartKey(partKey);
+      const current = getActivePartKey();
+      if (current === normalized) {
+        if (normalized !== null) {
+          normalized = null;
+        } else {
+          return;
+        }
+      }
+      appData.currentWorkout.selectedPartKey = normalized;
+      appData.settings.lastSelectedPartKey = normalized;
+      persist();
+      requestRender();
+    };
+
     const addSuperset = async () => {
       const index = appData.currentWorkout.supersets.length;
       const label = generateSupersetLabel(index);
@@ -1640,7 +1788,7 @@
           : `${label} ${groupId} の種目`;
         const name = await promptExerciseName(promptLabel);
         if (!name) return;
-        selections.push({ name, groupId });
+        selections.push({ name, groupId, partKey: getActivePartKey() });
       }
 
       const superset = createSupersetSkeleton({
@@ -1651,7 +1799,8 @@
         mode
       });
 
-      selections.forEach(({ name, groupId }, slotIndex) => {
+      selections.forEach(({ name, groupId, partKey }, slotIndex) => {
+        recordExercisePartHint(name, partKey);
         ensureExerciseCatalog(name);
         const exercise = createExerciseEntity(name);
         const slot = superset.slots[slotIndex] || superset.slots.find((entry) => entry.groupId === groupId);
@@ -1880,6 +2029,7 @@
         : `${superset.label} ${groupId} の種目`;
       const name = await promptExerciseName(promptLabel);
       if (!name) return;
+      recordExercisePartHint(name, getActivePartKey());
       ensureExerciseCatalog(name);
       if (slot.exerciseId) {
         appData.currentWorkout.exercises = appData.currentWorkout.exercises.filter((exercise) => exercise.id !== slot.exerciseId);
@@ -2105,7 +2255,8 @@
         startedAt,
         entryMode: WORKOUT_ENTRY_MODES.superset,
         exercises: [],
-        supersets: []
+        supersets: [],
+        selectedPartKey: normalizePartKey(appData?.settings?.lastSelectedPartKey)
       };
       const today = getTodayDateValue();
       blueprint.forEach((config, index) => {
@@ -2176,6 +2327,9 @@
       appData.currentWorkout = nextWorkout;
       normalizeWorkout(appData.currentWorkout);
       appData.currentWorkout.startedAt = nextWorkout.startedAt ?? Date.now();
+      appData.currentWorkout.selectedPartKey = normalizePartKey(appData.currentWorkout.selectedPartKey)
+        ?? appData.settings.lastSelectedPartKey
+        ?? null;
       appData.currentWorkout.exercises.forEach((exercise) => recomputeExercise(appData.currentWorkout.id, exercise));
       appData.lastSupersetBlueprint = buildSupersetBlueprint(appData.currentWorkout);
       persist();
@@ -2600,7 +2754,8 @@
         id: `current-${Date.now()}`,
         startedAt: Date.now(),
         exercises: [],
-        supersets: []
+        supersets: [],
+        selectedPartKey: appData.settings.lastSelectedPartKey ?? null
       };
       restoreSupersetBlueprint();
       persist();
@@ -3207,6 +3362,21 @@
         oneRmMemo.clear();
         appData = data;
         if (!Array.isArray(appData.templates)) appData.templates = [];
+        if (!appData.settings || typeof appData.settings !== 'object') {
+          appData.settings = createInitialData().settings;
+        }
+        if (!Array.isArray(appData.settings.exerciseCatalog)) {
+          appData.settings.exerciseCatalog = createInitialData().settings.exerciseCatalog.slice();
+        }
+        if (!appData.settings.exercisePartHints || typeof appData.settings.exercisePartHints !== 'object') {
+          appData.settings.exercisePartHints = {};
+        }
+        appData.settings.lastSelectedPartKey = normalizePartKey(appData.settings.lastSelectedPartKey);
+        normalizeWorkout(appData.currentWorkout);
+        appData.currentWorkout.selectedPartKey = normalizePartKey(appData.currentWorkout.selectedPartKey)
+          ?? appData.settings.lastSelectedPartKey
+          ?? null;
+        appData.workouts.forEach((workout) => normalizeWorkout(workout));
         recomputeAll();
         persist();
         requestRender();
@@ -3450,6 +3620,54 @@
 
       const workout = appData.currentWorkout;
       const cardBody = createElem('div', { className: 'space-y-6' });
+      const partSelector = (() => {
+        const section = createElem('section', { className: 'space-y-2' });
+        const headerRow = createElem('div', { className: 'flex items-center justify-between' });
+        headerRow.append(
+          createElem('h3', { className: 'text-sm font-semibold text-slate-900', textContent: '記録する部位' }),
+          createElem('span', { className: 'text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500', textContent: '即時切替' })
+        );
+        const chipRow = createElem('div', { className: 'flex flex-wrap gap-2' });
+        const info = createElem('p', { className: 'text-xs text-slate-600' });
+        const baseClass = 'rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500';
+        const activeClass = 'border-slate-900 bg-slate-900 text-white shadow-sm';
+        const inactiveClass = 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:text-slate-900';
+        const options = [{ key: null, label: '未選択' }, ...EXERCISE_PARTS];
+        const buttons = [];
+        const update = () => {
+          const active = getActivePartKey();
+          let message = '部位を選ぶと候補が絞り込まれます。';
+          buttons.forEach((entry) => {
+            const isActive = (active ?? null) === (entry.key ?? null);
+            entry.button.className = `${baseClass} ${isActive ? activeClass : inactiveClass}`;
+            entry.button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            if (isActive && entry.key) {
+              const definition = getPartDefinition(entry.key);
+              if (definition) {
+                message = `${definition.label}を中心に候補を表示します。`;
+              }
+            }
+          });
+          info.textContent = message;
+        };
+        options.forEach((part) => {
+          const button = createElem('button', {
+            className: `${baseClass} ${inactiveClass}`,
+            textContent: part.label,
+            attrs: { type: 'button' }
+          });
+          buttons.push({ button, key: part.key });
+          button.addEventListener('click', () => {
+            setSelectedPartKey(part.key ?? null);
+            update();
+          });
+          chipRow.append(button);
+        });
+        update();
+        section.append(headerRow, chipRow, info);
+        return section;
+      })();
+      cardBody.append(partSelector);
       const toggleContainer = (() => {
         const wrapper = createElem('div', {
           className: 'inline-flex items-center rounded-full border border-slate-300 bg-slate-100 p-1 text-xs font-semibold'
