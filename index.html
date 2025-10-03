@@ -5138,15 +5138,37 @@
     };
 
 <!-- PATCH-START: UI-DENSITY -->
-    const GYM_BUILD_TAG = 'FIX-UI-REFINED-20251003';
-    if (typeof document !== 'undefined' && document.title !== `BUILD_TAG=${GYM_BUILD_TAG}`) {
-      document.title = `BUILD_TAG=${GYM_BUILD_TAG}`;
+    const GYM_BUILD_TAG = 'FIX-UI-COMPACT-20250219';
+    const enforceBuildIdentity = () => {
+      if (typeof document === 'undefined') return;
+      const desiredTitle = `BUILD_TAG=${GYM_BUILD_TAG}`;
+      if (document.title !== desiredTitle) {
+        document.title = desiredTitle;
+      }
       const titleEl = document.querySelector('title');
-      if (titleEl && titleEl.textContent !== `BUILD_TAG=${GYM_BUILD_TAG}`) {
-        titleEl.textContent = `BUILD_TAG=${GYM_BUILD_TAG}`;
+      if (titleEl && titleEl.textContent !== desiredTitle) {
+        titleEl.textContent = desiredTitle;
       }
       document.documentElement?.setAttribute('data-build-tag', GYM_BUILD_TAG);
       document.body?.setAttribute('data-build-tag', GYM_BUILD_TAG);
+    };
+    enforceBuildIdentity();
+    if (typeof document !== 'undefined' && typeof MutationObserver === 'function') {
+      const titleEl = document.querySelector('title');
+      if (titleEl) {
+        const titleObserver = new MutationObserver(enforceBuildIdentity);
+        titleObserver.observe(titleEl, { childList: true, subtree: true, characterData: true });
+      }
+      const htmlEl = document.documentElement;
+      if (htmlEl) {
+        const attrObserver = new MutationObserver(enforceBuildIdentity);
+        attrObserver.observe(htmlEl, { attributes: true, attributeFilter: ['data-build-tag'] });
+      }
+      const bodyEl = document.body;
+      if (bodyEl) {
+        const bodyObserver = new MutationObserver(enforceBuildIdentity);
+        bodyObserver.observe(bodyEl, { attributes: true, attributeFilter: ['data-build-tag'] });
+      }
     }
     const enhanceFieldWrapper = (wrapper) => {
       if (!wrapper) return;
@@ -5294,35 +5316,127 @@
       });
     };
 
-    const applyCompactCardBase = (card) => {
+    const applyCompactCardBase = (card, { padding = 'p-4', margin = 'mb-4' } = {}) => {
       if (!card) return;
-      if (card.classList.contains('p-5')) card.classList.replace('p-5', 'p-4');
-      if (card.classList.contains('mb-6')) card.classList.replace('mb-6', 'mb-4');
+      const paddingCandidates = ['p-5', 'p-4'];
+      paddingCandidates.forEach((candidate) => {
+        if (card.classList.contains(candidate)) {
+          if (padding) {
+            card.classList.replace(candidate, padding);
+          } else {
+            card.classList.remove(candidate);
+          }
+        }
+      });
+      if (padding && !card.classList.contains(padding)) {
+        card.classList.add(padding);
+      }
+      const marginCandidates = ['mb-6', 'mb-5', 'mb-4'];
+      marginCandidates.forEach((candidate) => {
+        if (card.classList.contains(candidate)) {
+          if (margin) {
+            card.classList.replace(candidate, margin);
+          } else {
+            card.classList.remove(candidate);
+          }
+        }
+      });
+      if (margin && !card.classList.contains(margin)) {
+        card.classList.add(margin);
+      }
+    };
+
+    const swapClass = (classList, oldValue, newValue) => {
+      if (!classList) return;
+      if (oldValue && classList.contains(oldValue)) {
+        if (newValue) {
+          classList.replace(oldValue, newValue);
+        } else {
+          classList.remove(oldValue);
+        }
+        return;
+      }
+      if (newValue && !classList.contains(newValue)) {
+        classList.add(newValue);
+      }
     };
 
     const applyQuickStartCompact = (card) => {
       if (!card || card.dataset.quickCompact === '1') return;
       card.dataset.quickCompact = '1';
-      applyCompactCardBase(card);
+      applyCompactCardBase(card, { padding: 'p-3', margin: 'mb-3' });
       const header = card.querySelector(':scope > header');
       if (header) {
-        ensureCompactSpacing(header.classList, ['mb-4', 'gap-3'], ['mb-3', 'gap-2', 'flex-wrap']);
+        ensureCompactSpacing(header.classList, ['mb-4', 'gap-3'], ['mb-2', 'gap-2', 'flex-wrap']);
       }
       const body = card.querySelector(':scope > div');
       if (body) {
-        ensureCompactSpacing(body.classList, ['space-y-5'], ['space-y-3']);
+        ensureCompactSpacing(body.classList, ['space-y-5', 'space-y-4', 'space-y-3'], ['space-y-2']);
         const primaryRow = body.firstElementChild;
         if (primaryRow) {
-          ensureCompactSpacing(primaryRow.classList, ['flex-col', 'gap-3'], ['flex-wrap', 'gap-2', 'sm:items-center']);
-          if (!primaryRow.classList.contains('sm:flex-row')) {
-            primaryRow.classList.add('sm:flex-row');
+          primaryRow.classList.remove('flex-col');
+          ensureCompactSpacing(primaryRow.classList, ['gap-3'], ['gap-2']);
+          primaryRow.classList.add('flex', 'flex-wrap');
+        }
+        if (primaryRow?.classList.contains('sm:flex-row')) {
+          primaryRow.classList.add('sm:flex-row');
+        }
+        primaryRow?.querySelectorAll('button').forEach((btn) => {
+          if (btn.classList.contains('py-3')) {
+            btn.classList.replace('py-3', 'py-2');
+          }
+          if (btn.classList.contains('px-4')) {
+            btn.classList.replace('px-4', 'px-3');
+          }
+          if (!btn.classList.contains('min-h-[44px]')) {
+            btn.classList.add('min-h-[44px]');
+          }
+        });
+        const sectionStacks = body.querySelectorAll('div.space-y-3');
+        sectionStacks.forEach((stack) => {
+          ensureCompactSpacing(stack.classList, ['space-y-3'], ['space-y-2']);
+        });
+        const safeSummary = body.querySelector('div.text-amber-800');
+        if (safeSummary) {
+          swapClass(safeSummary.classList, 'space-y-2', 'space-y-1');
+          swapClass(safeSummary.classList, 'p-4', 'p-3');
+          swapClass(safeSummary.classList, 'text-sm', 'text-xs');
+          safeSummary.classList.add('leading-tight', 'font-medium');
+          const statsList = safeSummary.querySelector('ul');
+          if (statsList) {
+            swapClass(statsList.classList, 'space-y-1', 'space-y-0.5');
           }
         }
+        const templateEmptyTexts = Array.from(body.querySelectorAll('p')).filter((p) => {
+          const text = p.textContent?.trim() || '';
+          return text === '保存されたテンプレートはまだありません。' || text === '安全モードではテンプレート一覧の読み込みを省略しています。';
+        });
+        templateEmptyTexts.forEach((paragraph) => {
+          paragraph.className = 'text-xs text-gray-500 mt-1 leading-tight';
+        });
+        const templateCards = body.querySelectorAll('article.rounded-2xl');
+        templateCards.forEach((article) => {
+          swapClass(article.classList, 'space-y-3', 'space-y-2');
+          swapClass(article.classList, 'p-4', 'p-3');
+          const headerRow = article.querySelector('div.flex');
+          if (headerRow) {
+            headerRow.classList.remove('flex-col');
+            headerRow.classList.add('flex-wrap', 'items-center', 'gap-2');
+          }
+          const statsRow = article.querySelector('p.text-xs');
+          if (statsRow) {
+            statsRow.classList.add('leading-tight');
+          }
+          const buttonRow = article.querySelector('div.flex');
+          if (buttonRow) {
+            ensureCompactSpacing(buttonRow.classList, ['gap-2', 'gap-3'], ['gap-1.5']);
+            buttonRow.classList.add('items-center');
+          }
+        });
       }
       card.querySelectorAll('button').forEach((btn) => {
         if (btn.classList.contains('py-3')) {
-          btn.classList.remove('py-3');
-          btn.classList.add('py-2.5');
+          btn.classList.replace('py-3', 'py-2.5');
         }
         if (!btn.classList.contains('min-h-[44px]')) {
           btn.classList.add('min-h-[44px]');
@@ -5333,18 +5447,64 @@
     const applyCurrentWorkoutCompact = (card) => {
       if (!card || card.dataset.workoutCompact === '1') return;
       card.dataset.workoutCompact = '1';
-      applyCompactCardBase(card);
+      applyCompactCardBase(card, { padding: 'p-4', margin: 'mb-3' });
       const header = card.querySelector(':scope > header');
       if (header) {
-        ensureCompactSpacing(header.classList, ['mb-4', 'gap-3'], ['mb-3', 'gap-2', 'flex-wrap']);
+        ensureCompactSpacing(header.classList, ['mb-4', 'gap-3'], ['mb-2', 'gap-2', 'flex-wrap']);
         const headerControls = header.querySelector(':scope > div');
         if (headerControls) {
           ensureCompactSpacing(headerControls.classList, ['gap-3'], ['gap-2', 'flex-wrap']);
+          if (headerControls.classList.contains('gap-2')) {
+            headerControls.classList.add('gap-1.5');
+          }
         }
       }
       const body = card.querySelector(':scope > div');
       if (body) {
-        ensureCompactSpacing(body.classList, ['space-y-5'], ['space-y-4']);
+        ensureCompactSpacing(body.classList, ['space-y-5', 'space-y-4'], ['space-y-3']);
+        if (body.classList.contains('pb-24')) {
+          body.classList.replace('pb-24', 'pb-20');
+        }
+        const metaGrid = body.querySelector('div.grid');
+        if (metaGrid) {
+          metaGrid.classList.remove('grid-cols-1');
+          metaGrid.classList.remove('md:grid-cols-2');
+          metaGrid.classList.add('grid-cols-2', 'gap-2');
+        }
+        const partSelect = body.querySelector('select[name="part-selector"]');
+        if (partSelect) {
+          const partSection = partSelect.closest('section');
+          if (partSection) {
+            swapClass(partSection.classList, 'space-y-1.5', 'space-y-1');
+            const hint = partSection.querySelector('p');
+            if (hint && hint.textContent?.includes('部位を選ぶと')) {
+              hint.className = 'text-xs text-slate-500 mt-1 leading-tight';
+            }
+          }
+        }
+        const startSection = Array.from(body.querySelectorAll('section')).find((section) => {
+          const heading = section.querySelector('h3');
+          return heading?.textContent?.trim() === '開始日時';
+        });
+        if (startSection) {
+          swapClass(startSection.classList, 'space-y-1.5', 'space-y-1');
+          const timeDisplay = startSection.querySelector('p');
+          if (timeDisplay) {
+            swapClass(timeDisplay.classList, 'py-2', 'py-1.5');
+            swapClass(timeDisplay.classList, 'text-base', 'text-sm');
+            timeDisplay.classList.add('leading-tight');
+          }
+        }
+        const emptyNotices = Array.from(body.querySelectorAll('p')).filter((p) => {
+          const text = p.textContent?.trim() || '';
+          return text === '種目を追加して記録を始めましょう。'
+            || text === 'スーパーセットを追加して記録を始めましょう。'
+            || text === 'このスーパーセットにはまだ種目が設定されていません。'
+            || text === 'セットを追加して記録を開始しましょう。';
+        });
+        emptyNotices.forEach((paragraph) => {
+          paragraph.className = 'text-xs text-slate-600 leading-tight mt-1';
+        });
       }
     };
 
