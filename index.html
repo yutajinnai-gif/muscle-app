@@ -5138,10 +5138,10 @@
     };
 
 <!-- PATCH-START: UI-DENSITY -->
-    const GYM_BUILD_TAG = 'FIX-UI-RECOVERY-20250220';
+    const GYM_BUILD_TAG = 'FIX-STRONG-RECOVERY-20251003';
     const enforceBuildIdentity = () => {
       if (typeof document === 'undefined') return;
-      const desiredTitle = GYM_BUILD_TAG;
+      const desiredTitle = `BUILD_TAG=${GYM_BUILD_TAG}`;
       if (document.title !== desiredTitle) {
         document.title = desiredTitle;
       }
@@ -5173,14 +5173,14 @@
     const enhanceFieldWrapper = (wrapper) => {
       if (!wrapper) return;
       wrapper.classList.remove('font-semibold', 'text-slate-900');
-      wrapper.classList.add('font-medium', 'text-gray-800', 'gap-1.5', 'text-sm', 'leading-snug');
+      wrapper.classList.add('font-medium', 'text-gray-800', 'gap-1.5', 'text-sm', 'leading-tight');
       const header = wrapper.querySelector('div');
       if (header) {
         header.classList.remove('font-semibold', 'text-slate-900');
-        header.classList.add('font-medium', 'text-gray-900', 'gap-2');
+        header.classList.add('font-medium', 'text-gray-900', 'gap-1.5');
       }
       wrapper.querySelectorAll('span.text-xs').forEach((desc) => {
-        desc.classList.add('leading-snug', 'text-slate-700');
+        desc.classList.add('text-xs', 'leading-tight', 'text-slate-700');
       });
     };
     const enhanceInputTarget = (control) => {
@@ -5458,7 +5458,7 @@
     const applyCurrentWorkoutCompact = (card) => {
       if (!card || card.dataset.workoutCompact === '1') return;
       card.dataset.workoutCompact = '1';
-      applyCompactCardBase(card, { padding: 'p-3', margin: 'mb-3' });
+      applyCompactCardBase(card, { padding: 'p-3', margin: 'mb-2.5' });
       const header = card.querySelector(':scope > header');
       if (header) {
         ensureCompactSpacing(header.classList, ['mb-4', 'gap-3'], ['mb-2', 'gap-2', 'flex-wrap']);
@@ -5472,7 +5472,7 @@
       }
       const body = card.querySelector(':scope > div');
       if (body) {
-        ensureCompactSpacing(body.classList, ['space-y-6', 'space-y-5', 'space-y-4'], ['space-y-3']);
+        ensureCompactSpacing(body.classList, ['space-y-6', 'space-y-5', 'space-y-4', 'space-y-3'], ['space-y-2']);
         if (body.classList.contains('pb-24')) {
           body.classList.replace('pb-24', 'pb-20');
         }
@@ -6484,20 +6484,57 @@
         : homeNodes
           ? [homeNodes]
           : [];
-      const workoutCard = nodes.find((node) => {
+      let workoutCard = nodes.find((node) => {
         if (!node || typeof node.querySelector !== 'function') return false;
         const title = node.querySelector(':scope > header h2');
         return title?.textContent?.trim() === '現在のワークアウト';
-      });
+      }) || null;
       if (workoutCard) {
-        nodes.forEach((node) => {
-          if (node !== workoutCard && typeof node.remove === 'function' && !node.isConnected) {
-            node.remove();
+        const body = workoutCard.querySelector(':scope > div');
+        if (body) {
+          const encourage = Array.from(body.querySelectorAll('p')).find((paragraph) => {
+            const text = paragraph.textContent?.trim() || '';
+            return /記録を始めましょう。$/.test(text);
+          });
+          if (encourage) {
+            encourage.textContent = '現在のワークアウトの記録がありません。種目を追加して記録を始めましょう。';
+            encourage.className = 'text-sm text-slate-700 leading-tight';
+          } else if (!body.querySelector('[data-role="workout-empty"]')) {
+            body.append(
+              createElem('p', {
+                className: 'text-sm text-slate-700 leading-tight',
+                textContent: '現在のワークアウトの記録がありません。',
+                attrs: { 'data-role': 'workout-empty' }
+              })
+            );
           }
-        });
-        return [workoutCard];
+        }
+      } else {
+        const placeholderBody = createElem('div', { className: 'space-y-2 text-sm leading-tight text-slate-700' });
+        placeholderBody.append(
+          createElem('p', {
+            className: 'text-sm font-semibold text-slate-900 leading-tight',
+            textContent: '現在のワークアウトの記録がありません。'
+          })
+        );
+        placeholderBody.append(
+          createElem('p', {
+            className: 'text-xs text-slate-600 leading-tight',
+            textContent: 'ホームタブで種目を追加するとここに記録が表示されます。'
+          })
+        );
+        placeholderBody.append(
+          createElem('ul', {
+            className: 'list-disc space-y-1 pl-5 text-xs text-slate-500 leading-tight',
+            children: [
+              createElem('li', { textContent: '「前回コピー」で直近のスーパーセットを呼び出せます。' }),
+              createElem('li', { textContent: 'テンプレートを読み込むとセット入力を素早く始められます。' })
+            ]
+          })
+        );
+        workoutCard = createCard('現在のワークアウト', placeholderBody);
       }
-      return nodes;
+      return workoutCard ? [workoutCard] : [];
     };
 
     const buildWorkoutView = (appFlags = {}) => {
@@ -7107,13 +7144,7 @@
       }
     }
 
-    const RECOVERY_BUILD_TAG = (() => {
-      const now = new Date();
-      const year = String(now.getFullYear());
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      return `FIX-BOOT-RECOVERY-${year}${month}${day}`;
-    })();
+    const PRIMARY_BUILD_TAG = 'FIX-STRONG-RECOVERY-20251003';
 
     let tabsBound = false;
     let bootWatchdogId = null;
@@ -7149,15 +7180,18 @@
     };
 
     const updateBuildIdentifiers = (tag, host) => {
-      document.title = `BUILD_TAG=${tag}`;
+      const normalizedTag = typeof tag === 'string' && tag.startsWith('BUILD_TAG=')
+        ? tag.slice('BUILD_TAG='.length)
+        : tag || PRIMARY_BUILD_TAG;
+      document.title = `BUILD_TAG=${normalizedTag}`;
       const htmlEl = document.documentElement;
-      if (htmlEl) htmlEl.setAttribute('data-build-tag', tag);
+      if (htmlEl) htmlEl.setAttribute('data-build-tag', normalizedTag);
       const bodyEl = document.body;
-      if (bodyEl) bodyEl.setAttribute('data-build-tag', tag);
+      if (bodyEl) bodyEl.setAttribute('data-build-tag', normalizedTag);
       const scope = host || appRoot || document.getElementById('app');
       const buildLabel = scope?.querySelector('.safe-mode-shell span.text-xs.text-slate-500');
       if (buildLabel) {
-        buildLabel.textContent = `BUILD: ${tag}`;
+        buildLabel.textContent = `BUILD: ${normalizedTag}`;
       }
     };
 
@@ -7173,7 +7207,7 @@
       if (!host || host.dataset.fullAppReady === '1') return;
       if (host.querySelector('.boot-timeout-fallback')) return;
       const fallback = createElem('div', {
-        className: 'boot-timeout-fallback bg-white rounded-2xl shadow-sm p-4 sm:p-5 flex flex-col gap-3'
+        className: 'boot-timeout-fallback bg-white rounded-2xl shadow-sm p-3 sm:p-4 flex flex-col gap-2.5'
       });
       fallback.append(
         createElem('h2', { className: 'text-base font-semibold text-slate-900', textContent: '安全モードの起動に失敗しました' }),
@@ -7210,7 +7244,7 @@
         tabsBound = true;
       }
       safeMode.mount(host);
-      updateBuildIdentifiers(RECOVERY_BUILD_TAG, host);
+      updateBuildIdentifiers(PRIMARY_BUILD_TAG, host);
       return host;
     };
 
@@ -7225,13 +7259,13 @@
       lastStableState = { ...appState };
       clearBootWatchdog();
       if (!SAFE_MODE_ACTIVE) {
-        updateBuildIdentifiers(BUILD_TAG);
+        updateBuildIdentifiers(PRIMARY_BUILD_TAG);
       }
     };
 
     const renderSafeWorkout = () => {
       renderInitialApp();
-      updateBuildIdentifiers(RECOVERY_BUILD_TAG);
+      updateBuildIdentifiers(PRIMARY_BUILD_TAG);
       safeMode.onRenderSuccess();
     };
 
@@ -7254,9 +7288,13 @@
         window.showError('Boot crash', detail);
       }
       pushError(`初期化に失敗しました: ${err.message || err}`);
+      const errHost = document.getElementById('errbar');
+      if (errHost && !errHost.textContent) {
+        errHost.textContent = err?.message || String(err);
+      }
       ensureHostStructure();
       applyVisibilityGuarantees(appRoot || document.getElementById('app'));
-      updateBuildIdentifiers(RECOVERY_BUILD_TAG);
+      updateBuildIdentifiers(PRIMARY_BUILD_TAG);
       mountBootTimeoutUi();
       safeMode.onRenderFailure(err instanceof Error ? err : new Error(detail));
     }
