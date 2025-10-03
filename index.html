@@ -3549,6 +3549,140 @@
     });
 
 <!-- PATCH-START: FAST-INPUT -->
+    (() => {
+      try {
+        const now = new Date();
+        const yyyy = String(now.getFullYear());
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const buildTag = `BUILD_TAG=FIX-FAST-INPUT-${yyyy}${mm}${dd}`;
+        if (typeof document?.title === 'string') {
+          document.title = buildTag;
+        }
+      } catch (_) {}
+    })();
+
+    const isSetFieldEmpty = (value) => value === null || value === undefined || value === '';
+
+    const buildExerciseHistoryKey = (partKey, nameKey, fallbackName) => {
+      const normalizedPart = normalizePartKey(partKey) || 'unknown';
+      if (nameKey) {
+        return `${normalizedPart}::key::${nameKey}`;
+      }
+      const signature = typeof fallbackName === 'string' ? createLabelSignature(fallbackName) : '';
+      if (!signature) return null;
+      return `${normalizedPart}::label::${signature}`;
+    };
+
+    const resolveExerciseHistoryKey = (exercise, fallbackPartKey = null) => {
+      if (!exercise) return null;
+      const partKey = getExercisePartByKey(exercise.nameKey) || fallbackPartKey;
+      return buildExerciseHistoryKey(partKey, exercise.nameKey, exercise.name);
+    };
+
+    const findLatestExerciseHistory = (historyKey) => {
+      if (!historyKey) return null;
+      for (let index = 0; index < appData.workouts.length; index += 1) {
+        const workout = appData.workouts[index];
+        if (!workout || !Array.isArray(workout.exercises)) continue;
+        const matched = workout.exercises.find((exercise) => {
+          const candidateKey = resolveExerciseHistoryKey(exercise);
+          return candidateKey && candidateKey === historyKey;
+        });
+        if (matched) {
+          return { workout, exercise: matched };
+        }
+      }
+      return null;
+    };
+
+    const autofillWorkoutFromHistory = (workout) => {
+      if (!workout || !Array.isArray(workout.exercises)) return;
+      const cache = new Map();
+      workout.exercises.forEach((exercise) => {
+        const historyKey = resolveExerciseHistoryKey(exercise, workout.selectedPartKey);
+        if (!historyKey) return;
+        if (!cache.has(historyKey)) {
+          cache.set(historyKey, findLatestExerciseHistory(historyKey));
+        }
+        const historyEntry = cache.get(historyKey);
+        const sourceExercise = historyEntry?.exercise;
+        if (!sourceExercise || !Array.isArray(sourceExercise.sets) || !sourceExercise.sets.length) return;
+        const sourceSets = sourceExercise.sets;
+        let changed = false;
+        exercise.sets.forEach((set, setIndex) => {
+          const sourceSet = sourceSets[setIndex] || sourceSets[sourceSets.length - 1];
+          if (!sourceSet) return;
+          if (isSetFieldEmpty(set.weight) && !isSetFieldEmpty(sourceSet.weight)) {
+            set.weight = sourceSet.weight;
+            changed = true;
+          }
+          if (isSetFieldEmpty(set.reps) && !isSetFieldEmpty(sourceSet.reps)) {
+            set.reps = sourceSet.reps;
+            changed = true;
+          }
+          applyProvisionalState(set);
+        });
+        if (
+          (exercise.intervalSeconds === null || exercise.intervalSeconds === undefined)
+          && sourceExercise.intervalSeconds !== null
+          && sourceExercise.intervalSeconds !== undefined
+        ) {
+          exercise.intervalSeconds = sourceExercise.intervalSeconds;
+          changed = true;
+        }
+        if (changed) {
+          recomputeExercise(workout.id, exercise);
+        }
+      });
+    };
+
+    const copyLatestSetFromHistory = (exerciseId, setIndex) => {
+      const context = findExerciseContext(exerciseId);
+      if (!context) {
+        return { copied: false, reason: 'missing-context' };
+      }
+      const targetSet = context.exercise?.sets?.[setIndex];
+      if (!targetSet) {
+        return { copied: false, reason: 'missing-set' };
+      }
+      const historyKey = resolveExerciseHistoryKey(context.exercise, appData.currentWorkout.selectedPartKey);
+      const historyEntry = findLatestExerciseHistory(historyKey);
+      const sourceExercise = historyEntry?.exercise;
+      if (!sourceExercise || !Array.isArray(sourceExercise.sets) || !sourceExercise.sets.length) {
+        const toast = createPwaToastController();
+        toast.showStatus('前回記録なし');
+        return { copied: false, reason: 'no-history' };
+      }
+      const sourceSet = sourceExercise.sets[setIndex] || sourceExercise.sets[sourceExercise.sets.length - 1];
+      if (!sourceSet) {
+        const toast = createPwaToastController();
+        toast.showStatus('前回記録なし');
+        return { copied: false, reason: 'no-source-set' };
+      }
+      let changed = false;
+      ['weight', 'reps'].forEach((field) => {
+        if (!isSetFieldEmpty(sourceSet[field])) {
+          if (targetSet[field] !== sourceSet[field] || isSetFieldEmpty(targetSet[field])) {
+            targetSet[field] = sourceSet[field];
+            changed = true;
+          }
+        }
+      });
+      applyProvisionalState(targetSet);
+      if (!changed) {
+        const toast = createPwaToastController();
+        toast.showStatus('前回と同じ値です');
+        return { copied: false, reason: 'no-change' };
+      }
+      recomputeExercise(appData.currentWorkout.id, context.exercise);
+      persist();
+      requestRender();
+      const toast = createPwaToastController();
+      toast.showStatus('前回の記録をコピーしました');
+      return { copied: true };
+    };
+
     const getTemplateById = (templateId) => appData.templates.find((tpl) => tpl.id === templateId);
 
     const applyTemplateById = (templateId) => {
@@ -3562,6 +3696,7 @@
         showValidationError('テンプレートに有効な構成がありません。');
         return;
       }
+      autofillWorkoutFromHistory(nextWorkout);
       if (replaceCurrentWorkout(nextWorkout)) {
         template.updatedAt = Date.now();
         persist();
@@ -5304,7 +5439,9 @@
                     className: 'text-lg text-slate-500 transition-transform duration-150',
                     textContent: isCollapsed ? '▸' : '▾'
                   });
-                  summary.append(summaryContent, summaryCaret);
+                  const summaryActions = createElem('div', { className: 'flex items-center gap-2' });
+                  summaryActions.append(summaryCaret);
+                  summary.append(summaryContent, summaryActions);
                   details.append(summary);
                   const detailBody = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 px-3 pb-3 pt-2 md:grid-cols-2' });
                   const exerciseControl = createOptionControl({
@@ -5366,6 +5503,24 @@
                       updateOneRmLabel();
                       syncProvisionalVisuals();
                     };
+                    const copyLastButton = createElem('button', {
+                      className:
+                        'inline-flex h-11 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
+                      attrs: { type: 'button', 'aria-label': `${slotTitle}の前回記録をコピー` }
+                    });
+                    copyLastButton.append(
+                      createElem('span', { className: 'text-base leading-none text-slate-600', textContent: '⟳' }),
+                      createElem('span', { className: 'leading-none', textContent: '前回コピー' })
+                    );
+                    copyLastButton.addEventListener('click', (event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const result = copyLatestSetFromHistory(exercise.id, index);
+                      if (result?.copied) {
+                        syncDerivedState();
+                      }
+                    });
+                    summaryActions.insertBefore(copyLastButton, summaryCaret);
                     const weightInput = createElem('input', {
                       className: 'input-base text-slate-900 placeholder-slate-400',
                       attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' },
