@@ -9,12 +9,46 @@
 <body>
   <!-- PATCH-START: BOOT-SAFE -->
   <!-- 先行エラーバーとアプリコンテナを必ず配置 -->
+  <style id="first-paint-style">
+    html,body{background:#f8fafc!important;color:#0f172a!important;min-height:100vh;color-scheme:light}
+    #app{display:block!important;min-height:60vh}
+    .fp-card{max-width:48rem;margin:16vh auto 0;padding:16px 20px;border:1px solid rgba(2,6,23,.12);border-radius:14px;background:#ffffff;box-shadow:0 10px 30px rgba(2,6,23,.12);font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+    .fp-title{font-weight:800;color:#0f172a;font-size:18px;margin:0 0 6px}
+    .fp-desc{color:#334155;font-size:14px;margin:0 0 10px}
+    .fp-row{display:flex;gap:8px;flex-wrap:wrap}
+    .fp-btn{appearance:none;border-radius:9999px;border:1px solid #cbd5e1;background:#0f172a;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
+    .fp-btn.alt{background:#fff;color:#0f172a}
+  </style>
+  <div id="first-paint-skeleton" class="fp-card" role="status" aria-live="polite">
+    <div class="fp-title">読み込み中…</div>
+    <p class="fp-desc">通常数秒で表示されます。表示されない場合は「ハード再読込」をお試しください。</p>
+    <div class="fp-row">
+      <button id="fp-reload" class="fp-btn">再読込</button>
+      <button id="fp-hard" class="fp-btn alt" style="border-color:#0f172a">ハード再読込</button>
+    </div>
+  </div>
   <div id="errbar" aria-live="assertive"></div>
   <main id="app"></main>
   <style id="boot-style">html,body,#app{display:block!important;visibility:visible!important;opacity:1!important} #app:empty{min-height:80vh}</style>
   <noscript><main role="main" style="padding:12px">JavaScriptが無効です。設定で有効にして再読込してください。</main></noscript>
   <script>
     const __boot = [];
+    (function(){
+      const reloadBtn = document.getElementById('fp-reload');
+      if (reloadBtn) {
+        reloadBtn.addEventListener('click', () => location.reload());
+      }
+      const hardBtn = document.getElementById('fp-hard');
+      if (hardBtn) {
+        hardBtn.addEventListener('click', () => {
+          const url = new URL(location.href);
+          url.searchParams.set('safe', '1');
+          url.searchParams.set('force', '1');
+          url.searchParams.set('v', Date.now());
+          location.replace(url.toString());
+        });
+      }
+    })();
     function bootLog(message) {
       __boot.push(`[${Date.now() % 100000}] ${message}`);
       const bar = document.getElementById('errbar');
@@ -47,11 +81,13 @@
       const app = document.getElementById('app');
       if (app && app.innerHTML.trim() === '') {
         app.innerHTML = `
-      <section style="padding:12px" role="region" aria-label="復旧モード">
-        <h2 style="font-size:18px;margin:0 0 8px">安全復旧モード</h2>
-        <p style="margin:0 0 8px">初期化に失敗しました。最小UIから再開できます。</p>
-        <button id="btn-retry" style="min-height:44px">再試行</button>
-        <button id="btn-hard-reload" style="min-height:44px;margin-left:8px">ハード再読込</button>
+      <section class="fp-card" style="margin:20vh auto 0" role="region" aria-label="復旧モード">
+        <h2 class="fp-title" style="margin-bottom:8px">安全復旧モード</h2>
+        <p class="fp-desc" style="margin-bottom:12px">初期化に失敗しました。最小UIから再開できます。</p>
+        <div class="fp-row">
+          <button id="btn-retry" class="fp-btn">再試行</button>
+          <button id="btn-hard-reload" class="fp-btn alt" style="border-color:#0f172a">ハード再読込</button>
+        </div>
       </section>`;
         const retryBtn = document.getElementById('btn-retry');
         if (retryBtn) {
@@ -62,7 +98,11 @@
         const hardReloadBtn = document.getElementById('btn-hard-reload');
         if (hardReloadBtn) {
           hardReloadBtn.addEventListener('click', () => {
-            location.replace(location.pathname + '#/home?safe=1&v=' + Date.now());
+            const url = new URL(location.href);
+            url.searchParams.set('safe', '1');
+            url.searchParams.set('force', '1');
+            url.searchParams.set('v', Date.now());
+            location.replace(url.toString());
           });
         }
         bootLog('watchdog fired');
@@ -84,6 +124,14 @@
       bootLog('boot start');
       boot();
       bootLog('boot ok');
+      const fps = document.getElementById('first-paint-style');
+      if (fps && fps.parentNode) {
+        fps.parentNode.removeChild(fps);
+      }
+      const skeleton = document.getElementById('first-paint-skeleton');
+      if (skeleton && skeleton.parentNode) {
+        skeleton.parentNode.removeChild(skeleton);
+      }
     } catch (e) {
       const detail = (e?.stack || e?.message || String(e)).split('\n')[0];
       bootLog('boot crash:' + detail);
@@ -96,7 +144,31 @@
       clearTimeout(watchdog);
       const app = document.getElementById('app');
       if (app && app.innerHTML.trim() === '') {
-        app.innerHTML = '<div class="p-3 rounded border bg-white">表示に失敗（簡易モード）。「種目を追加」から再開できます。</div>';
+        app.innerHTML = `
+      <section class="fp-card" style="margin:20vh auto 0" role="region" aria-label="簡易モード">
+        <div class="fp-title" style="margin-bottom:8px">表示に失敗しました</div>
+        <p class="fp-desc" style="margin-bottom:12px">「種目を追加」から再開できます。状況が変わらない場合はハード再読込をお試しください。</p>
+        <div class="fp-row">
+          <button id="btn-retry-final" class="fp-btn">再試行</button>
+          <button id="btn-hard-reload-final" class="fp-btn alt" style="border-color:#0f172a">ハード再読込</button>
+        </div>
+      </section>`;
+        const retryFinal = document.getElementById('btn-retry-final');
+        if (retryFinal) {
+          retryFinal.addEventListener('click', () => {
+            location.replace(location.pathname + location.search + '#/home');
+          });
+        }
+        const hardFinal = document.getElementById('btn-hard-reload-final');
+        if (hardFinal) {
+          hardFinal.addEventListener('click', () => {
+            const url = new URL(location.href);
+            url.searchParams.set('safe', '1');
+            url.searchParams.set('force', '1');
+            url.searchParams.set('v', Date.now());
+            location.replace(url.toString());
+          });
+        }
       }
     }
   </script>
@@ -135,6 +207,16 @@
       <p class="mt-1 text-xs text-gray-600 leading-tight">部位を選ぶと候補が絞り込まれます。</p>
     </div>
   </section>
+  <script>
+    if (typeof document !== 'undefined') {
+      try {
+        document.documentElement.style.background = '#f8fafc';
+        document.documentElement.style.colorScheme = 'light';
+        document.body.style.background = '#f8fafc';
+        document.body.style.color = '#0f172a';
+      } catch (e) {}
+    }
+  </script>
   <!-- PATCH-END: UI-DENSITY -->
 </body>
 </html>
