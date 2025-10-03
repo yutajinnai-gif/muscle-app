@@ -5138,9 +5138,13 @@
     };
 
 <!-- PATCH-START: UI-DENSITY -->
-    const GYM_BUILD_TAG = 'FIX-UI-GYM-READY-20251003';
+    const GYM_BUILD_TAG = 'FIX-UI-REFINED-20251003';
     if (typeof document !== 'undefined' && document.title !== `BUILD_TAG=${GYM_BUILD_TAG}`) {
       document.title = `BUILD_TAG=${GYM_BUILD_TAG}`;
+      const titleEl = document.querySelector('title');
+      if (titleEl && titleEl.textContent !== `BUILD_TAG=${GYM_BUILD_TAG}`) {
+        titleEl.textContent = `BUILD_TAG=${GYM_BUILD_TAG}`;
+      }
       document.documentElement?.setAttribute('data-build-tag', GYM_BUILD_TAG);
       document.body?.setAttribute('data-build-tag', GYM_BUILD_TAG);
     }
@@ -5187,9 +5191,9 @@
       enhanceInputTarget(control);
     };
     const createExerciseMetaPanel = (exercise) => {
-      const metaPanel = createElem('div', { className: 'space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm' });
+      const metaPanel = createElem('div', { className: 'space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm' });
 
-      const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2' });
+      const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-2 md:grid-cols-2' });
       const equipmentControl = createOptionControl({
         field: 'equipment',
         valueKey: exercise.equipmentKey,
@@ -5209,7 +5213,7 @@
       equipmentRow.append(equipmentField, attachmentField);
       metaPanel.append(equipmentRow);
 
-      const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2' });
+      const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-2 md:grid-cols-2' });
       const angleInput = createElem('input', {
         className: 'input-base text-slate-900 placeholder-slate-500',
         attrs: { type: 'number', inputmode: 'decimal', min: '0', max: '180', step: '1', placeholder: '例: 30' },
@@ -5239,7 +5243,7 @@
       angleRow.append(angleField, positionField);
       metaPanel.append(angleRow);
 
-      const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2' });
+      const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-2 md:grid-cols-2' });
       const performedOnInput = createElem('input', {
         className: 'input-base text-slate-900',
         attrs: { type: 'date', min: '2000-01-01', max: '2099-12-31', step: '1' },
@@ -5280,6 +5284,115 @@
 
       return metaPanel;
     };
+
+    const ensureCompactSpacing = (classList, removals = [], additions = []) => {
+      removals.forEach((name) => {
+        if (classList.contains(name)) classList.remove(name);
+      });
+      additions.forEach((name) => {
+        if (!classList.contains(name)) classList.add(name);
+      });
+    };
+
+    const applyCompactCardBase = (card) => {
+      if (!card) return;
+      if (card.classList.contains('p-5')) card.classList.replace('p-5', 'p-4');
+      if (card.classList.contains('mb-6')) card.classList.replace('mb-6', 'mb-4');
+    };
+
+    const applyQuickStartCompact = (card) => {
+      if (!card || card.dataset.quickCompact === '1') return;
+      card.dataset.quickCompact = '1';
+      applyCompactCardBase(card);
+      const header = card.querySelector(':scope > header');
+      if (header) {
+        ensureCompactSpacing(header.classList, ['mb-4', 'gap-3'], ['mb-3', 'gap-2', 'flex-wrap']);
+      }
+      const body = card.querySelector(':scope > div');
+      if (body) {
+        ensureCompactSpacing(body.classList, ['space-y-5'], ['space-y-3']);
+        const primaryRow = body.firstElementChild;
+        if (primaryRow) {
+          ensureCompactSpacing(primaryRow.classList, ['flex-col', 'gap-3'], ['flex-wrap', 'gap-2', 'sm:items-center']);
+          if (!primaryRow.classList.contains('sm:flex-row')) {
+            primaryRow.classList.add('sm:flex-row');
+          }
+        }
+      }
+      card.querySelectorAll('button').forEach((btn) => {
+        if (btn.classList.contains('py-3')) {
+          btn.classList.remove('py-3');
+          btn.classList.add('py-2.5');
+        }
+        if (!btn.classList.contains('min-h-[44px]')) {
+          btn.classList.add('min-h-[44px]');
+        }
+      });
+    };
+
+    const applyCurrentWorkoutCompact = (card) => {
+      if (!card || card.dataset.workoutCompact === '1') return;
+      card.dataset.workoutCompact = '1';
+      applyCompactCardBase(card);
+      const header = card.querySelector(':scope > header');
+      if (header) {
+        ensureCompactSpacing(header.classList, ['mb-4', 'gap-3'], ['mb-3', 'gap-2', 'flex-wrap']);
+        const headerControls = header.querySelector(':scope > div');
+        if (headerControls) {
+          ensureCompactSpacing(headerControls.classList, ['gap-3'], ['gap-2', 'flex-wrap']);
+        }
+      }
+      const body = card.querySelector(':scope > div');
+      if (body) {
+        ensureCompactSpacing(body.classList, ['space-y-5'], ['space-y-4']);
+      }
+    };
+
+    const scanCompactCards = (root) => {
+      if (!root || typeof root.querySelectorAll !== 'function') return;
+      const cards = root.querySelectorAll('section');
+      cards.forEach((card) => {
+        const title = card.querySelector(':scope > header h2')?.textContent?.trim();
+        if (title === 'クイックスタート') {
+          applyQuickStartCompact(card);
+        } else if (title === '現在のワークアウト') {
+          applyCurrentWorkoutCompact(card);
+        }
+      });
+    };
+
+    const scheduleCompactScan = (root) => {
+      const runner = () => scanCompactCards(root);
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(runner);
+      } else {
+        setTimeout(runner, 16);
+      }
+    };
+
+    const bootCompactObserver = () => {
+      if (typeof document === 'undefined') return;
+      const appRoot = document.getElementById('app');
+      if (!appRoot) return;
+      scanCompactCards(appRoot);
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node && node.nodeType === 1) {
+              scheduleCompactScan(node);
+            }
+          }
+        }
+      });
+      observer.observe(appRoot, { childList: true, subtree: true });
+    };
+    if (typeof document !== 'undefined') {
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootCompactObserver, { once: true });
+      } else {
+        bootCompactObserver();
+      }
+    }
 <!-- PATCH-END: UI-DENSITY -->
 
     const buildHomeView = (appFlags = {}) => {
@@ -5463,9 +5576,9 @@
         });
         return button;
       };
-      const cardBody = createElem('div', { className: 'space-y-5 pb-28' });
+      const cardBody = createElem('div', { className: 'space-y-4 pb-24' });
       const partSelector = (() => {
-        const section = createElem('section', { className: 'space-y-2' });
+        const section = createElem('section', { className: 'space-y-1.5' });
         section.append(
           createElem('h3', { className: 'text-sm font-semibold text-slate-900', textContent: '記録する部位' })
         );
@@ -5493,10 +5606,11 @@
         section.append(select, info);
         return section;
       })();
-      cardBody.append(partSelector);
+      const workoutMetaGrid = createElem('div', { className: 'grid grid-cols-1 gap-2 items-start md:grid-cols-2' });
+      workoutMetaGrid.append(partSelector);
       const toggleContainer = (() => {
         const wrapper = createElem('div', {
-          className: 'inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 text-sm font-medium'
+          className: 'inline-flex flex-wrap items-center gap-1.5 rounded-full border border-slate-200 bg-white px-1.5 py-1 text-sm font-medium'
         });
         const createToggleButton = (mode, label) => {
           const active = workout.entryMode === mode;
@@ -5520,16 +5634,21 @@
         );
         return wrapper;
       })();
-      const headerAddButton = buildAddExerciseButton({ extraClasses: 'w-full sm:w-auto' });
+      const headerAddButton = buildAddExerciseButton({ extraClasses: 'w-full min-h-[44px] sm:ml-auto sm:w-auto' });
       const headerControls = createElem('div', {
-        className: 'flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3'
+        className: 'flex w-full flex-wrap items-center gap-2 sm:flex-row sm:justify-end'
       });
       headerControls.append(toggleContainer, headerAddButton);
-      const headerInfo = createElem('p', {
-        className: 'rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-800',
-        textContent: `開始: ${formatDate(workout.startedAt)}`
-      });
-      cardBody.append(headerInfo);
+      const startInfoSection = createElem('section', { className: 'space-y-1.5' });
+      startInfoSection.append(
+        createElem('h3', { className: 'text-sm font-semibold text-slate-900', textContent: '開始日時' }),
+        createElem('p', {
+          className: 'rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-base leading-snug text-slate-800',
+          textContent: `開始: ${formatDate(workout.startedAt)}`
+        })
+      );
+      workoutMetaGrid.append(startInfoSection);
+      cardBody.append(workoutMetaGrid);
       if (workoutHasProvisionalSets(workout)) {
         cardBody.append(
           createElem('p', {
@@ -5548,11 +5667,6 @@
             textContent: emptyMessage
           })
         );
-        const emptyActions = createElem('div', {
-          className: 'flex flex-col gap-2 sm:flex-row sm:items-center'
-        });
-        emptyActions.append(buildAddExerciseButton({ extraClasses: 'w-full sm:w-auto' }));
-        cardBody.append(emptyActions);
       } else {
         workout.supersets.forEach((superset) => {
           supersetFocusRegistry.set(superset.id, []);
@@ -5572,8 +5686,8 @@
             exercise: slot.exerciseId ? getExerciseById(slot.exerciseId) : null
           }));
           const roundCount = Math.max(0, ...slotExercises.map(({ exercise }) => (exercise ? exercise.sets.length : 0)));
-          const supCard = createElem('section', { className: 'space-y-3 rounded-2xl border border-slate-300 bg-white p-4 shadow-sm' });
-          const headerRow = createElem('div', { className: 'flex flex-col gap-2 md:flex-row md:items-center md:justify-between' });
+          const supCard = createElem('section', { className: 'space-y-2 rounded-2xl border border-slate-300 bg-white p-3 shadow-sm' });
+          const headerRow = createElem('div', { className: 'flex flex-wrap gap-1.5 md:flex-row md:items-center md:justify-between' });
           const toggleBtn = createElem('button', {
             className: 'flex items-center gap-2 text-left text-lg font-bold leading-snug text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
             attrs: { type: 'button' }
@@ -5591,7 +5705,7 @@
           );
           supCard.append(headerRow);
 
-          const controls = createElem('div', { className: 'flex flex-wrap items-center gap-3 text-sm leading-snug' });
+          const controls = createElem('div', { className: 'flex flex-wrap items-center gap-2 text-sm leading-snug' });
           const restInput = createElem('input', {
             className: 'input-base w-28 text-base',
             attrs: { type: 'number', min: '10', max: '600', step: '5' },
@@ -5689,7 +5803,7 @@
           controls.append(timerBtn, restLabel, addRoundBtn, duplicateBtn, deleteBtn);
           supCard.append(controls);
 
-          const body = createElem('div', { className: 'space-y-3' });
+          const body = createElem('div', { className: 'space-y-2' });
           if (superset.collapsed) body.classList.add('hidden');
           const hasExercises = slotExercises.some(({ exercise }) => exercise);
           if (!hasExercises) {
@@ -5707,7 +5821,7 @@
               })
             );
           }
-          const roundsContainer = createElem('div', { className: 'space-y-3' });
+          const roundsContainer = createElem('div', { className: 'space-y-2' });
           const iterationCount = Math.max(roundCount, 1);
           for (let index = 0; index < iterationCount; index += 1) {
                 const round = createElem('div', {
@@ -6038,7 +6152,7 @@
           body.append(roundsContainer);
 
           const metaGrid = createElem('div', {
-            className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2'
+            className: 'grid grid-cols-1 gap-2 md:grid-cols-2'
           });
           slotExercises.forEach(({ slot, exercise }) => {
             if (!exercise) return;
