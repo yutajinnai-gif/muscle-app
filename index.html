@@ -5138,10 +5138,58 @@
     };
 
 <!-- PATCH-START: UI-DENSITY -->
+    const GYM_BUILD_TAG = 'FIX-UI-GYM-READY-20251003';
+    if (typeof document !== 'undefined' && document.title !== `BUILD_TAG=${GYM_BUILD_TAG}`) {
+      document.title = `BUILD_TAG=${GYM_BUILD_TAG}`;
+      document.documentElement?.setAttribute('data-build-tag', GYM_BUILD_TAG);
+      document.body?.setAttribute('data-build-tag', GYM_BUILD_TAG);
+    }
+    const enhanceFieldWrapper = (wrapper) => {
+      if (!wrapper) return;
+      wrapper.classList.remove('font-semibold', 'text-slate-900');
+      wrapper.classList.add('font-medium', 'text-gray-800', 'gap-1.5', 'text-sm', 'leading-snug');
+      const header = wrapper.querySelector('div');
+      if (header) {
+        header.classList.remove('font-semibold', 'text-slate-900');
+        header.classList.add('font-medium', 'text-gray-900', 'gap-2');
+      }
+      wrapper.querySelectorAll('span.text-xs').forEach((desc) => {
+        desc.classList.add('leading-snug', 'text-slate-700');
+      });
+    };
+    const enhanceInputTarget = (control) => {
+      if (!control) return;
+      const targets = control.matches?.('input, select, textarea')
+        ? [control]
+        : control.querySelectorAll?.('input, select, textarea') || [];
+      targets.forEach((target) => {
+        target.classList.remove('text-sm');
+        target.classList.add(
+          'min-h-[44px]',
+          'px-3',
+          'py-2',
+          'text-base',
+          'leading-snug',
+          'rounded-xl',
+          'border',
+          'border-slate-300',
+          'focus-visible:ring-2',
+          'focus-visible:ring-offset-2',
+          'focus-visible:ring-blue-500'
+        );
+        if (!target.classList.contains('w-full')) {
+          target.classList.add('w-full');
+        }
+      });
+    };
+    const enhanceField = (wrapper, control) => {
+      enhanceFieldWrapper(wrapper);
+      enhanceInputTarget(control);
+    };
     const createExerciseMetaPanel = (exercise) => {
-      const metaPanel = createElem('div', { className: 'space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4' });
+      const metaPanel = createElem('div', { className: 'space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm' });
 
-      const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2' });
+      const equipmentRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2' });
       const equipmentControl = createOptionControl({
         field: 'equipment',
         valueKey: exercise.equipmentKey,
@@ -5149,7 +5197,7 @@
         onCommit: (value) => scheduleExerciseFieldUpdate(exercise.id, 'equipment', value)
       });
       const equipmentField = createFieldWrapper('器具', '使用した器具を入力します。', '使用した器具の種類を記録しましょう。', equipmentControl);
-
+      enhanceField(equipmentField, equipmentControl);
       const attachmentControl = createOptionControl({
         field: 'attachment',
         valueKey: exercise.attachmentKey,
@@ -5157,12 +5205,13 @@
         onCommit: (value) => scheduleExerciseFieldUpdate(exercise.id, 'attachment', value)
       });
       const attachmentField = createFieldWrapper('アタッチメント', '利用したアタッチメントを記録します。', 'ケーブルハンドルなどをメモできます。', attachmentControl);
+      enhanceField(attachmentField, attachmentControl);
       equipmentRow.append(equipmentField, attachmentField);
       metaPanel.append(equipmentRow);
 
-      const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2' });
+      const angleRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2' });
       const angleInput = createElem('input', {
-        className: 'input-base text-slate-900 placeholder-slate-400',
+        className: 'input-base text-slate-900 placeholder-slate-500',
         attrs: { type: 'number', inputmode: 'decimal', min: '0', max: '180', step: '1', placeholder: '例: 30' },
         value: exercise.angle ?? ''
       });
@@ -5177,6 +5226,7 @@
         apply: (el, value) => applyInputValue(el, value)
       });
       const angleField = createFieldWrapper('角度 (°)', 'ベンチやマシンの角度を記録します。', '角度の変化を記録してフォームを比較。', angleInput);
+      enhanceField(angleField, angleInput);
 
       const positionControl = createOptionControl({
         field: 'position',
@@ -5185,10 +5235,11 @@
         onCommit: (value) => scheduleExerciseFieldUpdate(exercise.id, 'position', value)
       });
       const positionField = createFieldWrapper('スタンス / ポジション', '足幅やグリップ幅などを記録します。', 'スタンスやポジションの工夫を書き残しましょう。', positionControl);
+      enhanceField(positionField, positionControl);
       angleRow.append(angleField, positionField);
       metaPanel.append(angleRow);
 
-      const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2' });
+      const scheduleRow = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2' });
       const performedOnInput = createElem('input', {
         className: 'input-base text-slate-900',
         attrs: { type: 'date', min: '2000-01-01', max: '2099-12-31', step: '1' },
@@ -5205,9 +5256,10 @@
         apply: (el, value) => applyInputValue(el, value)
       });
       const performedOnField = createFieldWrapper('実施日', 'トレーニングを行った日付です。', '後から見返すために日付を残せます。', performedOnInput);
+      enhanceField(performedOnField, performedOnInput);
 
       const intervalInput = createElem('input', {
-        className: 'input-base text-slate-900 placeholder-slate-400',
+        className: 'input-base text-slate-900 placeholder-slate-500',
         attrs: { type: 'number', inputmode: 'numeric', min: '0', max: '600', step: '5', placeholder: '例: 90' },
         value: exercise.intervalSeconds ?? ''
       });
@@ -5222,6 +5274,7 @@
         apply: (el, value) => applyInputValue(el, value)
       });
       const intervalField = createFieldWrapper('インターバル (秒)', 'セット間の休憩秒数を記録します。', 'タイマーで計測した秒数を入力。', intervalInput);
+      enhanceField(intervalField, intervalInput);
       scheduleRow.append(performedOnField, intervalField);
       metaPanel.append(scheduleRow);
 
@@ -5382,21 +5435,26 @@
       nodes.push(createCard('クイックスタート', quickBody));
 
       const workout = appData.currentWorkout;
-      const addExerciseButtonText = '+ 種目を追加';
+      const addExerciseButtonText = '種目を追加';
       const buildAddExerciseButton = ({ id = null, block = false, variant = 'primary', extraClasses = '' } = {}) => {
         const focusRing =
-          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500';
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500';
         const baseClass =
+          'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-base font-medium leading-snug shadow-sm transition';
+        const variantClass =
           variant === 'accent'
-            ? `rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm min-h-11 bg-blue-600 transition hover:bg-blue-700 ${focusRing}`
-            : `btn-primary rounded-xl px-4 py-2 text-sm font-semibold shadow-sm min-h-11 ${focusRing}`;
-        const widthClass = block ? `w-full ${baseClass}` : baseClass;
+            ? `${baseClass} bg-blue-600 text-white hover:bg-blue-700 ${focusRing}`
+            : `${baseClass} btn-primary hover:bg-slate-900 ${focusRing}`;
+        const widthClass = block ? `w-full ${variantClass}` : variantClass;
         const className = extraClasses ? `${widthClass} ${extraClasses}` : widthClass;
         const button = createElem('button', {
           className,
-          textContent: addExerciseButtonText,
-          attrs: { type: 'button', 'aria-label': '種目を追加' }
+          attrs: { type: 'button', 'aria-label': addExerciseButtonText, role: 'button' }
         });
+        button.append(
+          createElem('span', { className: 'text-lg font-semibold', textContent: '＋', attrs: { 'aria-hidden': 'true' } }),
+          createElem('span', { className: 'leading-snug', textContent: addExerciseButtonText })
+        );
         if (id) button.id = id;
         button.setAttribute('title', '種目を追加');
         button.addEventListener('click', (event) => {
@@ -5405,7 +5463,7 @@
         });
         return button;
       };
-      const cardBody = createElem('div', { className: 'space-y-5' });
+      const cardBody = createElem('div', { className: 'space-y-5 pb-28' });
       const partSelector = (() => {
         const section = createElem('section', { className: 'space-y-2' });
         section.append(
@@ -5415,6 +5473,9 @@
           className: 'select-base text-sm font-semibold text-slate-900 bg-white',
           attrs: { name: 'part-selector' }
         });
+        select.classList.remove('text-sm', 'font-semibold');
+        select.classList.add('text-base', 'font-medium');
+        enhanceInputTarget(select);
         const placeholder = createElem('option', { textContent: '未選択', value: '' });
         select.append(placeholder);
         EXERCISE_PARTS.forEach((part) => {
@@ -5435,17 +5496,19 @@
       cardBody.append(partSelector);
       const toggleContainer = (() => {
         const wrapper = createElem('div', {
-          className: 'inline-flex items-center rounded-full border border-slate-300 bg-slate-100 p-1 text-xs font-semibold'
+          className: 'inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white p-1 text-sm font-medium'
         });
         const createToggleButton = (mode, label) => {
           const active = workout.entryMode === mode;
           const btn = createElem('button', {
-            className: `rounded-full px-3 py-1 transition ${
+            className: `${
+              'inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500'
+            } ${
               active
                 ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                : 'border border-slate-300 bg-white text-slate-600 hover:text-slate-900'
             }`,
-            attrs: { type: 'button', 'aria-pressed': active ? 'true' : 'false' },
+            attrs: { type: 'button', role: 'button', 'aria-pressed': active ? 'true' : 'false' },
             textContent: label
           });
           btn.addEventListener('click', () => setCurrentWorkoutEntryMode(mode));
@@ -5463,7 +5526,7 @@
       });
       headerControls.append(toggleContainer, headerAddButton);
       const headerInfo = createElem('p', {
-        className: 'rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800',
+        className: 'rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-base text-slate-800',
         textContent: `開始: ${formatDate(workout.startedAt)}`
       });
       cardBody.append(headerInfo);
@@ -5528,24 +5591,34 @@
           );
           supCard.append(headerRow);
 
-          const controls = createElem('div', { className: 'flex flex-wrap items-center gap-2 text-sm leading-snug' });
+          const controls = createElem('div', { className: 'flex flex-wrap items-center gap-3 text-sm leading-snug' });
           const restInput = createElem('input', {
-            className: 'input-base w-24 text-sm',
+            className: 'input-base w-28 text-base',
             attrs: { type: 'number', min: '10', max: '600', step: '5' },
             value: superset.restSeconds ?? DEFAULT_SUPERSET_REST
           });
+          enhanceInputTarget(restInput);
+          restInput.classList.add('max-w-[7rem]');
           const timerBtn = createElem('button', {
-            className: 'btn-primary rounded-lg px-3 py-2 text-sm font-semibold shadow-sm',
-            attrs: { type: 'button' },
+            className:
+              'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-base font-semibold text-white shadow-sm transition hover:bg-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900',
+            attrs: { type: 'button', role: 'button', 'aria-label': '休憩タイマーを開始' }
+          });
+          const timerLabel = createElem('span', {
+            className: 'leading-snug',
             textContent: `休憩 ${superset.restSeconds}秒`
           });
+          timerBtn.append(
+            createElem('span', { className: 'text-lg leading-none', textContent: '⏱', attrs: { 'aria-hidden': 'true' } }),
+            timerLabel
+          );
           attachTimerUpdater(superset.id, (remaining, active) => {
             if (active) {
-              timerBtn.textContent = `残り ${Math.max(0, remaining)}秒`;
+              timerLabel.textContent = `残り ${Math.max(0, remaining)}秒`;
               timerBtn.classList.add('animate-pulse');
             } else {
               const base = restInput.value || superset.restSeconds;
-              timerBtn.textContent = `休憩 ${base}秒`;
+              timerLabel.textContent = `休憩 ${base}秒`;
               timerBtn.classList.remove('animate-pulse');
             }
           });
@@ -5560,7 +5633,7 @@
                 sup.restSeconds = Math.max(10, Math.min(600, Math.round(parsed)));
               }
             }
-            timerBtn.textContent = `休憩 ${value || superset.restSeconds}秒`;
+            timerLabel.textContent = `休憩 ${value || superset.restSeconds}秒`;
           });
           registerTypingTarget(restInput, {
             key: `superset:${superset.id}:restSeconds`,
@@ -5572,31 +5645,46 @@
               const sup = getSupersetById(superset.id);
               const fallback = sup?.restSeconds ?? DEFAULT_SUPERSET_REST;
               const display = restInput.value || fallback;
-              timerBtn.textContent = `休憩 ${display}秒`;
+              timerLabel.textContent = `休憩 ${display}秒`;
             }
           });
-          const restLabel = createElem('label', { className: 'flex w-28 flex-col gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500 leading-snug' });
+          const restLabel = createElem('label', { className: 'flex w-32 flex-col gap-1 text-sm font-medium leading-snug text-gray-800' });
           restLabel.append(
-            createElem('span', { className: 'text-slate-600', textContent: '休憩プリセット' }),
+            createElem('span', { className: 'text-sm font-medium text-slate-700', textContent: '休憩プリセット' }),
             restInput
           );
           const addRoundBtn = createElem('button', {
-            className: 'btn-muted rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100',
-            attrs: { type: 'button' },
-            textContent: 'セット追加'
+            className:
+              'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-base font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500',
+            attrs: { type: 'button', role: 'button', 'aria-label': 'セットを追加' }
           });
+          addRoundBtn.append(
+            createElem('span', { className: 'text-lg leading-none font-semibold', textContent: '＋', attrs: { 'aria-hidden': 'true' } }),
+            createElem('span', { className: 'leading-snug', textContent: 'セット追加' })
+          );
           addRoundBtn.addEventListener('click', () => addSupersetRound(superset.id));
           const duplicateBtn = createElem('button', {
-            className: 'btn-muted rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100',
-            attrs: { type: 'button' },
-            textContent: superset.mode === WORKOUT_ENTRY_MODES.single ? '複製' : 'グループ複製'
+            className:
+              'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-base font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500',
+            attrs: { type: 'button', role: 'button', 'aria-label': 'スーパーセットを複製' }
           });
+          duplicateBtn.append(
+            createElem('span', { className: 'text-lg leading-none text-slate-600', textContent: '⧉', attrs: { 'aria-hidden': 'true' } }),
+            createElem('span', {
+              className: 'leading-snug',
+              textContent: superset.mode === WORKOUT_ENTRY_MODES.single ? '複製' : 'グループ複製'
+            })
+          );
           duplicateBtn.addEventListener('click', () => duplicateSuperset(superset.id));
           const deleteBtn = createElem('button', {
-            className: 'text-sm font-semibold text-red-700 underline decoration-dotted hover:text-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500',
-            attrs: { type: 'button' },
-            textContent: '削除'
+            className:
+              'inline-flex min-h-[44px] items-center justify-center rounded-2xl px-4 py-2 text-base font-medium text-red-700 underline decoration-dotted transition hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-500',
+            attrs: { type: 'button', role: 'button' }
           });
+          deleteBtn.append(
+            createElem('span', { className: 'text-lg leading-none', textContent: '🗑', attrs: { 'aria-hidden': 'true' } }),
+            createElem('span', { className: 'leading-snug', textContent: '削除' })
+          );
           deleteBtn.addEventListener('click', () => deleteSuperset(superset.id));
           controls.append(timerBtn, restLabel, addRoundBtn, duplicateBtn, deleteBtn);
           supCard.append(controls);
@@ -5627,12 +5715,13 @@
                   attrs: { title: '長押しでこのラウンドを複製できます' }
                 });
                 registerLongPress(round, () => duplicateSupersetRound(superset.id, index));
-                const roundHeader = createElem('div', { className: 'flex items-center justify-between text-sm font-semibold leading-snug text-slate-800' });
+                const roundHeader = createElem('div', { className: 'flex items-center justify-between text-base font-medium leading-snug text-slate-900' });
                 roundHeader.append(createElem('span', { textContent: `ラウンド ${index + 1}` }));
                 const canRemove = slotExercises.some(({ exercise }) => exercise && exercise.sets.length > 1);
                 const removeBtn = createElem('button', {
-                  className: 'text-xs font-semibold leading-snug text-red-700 underline decoration-dotted hover:text-red-800',
-                  attrs: { type: 'button' },
+                  className:
+                    'inline-flex min-h-[44px] items-center justify-center rounded-xl px-3 py-2 text-sm font-medium text-red-700 underline decoration-dotted transition hover:text-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-500',
+                  attrs: { type: 'button', role: 'button' },
                   textContent: 'ラウンド削除'
                 });
                 if (!canRemove) {
@@ -5673,12 +5762,13 @@
                     details.setAttribute('open', '');
                   }
                   const summary = createElem('summary', {
-                    className: 'flex items-center justify-between gap-3 px-3 py-2 text-sm font-semibold leading-snug text-slate-900 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500'
+                    className:
+                      'flex min-h-[52px] items-center justify-between gap-3 rounded-2xl px-3 py-3 text-base font-medium leading-snug text-slate-900 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500'
                   });
                   const summaryContent = createElem('div', { className: 'flex flex-col gap-0.5 leading-snug' });
                   const summaryTitle = createElem('span', { textContent: slotTitle });
                   const summaryStats = createElem('span', {
-                    className: 'text-xs font-medium leading-snug text-slate-500',
+                    className: 'text-sm font-medium leading-snug text-slate-600',
                     textContent: exercise ? '' : '未設定'
                   });
                   const summaryPrevLine = createElem('span', {
@@ -5695,7 +5785,7 @@
                   summaryActions.append(summaryCaret);
                   summary.append(summaryContent, summaryActions);
                   details.append(summary);
-                  const detailBody = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-2 px-3 pb-3 pt-2 md:grid-cols-2' });
+                  const detailBody = createElem('div', { className: 'grid grid-cols-1 gap-x-3 gap-y-3 px-3 pb-4 pt-3 md:grid-cols-2' });
                   const exerciseControl = createOptionControl({
                     field: 'exercise',
                     valueKey: exercise?.nameKey ?? null,
@@ -5705,6 +5795,7 @@
                   });
                   const exerciseField = createFieldWrapper('種目', 'この枠で記録する種目を選択します。', '自由入力を有効にすると候補にない名称も追加できます。', exerciseControl);
                   exerciseField.classList.add('md:col-span-2');
+                  enhanceField(exerciseField, exerciseControl);
                   detailBody.append(exerciseField);
                   let exercisePrevSummary = null;
                   let prevSummaryBase = '前回: —';
@@ -5779,12 +5870,12 @@
                     };
                     const copyLastButton = createElem('button', {
                       className:
-                        'inline-flex h-11 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
-                      attrs: { type: 'button', 'aria-label': `${slotTitle}の前回記録をコピー` }
+                        'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 text-base font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500',
+                      attrs: { type: 'button', 'aria-label': `${slotTitle}の前回記録をコピー`, role: 'button' }
                     });
                     copyLastButton.append(
-                      createElem('span', { className: 'text-base leading-none text-slate-600', textContent: '⟳' }),
-                      createElem('span', { className: 'leading-none', textContent: '前回コピー' })
+                      createElem('span', { className: 'text-lg leading-none text-slate-600', textContent: '⟳', attrs: { 'aria-hidden': 'true' } }),
+                      createElem('span', { className: 'leading-snug', textContent: '前回コピー' })
                     );
                     copyLastButton.addEventListener('click', (event) => {
                       event.preventDefault();
@@ -5833,7 +5924,7 @@
                       prevSummaryBadge.textContent = text;
                     };
                     const weightInput = createElem('input', {
-                      className: 'input-base text-slate-900 placeholder-slate-400',
+                      className: 'input-base text-slate-900 placeholder-slate-500',
                       attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' },
                       value: set?.weight ?? ''
                     });
@@ -5851,11 +5942,12 @@
                       sync: syncDerivedState
                     });
                     const weightField = createFieldWrapper(`重量 (${appData.settings.unit})`, 'このセットで扱った重量です。', '小数点も入力できます。', weightInput);
+                    enhanceField(weightField, weightInput);
                     detailBody.append(weightField);
                     weightInputs.push(weightInput);
 
                     const repsInput = createElem('input', {
-                      className: 'input-base text-slate-900 placeholder-slate-400',
+                      className: 'input-base text-slate-900 placeholder-slate-500',
                       attrs: { type: 'number', inputmode: 'numeric', min: '0', step: '1' },
                       value: set?.reps ?? ''
                     });
@@ -5873,11 +5965,12 @@
                       sync: syncDerivedState
                     });
                     const repsField = createFieldWrapper('回数', '完了した反復回数を入力します。', '失敗した場合は実際の回数を。', repsInput);
+                    enhanceField(repsField, repsInput);
                     detailBody.append(repsField);
                     repsInputs.push(repsInput);
 
                     const noteInput = createElem('textarea', {
-                      className: 'input-base min-h-[3rem] text-slate-900 placeholder-slate-400',
+                      className: 'input-base min-h-[3rem] text-slate-900 placeholder-slate-500',
                       attrs: { rows: '2', placeholder: 'フォームや感覚をメモ' }
                     });
                     noteInput.value = set?.note || '';
@@ -5894,6 +5987,7 @@
                       sync: updateOneRmLabel
                     });
                     const noteField = createFieldWrapper('セットメモ', '気づいたことや次回の課題を記録します。', 'フォームやRPEを自由に入力。', noteInput);
+                    enhanceField(noteField, noteInput);
                     noteField.classList.add('md:col-span-2');
                     detailBody.append(noteField);
                     noteInputs.push(noteInput);
@@ -5951,7 +6045,7 @@
             const wrapper = createElem('div', { className: 'space-y-2 leading-snug' });
             wrapper.append(
               createElem('h4', {
-                className: 'text-sm font-semibold leading-snug text-slate-900',
+                className: 'text-base font-semibold leading-snug text-slate-900',
                 textContent:
                   superset.mode === WORKOUT_ENTRY_MODES.single
                     ? exercise.name
@@ -5970,31 +6064,45 @@
       }
       const addExerciseTitle = '種目を追加';
       const latestSuperset = workout.supersets[workout.supersets.length - 1] || null;
-      const actionBarContainer = createElem('div', { className: 'pointer-events-auto mx-auto max-w-3xl' });
+      const actionBarContainer = createElem('div', {
+        className:
+          'pointer-events-auto sticky bottom-0 inset-x-0 mx-auto max-w-3xl px-4 pb-[env(safe-area-inset-bottom)] sm:px-6'
+      });
       const actionBar = createElem('div', {
-        className: 'grid grid-cols-1 gap-2 rounded-2xl border border-slate-300 bg-white/95 p-2 shadow-xl backdrop-blur-sm sm:grid-cols-3'
+        className:
+          'grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur supports-[backdrop-filter]:backdrop-blur min-[360px]:grid-cols-2 sm:grid-cols-3'
       });
       const saveBtn = createElem('button', {
-        className: 'btn-primary w-full rounded-xl px-3 py-2 text-sm font-semibold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
-        textContent: '保存',
-        attrs: { type: 'button', title: '完了して履歴へ' }
+        className:
+          'inline-flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900',
+        attrs: { type: 'button', title: '完了して履歴へ', 'aria-label': 'ワークアウトを保存', role: 'button' }
       });
+      saveBtn.append(
+        createElem('span', { className: 'text-lg leading-none', textContent: '💾', attrs: { 'aria-hidden': 'true' } }),
+        createElem('span', { className: 'leading-snug', textContent: '保存' })
+      );
       saveBtn.addEventListener('click', finishWorkout);
       const addBtn = buildAddExerciseButton({ id: 'btn-add-exercise', block: true, variant: 'accent' });
       addBtn.setAttribute('title', addExerciseTitle);
       const duplicateBtn = createElem('button', {
-        className: 'btn-muted w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500',
-        textContent: '複製',
+        className:
+          'inline-flex w-full min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500',
         attrs: {
           type: 'button',
-          title: latestSuperset ? `${latestSuperset.label} を複製` : '複製できるスーパーセットがありません。'
+          title: latestSuperset ? `${latestSuperset.label} を複製` : '複製できるスーパーセットがありません。',
+          'aria-label': latestSuperset ? `${latestSuperset.label} を前回コピー` : '前回コピーできるスーパーセットがありません。',
         }
       });
+      duplicateBtn.append(
+        createElem('span', { className: 'text-lg leading-none text-slate-600', textContent: '📄', attrs: { 'aria-hidden': 'true' } }),
+        createElem('span', { className: 'leading-snug', textContent: '前回コピー' })
+      );
       if (latestSuperset) {
         duplicateBtn.addEventListener('click', () => duplicateSuperset(latestSuperset.id));
       } else {
         duplicateBtn.disabled = true;
         duplicateBtn.classList.add('cursor-not-allowed', 'opacity-60');
+        duplicateBtn.setAttribute('aria-disabled', 'true');
       }
       actionBar.append(saveBtn, addBtn, duplicateBtn);
       actionBarContainer.append(actionBar);
