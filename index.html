@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BUILD_TAG=FIX-20251003-SAFE-OFF</title>
+  <title>BUILD_TAG=MARKERS-20251003</title>
   <meta name="theme-color" content="#111827">
   <link rel="manifest" id="app-manifest" href="#">
   <script>
@@ -134,7 +134,7 @@
   (function(){
     'use strict';
 
-      const BUILD_TAG = 'FIX-20251003-SAFE-OFF';
+      const BUILD_TAG = 'MARKERS-20251003';
       /* DEPRECATED: Legacy SAFE_MODE detection kept for reference.
       const SAFE_MODE = true;
       let runtimeSafeMode = (() => {
@@ -3548,6 +3548,7 @@
       blueprint
     });
 
+<!-- PATCH-START: FAST-INPUT -->
     const getTemplateById = (templateId) => appData.templates.find((tpl) => tpl.id === templateId);
 
     const applyTemplateById = (templateId) => {
@@ -5901,6 +5902,7 @@
       })();
       cardBody.append(templateManagerSection);
 
+<!-- PATCH-END: FAST-INPUT -->
       const importExportSection = createElem('div', { className: 'space-y-3' });
       importExportSection.append(createElem('h3', { className: 'text-base font-semibold text-slate-800', textContent: 'バックアップ' }));
       const exportBtn = createElem('button', { className: 'btn-muted px-4 py-2 rounded-lg text-sm font-semibold', textContent: 'エクスポート', attrs: { type: 'button' } });
