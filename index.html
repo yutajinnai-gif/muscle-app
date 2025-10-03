@@ -3555,12 +3555,97 @@
         const yyyy = String(now.getFullYear());
         const mm = String(now.getMonth() + 1).padStart(2, '0');
         const dd = String(now.getDate()).padStart(2, '0');
-        const buildTag = `BUILD_TAG=FIX-ADD-EXERCISE-BUTTON-${yyyy}${mm}${dd}`;
+        const buildTag = `BUILD_TAG=FIX-PREV-COMPARISON-${yyyy}${mm}${dd}`;
         if (typeof document?.title === 'string') {
           document.title = buildTag;
         }
       } catch (_) {}
     })();
+
+    function getLastSetSummary({ partKey, exerciseKey }) {
+      const normalizedPart = normalizePartKey(partKey) || 'unknown';
+      const rawExerciseKey = typeof exerciseKey === 'string' ? exerciseKey.trim() : '';
+      if (!rawExerciseKey) return null;
+      const normalizedExercise = rawExerciseKey.includes('::') ? rawExerciseKey : `key::${rawExerciseKey}`;
+      const targetKey = `${normalizedPart}::${normalizedExercise}`;
+      const parseNumber = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const num = Number(value);
+        if (!Number.isFinite(num)) return null;
+        return num;
+      };
+      if (!appData || !Array.isArray(appData.workouts)) return null;
+      for (let index = 0; index < appData.workouts.length; index += 1) {
+        const workout = appData.workouts[index];
+        if (!workout || !Array.isArray(workout.exercises)) continue;
+        const matched = workout.exercises.find((candidate) => {
+          if (!candidate) return false;
+          const candidateKey = resolveExerciseHistoryKey(candidate, normalizedPart);
+          return candidateKey === targetKey;
+        });
+        if (!matched || !Array.isArray(matched.sets) || !matched.sets.length) continue;
+        const lastSet = matched.sets[matched.sets.length - 1];
+        if (!lastSet) continue;
+        return {
+          weight: parseNumber(lastSet.weight),
+          reps: parseNumber(lastSet.reps),
+          rpe: parseNumber(lastSet.rpe),
+          ts: workout.completedAt || workout.startedAt || null
+        };
+      }
+      return null;
+    }
+
+    function formatPrevSummary(summary) {
+      if (!summary) return '前回: —';
+      const unit = appData?.settings?.unit || 'kg';
+      const formatNumber = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const num = Number(value);
+        if (!Number.isFinite(num)) return String(value);
+        if (Number.isInteger(num)) return String(num);
+        return String(num);
+      };
+      const weightText = formatNumber(summary.weight);
+      const repsText = formatNumber(summary.reps);
+      const parts = [];
+      if (weightText !== null) parts.push(`${weightText}${unit}`);
+      if (repsText !== null) parts.push(`${repsText}回`);
+      let body = parts.length ? parts.join('×') : '—';
+      const rpeText = formatNumber(summary.rpe);
+      if (rpeText !== null) {
+        body = `${body} @${rpeText}`;
+      }
+      return `前回: ${body}`;
+    }
+
+    function computeDelta({ prev, current }) {
+      if (!prev || !current) return null;
+      const parseNumber = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const num = Number(value);
+        if (!Number.isFinite(num)) return null;
+        return num;
+      };
+      const prevWeight = parseNumber(prev.weight);
+      const prevReps = parseNumber(prev.reps);
+      const currentWeight = parseNumber(current.weight);
+      const currentReps = parseNumber(current.reps);
+      const normalizeDelta = (value) => {
+        const scaled = Math.round(value * 100) / 100;
+        return Object.is(scaled, -0) ? 0 : scaled;
+      };
+      const deltas = {};
+      if (prevWeight !== null && currentWeight !== null) {
+        const diff = normalizeDelta(currentWeight - prevWeight);
+        if (diff !== 0) deltas.dWeight = diff;
+      }
+      if (prevReps !== null && currentReps !== null) {
+        const diff = normalizeDelta(currentReps - prevReps);
+        if (diff !== 0) deltas.dReps = diff;
+      }
+      return Object.keys(deltas).length ? deltas : null;
+    }
 
     let pendingExerciseFocusId = null;
 
@@ -5596,7 +5681,12 @@
                     className: 'text-xs font-medium leading-snug text-slate-500',
                     textContent: exercise ? '' : '未設定'
                   });
-                  summaryContent.append(summaryTitle, summaryStats);
+                  const summaryPrevLine = createElem('span', {
+                    className: 'prev-summary text-[11px] font-semibold leading-snug text-slate-600',
+                    textContent: '前回（この種目）: —',
+                    attrs: { 'aria-label': 'この種目の前回記録', 'aria-live': 'polite' }
+                  });
+                  summaryContent.append(summaryTitle, summaryStats, summaryPrevLine);
                   const summaryCaret = createElem('span', {
                     className: 'text-lg text-slate-500 transition-transform duration-150',
                     textContent: isCollapsed ? '▸' : '▾'
@@ -5616,6 +5706,26 @@
                   const exerciseField = createFieldWrapper('種目', 'この枠で記録する種目を選択します。', '自由入力を有効にすると候補にない名称も追加できます。', exerciseControl);
                   exerciseField.classList.add('md:col-span-2');
                   detailBody.append(exerciseField);
+                  let exercisePrevSummary = null;
+                  let prevSummaryBase = '前回: —';
+                  if (exercise) {
+                    const lookupPartKey = getExercisePartByKey(exercise.nameKey)
+                      || appData.currentWorkout.selectedPartKey
+                      || getActivePartKey();
+                    let lookupExerciseKey = exercise.nameKey || null;
+                    if (!lookupExerciseKey && exercise.name) {
+                      const signature = createLabelSignature(exercise.name);
+                      if (signature) {
+                        lookupExerciseKey = `label::${signature}`;
+                      }
+                    }
+                    const partForLookup = lookupPartKey || 'unknown';
+                    if (lookupExerciseKey) {
+                      exercisePrevSummary = getLastSetSummary({ partKey: partForLookup, exerciseKey: lookupExerciseKey });
+                    }
+                  }
+                  prevSummaryBase = formatPrevSummary(exercisePrevSummary);
+                  summaryPrevLine.textContent = prevSummaryBase.replace(/^前回\s*:/, '前回（この種目）:');
                   if (!exercise) {
                     const helper = createElem('p', {
                       className: 'md:col-span-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold leading-snug text-slate-600',
@@ -5661,9 +5771,11 @@
                       const value = currentSet?.oneRM;
                       oneRmLabel.textContent = value ? `推定1RM: ${value} ${appData.settings.unit}` : '推定1RM: -';
                     };
+                    let updatePrevSummaryDisplay = () => {};
                     const syncDerivedState = () => {
                       updateOneRmLabel();
                       syncProvisionalVisuals();
+                      updatePrevSummaryDisplay();
                     };
                     const copyLastButton = createElem('button', {
                       className:
@@ -5682,7 +5794,44 @@
                         syncDerivedState();
                       }
                     });
+                    const prevSummaryBadge = createElem('span', {
+                      className: 'prev-summary text-[11px] font-semibold leading-snug text-slate-600',
+                      attrs: { 'aria-label': `${slotTitle}の前回記録`, 'aria-live': 'polite' },
+                      textContent: prevSummaryBase
+                    });
+                    summaryActions.insertBefore(prevSummaryBadge, summaryCaret);
                     summaryActions.insertBefore(copyLastButton, summaryCaret);
+                    updatePrevSummaryDisplay = () => {
+                      if (!prevSummaryBadge) return;
+                      let text = prevSummaryBase;
+                      if (exercisePrevSummary) {
+                        const delta = computeDelta({
+                          prev: exercisePrevSummary,
+                          current: { weight: weightInput?.value, reps: repsInput?.value }
+                        });
+                        if (delta) {
+                          const parts = [];
+                          const formatDeltaValue = (value, suffix) => {
+                            if (typeof value !== 'number') return null;
+                            const normalized = Math.round(Math.abs(value) * 100) / 100;
+                            const formatted = Number.isInteger(normalized)
+                              ? String(normalized)
+                              : String(normalized);
+                            const symbol = value > 0 ? '▲' : '▼';
+                            const sign = value > 0 ? '+' : '-';
+                            return `${symbol}${sign}${formatted}${suffix}`;
+                          };
+                          const weightDeltaText = formatDeltaValue(delta.dWeight, appData.settings.unit);
+                          if (weightDeltaText) parts.push(weightDeltaText);
+                          const repsDeltaText = formatDeltaValue(delta.dReps, '回');
+                          if (repsDeltaText) parts.push(repsDeltaText);
+                          if (parts.length) {
+                            text = `${prevSummaryBase}（${parts.join(' / ')}）`;
+                          }
+                        }
+                      }
+                      prevSummaryBadge.textContent = text;
+                    };
                     const weightInput = createElem('input', {
                       className: 'input-base text-slate-900 placeholder-slate-400',
                       attrs: { type: 'number', inputmode: 'decimal', min: '0', step: '0.5' },
@@ -5690,6 +5839,7 @@
                     });
                     weightInput.addEventListener('input', (event) => {
                       scheduleSetFieldUpdate(exercise.id, index, 'weight', event.target.value);
+                      updatePrevSummaryDisplay();
                     });
                     registerTypingTarget(weightInput, {
                       key: `set:${exercise.id}:${index}:weight`,
@@ -5711,6 +5861,7 @@
                     });
                     repsInput.addEventListener('input', (event) => {
                       scheduleSetFieldUpdate(exercise.id, index, 'reps', event.target.value);
+                      updatePrevSummaryDisplay();
                     });
                     registerTypingTarget(repsInput, {
                       key: `set:${exercise.id}:${index}:reps`,
@@ -5755,6 +5906,7 @@
                       textContent: set?.oneRM ? `推定1RM: ${set.oneRM} ${appData.settings.unit}` : '推定1RM: -'
                     });
                     syncDerivedState();
+                    updatePrevSummaryDisplay();
                     detailBody.append(oneRmLabel);
                     detailBody.append(provisionalWarning);
                   }
