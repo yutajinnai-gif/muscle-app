@@ -7,21 +7,102 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- PATCH-START: BOOT-SAFE -->
   <!-- 先行エラーバーとアプリコンテナを必ず配置 -->
   <div id="errbar" aria-live="assertive"></div>
   <main id="app"></main>
+  <style id="boot-style">html,body,#app{display:block!important;visibility:visible!important;opacity:1!important} #app:empty{min-height:80vh}</style>
+  <noscript><main role="main" style="padding:12px">JavaScriptが無効です。設定で有効にして再読込してください。</main></noscript>
+  <script>
+    const __boot = [];
+    function bootLog(message) {
+      __boot.push(`[${Date.now() % 100000}] ${message}`);
+      const bar = document.getElementById('errbar');
+      if (bar) {
+        bar.textContent = __boot.slice(-4).join(' | ');
+      }
+    }
 
-  <section class="p-4">
-    <div class="bg-white shadow rounded-lg p-3 space-y-2">
-      <header class="space-y-1">
-        <h1 class="text-lg font-semibold text-gray-900">筋トレメモ</h1>
-        <p class="text-xs text-gray-500">簡易ビューでアプリの表示確認を行います。</p>
-      </header>
-      <p class="mt-1 text-xs text-gray-600 leading-tight">部位を選ぶと候補が絞り込まれます。</p>
-    </div>
-  </section>
+    window.onerror = (msg, src, line, col, error) => {
+      const detail = (error?.stack || String(msg || 'error')).split('\n')[0];
+      bootLog(`onerror:${detail}`);
+    };
 
+    window.onunhandledrejection = (event) => {
+      const reason = event?.reason;
+      const detail = (reason?.stack || reason?.message || String(reason || 'unhandled')).split('\n')[0];
+      bootLog(`unhandled:${detail}`);
+    };
+
+    const qs = new URLSearchParams(location.search);
+    const FORCE = qs.get('force') === '1' || qs.get('safe') === '1';
+    if (FORCE) {
+      navigator.serviceWorker?.getRegistrations?.().then((registrations) => {
+        registrations.forEach((registration) => registration.unregister());
+      });
+      bootLog('SW unregistered');
+    }
+
+    const watchdog = setTimeout(() => {
+      const app = document.getElementById('app');
+      if (app && app.innerHTML.trim() === '') {
+        app.innerHTML = `
+      <section style="padding:12px" role="region" aria-label="復旧モード">
+        <h2 style="font-size:18px;margin:0 0 8px">安全復旧モード</h2>
+        <p style="margin:0 0 8px">初期化に失敗しました。最小UIから再開できます。</p>
+        <button id="btn-retry" style="min-height:44px">再試行</button>
+        <button id="btn-hard-reload" style="min-height:44px;margin-left:8px">ハード再読込</button>
+      </section>`;
+        const retryBtn = document.getElementById('btn-retry');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            location.replace(location.pathname + location.search + '#/home');
+          });
+        }
+        const hardReloadBtn = document.getElementById('btn-hard-reload');
+        if (hardReloadBtn) {
+          hardReloadBtn.addEventListener('click', () => {
+            location.replace(location.pathname + '#/home?safe=1&v=' + Date.now());
+          });
+        }
+        bootLog('watchdog fired');
+      }
+    }, 1800);
+
+    const BUILD_TAG = 'FIX-NUCLEAR-RECOVERY-20251003';
+    document.title = `BUILD_TAG=${BUILD_TAG}`;
+
+    function boot() {
+      const container = document.getElementById('app');
+      if (!container) {
+        throw new Error('アプリコンテナが見つかりません');
+      }
+      container.innerHTML = '<p class="text-sm text-gray-700">アプリが起動しました。</p>';
+    }
+
+    try {
+      bootLog('boot start');
+      boot();
+      bootLog('boot ok');
+    } catch (e) {
+      const detail = (e?.stack || e?.message || String(e)).split('\n')[0];
+      bootLog('boot crash:' + detail);
+      const bar = document.getElementById('errbar');
+      if (bar) {
+        bar.textContent = detail;
+      }
+      console.error(e);
+    } finally {
+      clearTimeout(watchdog);
+      const app = document.getElementById('app');
+      if (app && app.innerHTML.trim() === '') {
+        app.innerHTML = '<div class="p-3 rounded border bg-white">表示に失敗（簡易モード）。「種目を追加」から再開できます。</div>';
+      }
+    }
+  </script>
   <script src="app.js"></script>
+  <!-- DEPRECATED: 旧ブート処理は安全起動ロジックに置換 -->
+  <!--
   <script>
     function boot() {
       const container = document.getElementById('app');
@@ -31,11 +112,9 @@
       container.innerHTML = '<p class="text-sm text-gray-700">アプリが起動しました。</p>';
     }
 
-    // アプリケーションを起動
     try {
-      boot(); // ここで初期化とレンダリングを行う
+      boot();
     } catch (e) {
-      // エラーはerrbarに表示
       const bar = document.getElementById('errbar');
       if (bar) {
         bar.textContent = e?.message || String(e);
@@ -43,5 +122,19 @@
       console.error(e);
     }
   </script>
+  -->
+  <!-- PATCH-END: BOOT-SAFE -->
+
+  <!-- PATCH-START: UI-DENSITY -->
+  <section class="p-3">
+    <div class="bg-white shadow rounded-lg p-3 space-y-2">
+      <header class="space-y-1">
+        <h1 class="text-lg font-semibold text-gray-900">筋トレメモ</h1>
+        <p class="text-xs text-gray-500">簡易ビューでアプリの表示確認を行います。</p>
+      </header>
+      <p class="mt-1 text-xs text-gray-600 leading-tight">部位を選ぶと候補が絞り込まれます。</p>
+    </div>
+  </section>
+  <!-- PATCH-END: UI-DENSITY -->
 </body>
 </html>
