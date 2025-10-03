@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>筋トレメモ（軽量版）</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 先行エラーバーとアプリコンテナを必ず配置 -->
+  <div id="errbar" aria-live="assertive"></div>
+  <main id="app"></main>
+
+  <section class="p-4">
+    <div class="bg-white shadow rounded-lg p-3 space-y-2">
+      <header class="space-y-1">
+        <h1 class="text-lg font-semibold text-gray-900">筋トレメモ</h1>
+        <p class="text-xs text-gray-500">簡易ビューでアプリの表示確認を行います。</p>
+      </header>
+      <p class="mt-1 text-xs text-gray-600 leading-tight">部位を選ぶと候補が絞り込まれます。</p>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+  <script>
+    function boot() {
+      const container = document.getElementById('app');
+      if (!container) {
+        throw new Error('アプリコンテナが見つかりません');
+      }
+      container.innerHTML = '<p class="text-sm text-gray-700">アプリが起動しました。</p>';
+    }
+
+    // アプリケーションを起動
+    try {
+      boot(); // ここで初期化とレンダリングを行う
+    } catch (e) {
+      // エラーはerrbarに表示
+      const bar = document.getElementById('errbar');
+      if (bar) {
+        bar.textContent = e?.message || String(e);
+      }
+      console.error(e);
+    }
+  </script>
+</body>
+</html>
