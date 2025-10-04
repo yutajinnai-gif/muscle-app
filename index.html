@@ -5138,6 +5138,21 @@
     };
 
 <!-- PATCH-START: UI-DENSITY -->
+    /* 可視性の最終保証（白背景/濃色文字） */
+    if (typeof document !== 'undefined') {
+      try {
+        document.documentElement.style.background = '#ffffff';
+        document.body.style.background = '#ffffff';
+        document.body.style.color = '#0f172a';
+        var __app = document.getElementById('app');
+        if (__app) {
+          __app.style.minHeight = '60vh';
+          __app.style.display = 'block';
+          __app.style.visibility = 'visible';
+          __app.style.opacity = '1';
+        }
+      } catch (_) {}
+    }
     const GYM_BUILD_TAG = 'FIX-STRONG-RECOVERY-20251003';
     const enforceBuildIdentity = () => {
       if (typeof document === 'undefined') return;
@@ -7058,6 +7073,27 @@
     };
 
 <!-- PATCH-START: BOOT-SAFE -->
+    // --- Debug Probe: 画面に現状を常に文字表示（本稼働では後で外せる）
+    (function installDebugProbe(){
+      try{
+        var probe = document.getElementById('debug-probe');
+        if(!probe){
+          probe = document.createElement('div');
+          probe.id = 'debug-probe';
+          probe.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999;background:#0f172a;color:#fff;padding:6px 8px;border-radius:8px;font:12px/1.2 system-ui;opacity:.9';
+          probe.setAttribute('aria-live','polite');
+          document.body.appendChild(probe);
+        }
+        var appEl = document.getElementById('app');
+        var routeHash = location.hash || '(empty)';
+        var safe = (function(){try{return !!(typeof runtimeSafeMode!=="undefined" && runtimeSafeMode);}catch(_){return false;}})();
+        probe.textContent = 'DBG route=' + routeHash + ' | safe=' + safe + ' | appChildren=' + (appEl? appEl.childElementCount : -1);
+        window.addEventListener('hashchange', function(){
+          var app = document.getElementById('app');
+          probe.textContent = 'DBG route=' + (location.hash||'(empty)') + ' | safe=' + safe + ' | appChildren=' + (app? app.childElementCount : -1);
+        });
+      }catch(_){}
+    })();
     let lastRenderFlags = getAppFlags();
     let safeBannerBound = false;
     const syncSafeBanner = (isSafeMode) => {
@@ -7105,7 +7141,7 @@
       optionControlSequence = 0;
       scheduledActionBarContent = null;
       if (!appRoot) return;
-      // ルート不整合時はHOMEへ強制
+      // ルート不整合はHOMEへ強制
       let route = ROUTE_VALUES.has(state.route) ? state.route : ROUTES.HOME;
       if (!ROUTE_VALUES.has(route)) {
         route = ROUTES.HOME;
@@ -7147,17 +7183,16 @@
       }
       const builder = viewBuilders[route] || viewBuilders[ROUTES.HOME];
       const result = builder ? builder(lastRenderFlags) : [];
-      // Node以外が混じっても安全に捨てる
+      // Node 以外は捨てる（安全化）
       const nodes = Array.isArray(result)
-        ? result.filter((n) => n instanceof Node)
+        ? result.filter(n => n instanceof Node)
         : (result instanceof Node ? [result] : []);
       if (nodes.length === 0) {
-        // 第1フォールバック：最小カードを差し込む
+        // 第1フォールバック：最小カード
         const fb = document.createElement('section');
         fb.className = 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
-        fb.innerHTML =
-          '<h2 class="text-base font-bold text-slate-900">表示できるコンテンツがありません</h2>' +
-          '<p class="text-sm text-slate-700 mt-1">ホームに戻ってやり直すか、再読込してください。</p>';
+        fb.innerHTML = '<h2 class="text-base font-bold text-slate-900">表示できるコンテンツがありません</h2>' +
+                       '<p class="text-sm text-slate-700 mt-1">ホームに戻るか再読込をお試しください。</p>';
         host.replaceChildren(fb);
       } else {
         host.replaceChildren(...nodes);
@@ -7172,6 +7207,9 @@
           msg.innerHTML = '<p class="text-sm text-slate-700">レンダリング保護により代替表示中です。</p>';
           rootEl.appendChild(msg);
         }
+        // Debug Probe更新
+        var probe = document.getElementById('debug-probe');
+        if (probe) probe.textContent = 'DBG route=' + (location.hash||'(empty)') + ' | safe=' + Boolean(lastRenderFlags.safeMode) + ' | appChildren=' + (rootEl? rootEl.childElementCount : -1);
       } catch (_) {}
       applyScheduledActionBar(route);
     };
