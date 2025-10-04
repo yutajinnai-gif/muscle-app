@@ -86,7 +86,7 @@
     })();
   </script>
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-Jl0nO9r2yZS3AuNEqFOtPiou0IZ6Tn6PvxI6Bfq5lHppZArYrusS4x+h0/pk3jfb" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     body { font-size: 16px; min-height: 100vh; }
     .scroll-lock { overflow: hidden; }
@@ -296,50 +296,58 @@
     };
 
     const registerPwaFeatures = () => {
-      ensureManifest();
+      try {
+        ensureManifest();
+      } catch (_) {}
       if (!('serviceWorker' in navigator)) {
         return;
       }
+      const host = (typeof location !== 'undefined' && location.hostname) ? location.hostname.trim() : '';
+      const isProductionHost = Boolean(host && !IS_DEV);
+      if (!isProductionHost) {
+        return;
+      }
+      try {
+        const toast = createPwaToastController();
+        const swUrl = `./pwa-sw.js?build=${BUILD_TAG}`;
 
-      const toast = createPwaToastController();
-      const swUrl = `./pwa-sw.js?build=${BUILD_TAG}`;
+        navigator.serviceWorker.register(swUrl).then((registration) => {
+          const listenForWaiting = (worker) => {
+            if (!worker) return;
+            toast.showUpdatePrompt(() => worker.postMessage({ type: 'SKIP_WAITING' }));
+          };
 
-      navigator.serviceWorker.register(swUrl).then((registration) => {
-        const listenForWaiting = (worker) => {
-          if (!worker) return;
-          toast.showUpdatePrompt(() => worker.postMessage({ type: 'SKIP_WAITING' }));
-        };
-
-        if (registration.waiting) {
-          listenForWaiting(registration.waiting);
-        }
-
-        registration.addEventListener('updatefound', () => {
-          const worker = registration.installing;
-          if (!worker) return;
-          worker.addEventListener('statechange', () => {
-            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-              listenForWaiting(registration.waiting || worker);
-            }
-          });
-        });
-
-        navigator.serviceWorker.ready.then((readyRegistration) => {
-          const hasController = Boolean(navigator.serviceWorker.controller);
-          if (!hasController || !(registration.waiting || readyRegistration.waiting)) {
-            toast.showStatus('オフラインモードを準備しました');
+          if (registration.waiting) {
+            listenForWaiting(registration.waiting);
           }
-        }).catch(() => {});
-      }).catch((error) => {
-        console.error('[pwa] Service worker registration failed', error);
-      });
 
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshing) return;
-        refreshing = true;
-        window.location.reload();
-      });
+          registration.addEventListener('updatefound', () => {
+            const worker = registration.installing;
+            if (!worker) return;
+            worker.addEventListener('statechange', () => {
+              if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                listenForWaiting(registration.waiting || worker);
+              }
+            });
+          });
+
+          navigator.serviceWorker.ready.then((readyRegistration) => {
+            const hasController = Boolean(navigator.serviceWorker.controller);
+            if (!hasController || !(registration.waiting || readyRegistration.waiting)) {
+              toast.showStatus('オフラインモードを準備しました');
+            }
+          }).catch(() => {});
+        }).catch(() => {});
+
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (refreshing) return;
+          refreshing = true;
+          try {
+            window.location.reload();
+          } catch (_) {}
+        });
+      } catch (_) {}
     };
 
     const disableServiceWorkerOnce = () => {
@@ -1551,35 +1559,97 @@
       constructor(namespace, version) {
         this.namespace = namespace;
         this.version = version;
+        this._inMemory = new Map();
+        this._ok = this._probe();
+      }
+      _probe() {
+        try {
+          const key = `__probe__${Math.random().toString(36).slice(2)}`;
+          localStorage.setItem(key, '1');
+          localStorage.removeItem(key);
+          return true;
+        } catch (_) {
+          return false;
+        }
       }
       _key(key) {
         return `${this.namespace}:${key}`;
       }
+      _clone(value) {
+        try {
+          return structuredClone(value);
+        } catch (_) {
+          try {
+            return JSON.parse(JSON.stringify(value));
+          } catch (_) {
+            return value;
+          }
+        }
+      }
       _safeParse(raw) {
         try {
           return JSON.parse(raw);
-        } catch (err) {
+        } catch (_) {
           return null;
         }
       }
       load(key, fallback) {
-        const raw = localStorage.getItem(this._key(key));
-        if (!raw) return cloneDeep(fallback);
-        const parsed = this._safeParse(raw);
-        if (!parsed || parsed.schema !== this.version) return cloneDeep(fallback);
-        return parsed.data;
+        const storageKey = this._key(key);
+        if (this._ok) {
+          try {
+            const raw = localStorage.getItem(storageKey);
+            if (!raw) return this._clone(fallback);
+            const parsed = this._safeParse(raw);
+            if (!parsed || parsed.schema !== this.version) return this._clone(fallback);
+            return parsed.data;
+          } catch (_) {
+            // fallthrough to in-memory
+          }
+        }
+        if (this._inMemory.has(storageKey)) {
+          return this._clone(this._inMemory.get(storageKey));
+        }
+        const initValue = this._clone(fallback);
+        this._inMemory.set(storageKey, this._clone(initValue));
+        return initValue;
       }
       save(key, data) {
+        const storageKey = this._key(key);
         const payload = JSON.stringify({ schema: this.version, data });
-        localStorage.setItem(this._key(key), payload);
+        if (this._ok) {
+          try {
+            localStorage.setItem(storageKey, payload);
+            return;
+          } catch (_) {
+            this._ok = false;
+          }
+        }
+        this._inMemory.set(storageKey, this._clone(data));
       }
       clearNamespace() {
-        const keys = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith(`${this.namespace}:`)) keys.push(k);
+        if (this._ok) {
+          try {
+            const prefix = `${this.namespace}:`;
+            const toDelete = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const name = localStorage.key(i);
+              if (name && name.startsWith(prefix)) {
+                toDelete.push(name);
+              }
+            }
+            toDelete.forEach((name) => {
+              try {
+                localStorage.removeItem(name);
+              } catch (_) {}
+            });
+          } catch (_) {
+            // ignore
+          }
         }
-        keys.forEach((k) => localStorage.removeItem(k));
+        const prefix = `${this.namespace}:`;
+        Array.from(this._inMemory.keys())
+          .filter((k) => k.startsWith(prefix))
+          .forEach((k) => this._inMemory.delete(k));
       }
     }
 
